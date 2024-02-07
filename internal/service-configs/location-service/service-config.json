@@ -1,0 +1,6 @@
+{
+    "name": "socket-service",
+    "port": "8080",
+    "serviceExchange": "api-gateway-exchange",
+    "serviceQueue": "api-gateway-queue"
+}
