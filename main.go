@@ -1,41 +1,74 @@
 package main
 
 import (
-	"flag"
+	// "flag"
 	"fmt"
+	"log"
 	"os"
+	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/pkg/factory"
+
+	"github.com/urfave/cli/v2"
+	"go-micro.dev/v4"
 )
 
 func main() {
-	serviceTypeFlag := flag.String("s", "", "Name of the Service")
-	portFlag := flag.Int("p", 0, "The port on which the service will be running")
 
-	flag.Parse()
+	app := &cli.App{
+		Name:  "project-phoenix",
+		Usage: "A go-micro service",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:     "service-name",
+				Usage:    "Name of the Service",
+				Required: true,
+			},
+			&cli.IntFlag{
+				Name:     "port",
+				Usage:    "The port on which the service will be running",
+				Required: true,
+			},
+		},
+		Action: func(c *cli.Context) error {
+			serviceTypeFlag := c.String("service-name")
+			portFlag := c.Int("port")
+			log.Println("Service Name: ", serviceTypeFlag)
+			service := micro.NewService(
+				micro.Name(serviceTypeFlag),
+				micro.Address(fmt.Sprintf(":%d", portFlag)),
+				micro.Flags(&cli.StringFlag{
+					Name:  "service-name",
+					Usage: "Name of the service",
+				}),
+				micro.Flags(&cli.IntFlag{
+					Name:  "port",
+					Usage: "The port on which the service will be running",
+				}),
+			)
 
-	if *serviceTypeFlag == "" || *portFlag == 0 {
-		fmt.Println("Error occurred: Service type and port are required")
-		fmt.Println("Usage: go run main.go -s=<service-name> -p=<port>")
-		os.Exit(1)
+			// Initialize the service
+			service.Init()
+
+			var serviceType enum.ServiceType
+			switch serviceTypeFlag {
+			case "api-gateway":
+				serviceType = enum.APIGateway
+			case "location-service":
+				serviceType = enum.Location
+			default:
+				fmt.Println("Error occurred: Invalid service type")
+				os.Exit(1)
+			}
+
+			serviceObj := factory.ServiceFactory(service, serviceType, serviceTypeFlag)
+			if err := serviceObj.Start(); err != nil {
+				log.Fatal(err)
+			}
+			return nil
+		},
 	}
 
-	var serviceType factory.ServiceType
-
-	switch *serviceTypeFlag {
-	case "api-gateway":
-		serviceType = factory.APIGateway
-		break
-	case "location-service":
-		serviceType = factory.Location
-		break
-	default:
-		fmt.Println("Error occurred: Invalid service type")
-
-	}
-
-	serviceObj := factory.ServiceFactory(serviceType, *serviceTypeFlag)
-
-	if err := serviceObj.Start(); err != nil {
-		fmt.Println("Failed to start the service: %v", err)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
 	}
 }

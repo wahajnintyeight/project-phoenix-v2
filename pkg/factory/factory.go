@@ -1,28 +1,22 @@
 package factory
 
 import (
+	"log"
+	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/pkg/service"
+
+	"go-micro.dev/v4"
 )
 
-type ServiceType int
-
-const (
-	// Define constants for each service type
-	APIGateway ServiceType = iota
-	Location
-)
-
-// String provides the string representation of the ServiceType for easier debugging and logging
-func (st ServiceType) String() string {
-	return [...]string{"APIGateway", "Location"}[st]
-}
-
-func ServiceFactory(serviceType ServiceType, serviceName string) service.ServiceInterface {
+func ServiceFactory(serviceObj micro.Service, serviceType enum.ServiceType, serviceName string) service.ServiceInterface {
+	log.Print("Service Factory ", serviceName, " ", serviceType)
 	switch serviceType {
-	case APIGateway:
-		return service.InitializeService(serviceName)
-	case Location:
-		return service.InitializeService(serviceName)
+	case enum.APIGateway:
+		apiGatewayService := service.NewAPIGatewayService(serviceObj, serviceName)
+		return apiGatewayService
+	case enum.Location:
+		locationService := service.NewLocationService(serviceObj, serviceName)
+		return locationService
 	default:
 		panic("Invalid service type")
 	}
