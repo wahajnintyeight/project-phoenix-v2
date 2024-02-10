@@ -52,23 +52,26 @@ func NewAPIGatewayService(serviceObj micro.Service, serviceName string) ServiceI
 	return apiGatewayService.InitializeService(serviceObj, serviceName)
 }
 
-func (api *APIGatewayService) PUTRoutes(w http.ResponseWriter, r *http.Request) {
+func (api *APIGatewayService) SessionRoutes(w http.ResponseWriter, r *http.Request) {
 	//switch case for handling all the PUT routes
-	urlPath := r.URL.Path
-	log.Println("PUT Routes", api.serviceConfig.EndpointPrefix+"/createSession")
-	switch urlPath {
-	case urlPath + "/createSession":
-		log.Println("Create Session")
-		controller := controllers.GetControllerInstance(enum.SessionController)
+	vars := mux.Vars(r) // Assuming you're using gorilla/mux
+	action := vars["action"]
+	log.Println("API Called: ", r.URL.Path)
+	switch action {
+	case "create":
+		controller := controllers.GetControllerInstance(enum.SessionController, enum.MONGODB, "sessions")
 		sessionController := controller.(*controllers.SessionController)
 		res, ok := sessionController.CreateSession(w, r)
 		if ok != nil {
-			http.Error(w, "Failed to create session", http.StatusInternalServerError)
+			response.SendResponse(w, int(enum.SESSION_NOT_CREATED), res)
 		} else {
 			fmt.Println("Session created successfully", res)
-			response.SendResponse(w, 1000, "Session created successfully")
+			response.SendResponse(w, int(enum.SESSION_CREATED), res)
 			return
 		}
+		break
+	case "delete":
+		log.Println("Delete API Called")
 		break
 	default:
 		http.NotFound(w, r)
@@ -90,7 +93,7 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *APIGatewayService) registerRoutes() {
-	s.router.HandleFunc(s.serviceConfig.EndpointPrefix, s.PUTRoutes).Methods("PUT")
+	s.router.HandleFunc(s.serviceConfig.EndpointPrefix+"/session/{action}", s.SessionRoutes).Methods("PUT")
 	s.router.HandleFunc(s.serviceConfig.EndpointPrefix, GETRoutes).Methods("GET")
 }
 
@@ -110,7 +113,6 @@ func (s *APIGatewayService) Start() error {
 	}
 	s.registerRoutes()
 
-	log.Println("Starting the server...", s.server.Addr)
 	go func() {
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("HTTP server ListenAndServe error: %v\n", err)

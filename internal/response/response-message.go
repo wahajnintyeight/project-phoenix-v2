@@ -7,6 +7,9 @@ import (
 
 var responseMessage = map[int]string{
 	1000: "Users Fetched",
+	1006: "Session Not Found",
+	1007: "Session Created",
+	1008: "Session Not Created",
 }
 
 type MessageResponse struct {
