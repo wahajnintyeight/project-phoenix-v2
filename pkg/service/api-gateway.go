@@ -53,8 +53,7 @@ func NewAPIGatewayService(serviceObj micro.Service, serviceName string) ServiceI
 }
 
 func (api *APIGatewayService) SessionRoutes(w http.ResponseWriter, r *http.Request) {
-	//switch case for handling all the PUT routes
-	vars := mux.Vars(r) // Assuming you're using gorilla/mux
+	vars := mux.Vars(r)
 	action := vars["action"]
 	log.Println("API Called: ", r.URL.Path)
 	switch action {
@@ -72,6 +71,7 @@ func (api *APIGatewayService) SessionRoutes(w http.ResponseWriter, r *http.Reque
 		break
 	case "delete":
 		log.Println("Delete API Called")
+
 		break
 	default:
 		http.NotFound(w, r)
@@ -80,10 +80,10 @@ func (api *APIGatewayService) SessionRoutes(w http.ResponseWriter, r *http.Reque
 
 func GETRoutes(w http.ResponseWriter, r *http.Request) {
 	//switch case for handling all the GET routes
-	urlPath := r.URL.Path
+	urlPath := r.URL.Path 
 	log.Print("GET Routes: ", urlPath)
 	switch urlPath {
-	case "/":
+	case urlPath + "/":
 		log.Print("Welcome to API Gateway")
 		response.SendResponse(w, 1000, "Welcome to API Gateway")
 		break
@@ -94,7 +94,7 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 
 func (s *APIGatewayService) registerRoutes() {
 	s.router.HandleFunc(s.serviceConfig.EndpointPrefix+"/session/{action}", s.SessionRoutes).Methods("PUT")
-	s.router.HandleFunc(s.serviceConfig.EndpointPrefix, GETRoutes).Methods("GET")
+	s.router.HandleFunc(s.serviceConfig.EndpointPrefix + "/", GETRoutes).Methods("GET")
 }
 
 func (s *APIGatewayService) Start() error {
