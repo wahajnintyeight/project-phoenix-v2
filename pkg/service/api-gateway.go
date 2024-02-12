@@ -6,19 +6,20 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"os"
 	"os/signal"
-	"project-phoenix/v2/internal/controllers"
-	"project-phoenix/v2/internal/enum"
-	"project-phoenix/v2/internal/response"
+	"project-phoenix/v2/internal/controllers/middleware"
 	internal "project-phoenix/v2/internal/service-configs"
+	"project-phoenix/v2/pkg/handler"
 	"sync"
 
 	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	"go-micro.dev/v4"
 	// "log"
 )
@@ -30,7 +31,6 @@ type APIGatewayService struct {
 	serviceConfig internal.ServiceConfig
 }
 
-// var apiGatewayServiceObj *APIGatewayService
 var once sync.Once
 
 func (api *APIGatewayService) InitializeService(serviceObj micro.Service, serviceName string) ServiceInterface {
@@ -39,10 +39,11 @@ func (api *APIGatewayService) InitializeService(serviceObj micro.Service, servic
 		service := serviceObj
 		api.service = service
 		api.router = mux.NewRouter()
-		serviceConfig, _ := internal.ReturnServiceConfig("internal/service-configs/api-gateway/service-config.json")
+		godotenv.Load()
+		servicePath := os.Getenv("API_GATEWAY_SERVICE_CONFIG_PATH")
+		serviceConfig, _ := internal.ReturnServiceConfig(servicePath)
 		api.serviceConfig = serviceConfig.(internal.ServiceConfig)
 	})
-	// api.service.Init()
 
 	return api
 }
@@ -52,53 +53,37 @@ func NewAPIGatewayService(serviceObj micro.Service, serviceName string) ServiceI
 	return apiGatewayService.InitializeService(serviceObj, serviceName)
 }
 
-func (api *APIGatewayService) SessionRoutes(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	action := vars["action"]
-	log.Println("API Called: ", r.URL.Path)
-	switch action {
-	case "create":
-		controller := controllers.GetControllerInstance(enum.SessionController, enum.MONGODB, "sessions")
-		sessionController := controller.(*controllers.SessionController)
-		res, ok := sessionController.CreateSession(w, r)
-		if ok != nil {
-			response.SendResponse(w, int(enum.SESSION_NOT_CREATED), res)
-		} else {
-			fmt.Println("Session created successfully", res)
-			response.SendResponse(w, int(enum.SESSION_CREATED), res)
-			return
-		}
-		break
-	case "delete":
-		log.Println("Delete API Called")
-
-		break
-	default:
-		http.NotFound(w, r)
-	}
-}
-
-func GETRoutes(w http.ResponseWriter, r *http.Request) {
-	//switch case for handling all the GET routes
-	urlPath := r.URL.Path 
-	log.Print("GET Routes: ", urlPath)
-	switch urlPath {
-	case urlPath + "/":
-		log.Print("Welcome to API Gateway")
-		response.SendResponse(w, 1000, "Welcome to API Gateway")
-		break
-	default:
-		http.NotFound(w, r)
-	}
-}
-
 func (s *APIGatewayService) registerRoutes() {
-	s.router.HandleFunc(s.serviceConfig.EndpointPrefix+"/session/{action}", s.SessionRoutes).Methods("PUT")
-	s.router.HandleFunc(s.serviceConfig.EndpointPrefix + "/", GETRoutes).Methods("GET")
+	sessionMiddleware := middleware.NewSessionMiddleware()
+	authMiddleware := middleware.NewAuthMiddleware()
+	apiRequestHandler := &handler.APIRequestHandler{}
+	apiRequestHandler.Endpoint = s.serviceConfig.EndpointPrefix
+
+	openRoutes := []string{
+		s.serviceConfig.EndpointPrefix + "/createSession",
+	}
+	customMiddlewareWrapper := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if the request path is one of the open routes
+			for _, path := range openRoutes {
+				if strings.HasSuffix(r.URL.Path, path) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
+			sessionMiddleware.Middleware(authMiddleware.Middleware(next)).ServeHTTP(w, r)
+		})
+	}
+
+	s.router.Use(customMiddlewareWrapper)
+
+	s.router.PathPrefix(s.serviceConfig.EndpointPrefix).Handler(apiRequestHandler)
 }
 
 func (s *APIGatewayService) Start() error {
-	serviceConfig, serviceConfigErr := internal.ReturnServiceConfig("internal/service-configs/api-gateway/service-config.json")
+	godotenv.Load()
+	serviceConfig, serviceConfigErr := internal.ReturnServiceConfig(os.Getenv("API_GATEWAY_SERVICE_CONFIG_PATH"))
 	fmt.Println("Starting API Gateway Service on", serviceConfig.(internal.ServiceConfig).Port)
 	var serverPort string
 	if serviceConfigErr != nil {

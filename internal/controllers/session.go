@@ -14,6 +14,10 @@ type SessionController struct {
 	DB             db.DBInterface
 }
 
+func (sc *SessionController) GetCollectionName() string {
+	return "sessions"
+}
+
 func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Request) (string, error) {
 
 	sessionID, err := sc.generateSessionID(15)
@@ -36,10 +40,27 @@ func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+func (sc *SessionController) DoesSessionIDExist(sessionID string) (interface{}, error) {
+	sessionQuery := map[string]interface{}{
+		"sessionID": sessionID,
+	}
+	sessionData, err := sc.DB.FindOne(sessionQuery, sc.GetCollectionName())
+	if err != nil {
+		log.Println("Error fetching session from DB", err)
+		return false, err
+	} else {
+		if sessionData != nil {
+			return sessionData, nil
+		} else {
+			return false, nil
+		}
+	}
+}
+
 func (sc *SessionController) generateSessionID(length int) (string, error) {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
-		return "", err	
+		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
 }

@@ -6,7 +6,7 @@ import (
 )
 
 var responseMessage = map[int]string{
-	1000: "Users Fetched",
+	1000: "Welcome to Project Phoenix V2",
 	1006: "Session Not Found",
 	1007: "Session Created",
 	1008: "Session Not Created",

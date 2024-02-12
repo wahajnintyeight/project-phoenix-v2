@@ -2,6 +2,7 @@ package db
 
 import (
 	"errors"
+	"log"
 	"project-phoenix/v2/internal/enum"
 	"sync"
 
@@ -25,7 +26,13 @@ type DBInterface interface {
 func GetDBInstance(dbType enum.DBType) (DBInterface, error) {
 	switch dbType {
 	case enum.MONGODB:
-		return GetInstance(), nil
+		instance, err := GetInstance()
+		log.Println("Get Instance", instance, err)
+		if err != nil || (err == nil && instance == nil) {
+			return nil, err
+		} else {
+			return instance, nil
+		}
 		// Add case for "postgresql" once you have the implementation
 	default:
 		return nil, errors.New("unknown database type")

@@ -29,7 +29,7 @@ func init() {
 	mongoPool = make(chan *MongoDB, poolSize)
 }
 
-func GetInstance() *MongoDB {
+func GetInstance() (*MongoDB, error) {
 	once.Do(func() {
 		// Load the .env file
 		godotenv.Load()
@@ -40,6 +40,7 @@ func GetInstance() *MongoDB {
 		client, err := mongo.Connect(context.Background(), clientOptions)
 		if err != nil {
 			log.Fatal(err)
+			return
 		} else {
 
 			err = client.Ping(context.Background(), nil)
@@ -61,7 +62,7 @@ func GetInstance() *MongoDB {
 
 		}
 	})
-	return dbInstance
+	return dbInstance, nil
 
 }
 

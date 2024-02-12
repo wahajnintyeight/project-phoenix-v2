@@ -3,5 +3,6 @@
     "port": "8881",
     "serviceExchange": "api-gateway-exchange",
     "serviceQueue": "api-gateway-queue",
-    "endpointPrefix": "/v2/api"
+    "endpointPrefix": "/v2/api",
+    "sessionIdMiddleware":"sessionId"
 }

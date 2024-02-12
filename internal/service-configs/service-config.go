@@ -13,6 +13,7 @@ type ServiceConfig struct {
 	ServiceExchange string `json:"serviceExchange"`
 	ServiceQueue    string `json:"serviceQueue"`
 	EndpointPrefix  string `json:"endpointPrefix"`
+	SessionIDMiddlewareKey string `json:"sessionIdMiddleware"`
 }
 
 var serviceConfigObj ServiceConfig
