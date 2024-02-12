@@ -5,19 +5,20 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"project-phoenix/v2/internal/cache"
 	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/enum"
+	"project-phoenix/v2/internal/response"
 	internal "project-phoenix/v2/internal/service-configs"
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/mongo"
 	// "project-phoenix/v2/internal/session"
 )
 
 type SessionMiddleware struct {
-	redisClient       *redis.Client
+	redisClient       cache.Redis
 	mongoClient       *mongo.Client
 	apiGatewayService internal.ServiceConfig
 }
@@ -33,7 +34,27 @@ func NewSessionMiddleware() *SessionMiddleware {
 }
 
 func (sm *SessionMiddleware) GetSession(ctx context.Context, sessionID string) (interface{}, error) {
-	// val, err := sm.redisClient.Get(ctx, sessionID).Result()
+	redisInstance := cache.GetInstance()
+	if redisInstance != nil {
+		redisSessionData, err := redisInstance.Get(sessionID)
+		if err != nil {
+			log.Println("Error fetching from Redis ", err)
+			controller := controllers.GetControllerInstance(enum.SessionController, enum.MONGODB, "sessions")
+			sessionController := controller.(*controllers.SessionController)
+			dbSessionData, sessionErr := sessionController.DoesSessionIDExist(sessionID)
+			if sessionErr != nil {
+				return nil, sessionErr
+			} else {
+				return dbSessionData, nil
+			}
+		} else {
+			log.Println("Session Data from Redis", redisSessionData)
+			return redisSessionData, nil
+		}
+	} else {
+		log.Println("Redis client not initialized")
+		return nil, nil
+	}
 	// if err == redis.Nil {
 	// 	// If not found in Redis, look up in MongoDB
 	// 	var sessionData bson.M
@@ -52,13 +73,7 @@ func (sm *SessionMiddleware) GetSession(ctx context.Context, sessionID string) (
 	// } else if err != nil {
 	// 	return nil, err // Error fetching from Redis
 	// }
-	controller := controllers.GetControllerInstance(enum.SessionController, enum.MONGODB, "sessions")
-	sessionController := controller.(*controllers.SessionController)
-	val, err := sessionController.DoesSessionIDExist(sessionID)
-	if err != nil {
-		return nil, err
-	}
-	return val, nil
+
 }
 
 func (sm *SessionMiddleware) Middleware(next http.Handler) http.Handler {
@@ -66,15 +81,16 @@ func (sm *SessionMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		godotenv.Load()
 		token, err := sm.extractToken(r)
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		if err != nil || token == "" {
+			response.SendResponse(w, int(enum.SESSION_HEADER_NOT_FOUND), nil)
 			return
 		}
 
 		newCtx := r.Context()
 		session, err := sm.GetSession(newCtx, token)
 		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			log.Println("Error fetching session", err)
+			response.SendResponse(w, int(enum.SESSION_NOT_FOUND), nil)
 			return
 		}
 
@@ -89,6 +105,11 @@ func (sm *SessionMiddleware) Middleware(next http.Handler) http.Handler {
 
 func (sm *SessionMiddleware) extractToken(r *http.Request) (string, error) {
 	sessionID := r.Header.Get("sessionId")
+	log.Println("Extract Token - Session ID", sessionID)
+	if sessionID == "" {
+		log.Println("Session ID not found in header")
+		return "", nil
+	}
 	log.Println("Session ID", sessionID)
 	return sessionID, nil
 }

@@ -32,6 +32,7 @@ func init() {
 func GetInstance() (*MongoDB, error) {
 	once.Do(func() {
 		// Load the .env file
+		log.Println("Initializing MongoDB Connection")
 		godotenv.Load()
 		mongoURI := os.Getenv("MONGO_URI")
 		dbName := os.Getenv("MONGO_DB_NAME")
@@ -39,13 +40,13 @@ func GetInstance() (*MongoDB, error) {
 		clientOptions := options.Client().ApplyURI(mongoURI)
 		client, err := mongo.Connect(context.Background(), clientOptions)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 			return
 		} else {
 
 			err = client.Ping(context.Background(), nil)
 			if err != nil {
-				log.Fatalf("Failed to ping MongoDB: %v", err)
+				log.Println("Failed to ping MongoDB: ", err)
 			} else {
 				log.Println("Initialized MongoDB Connection | DB Name: ", dbName)
 			}
@@ -82,7 +83,7 @@ func (m *MongoDB) Connect(uri string) (string, error) {
 func (m *MongoDB) Disconnect() (string, error) {
 	err := m.client.Disconnect(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return "MongoDB disconnected", nil
 }
@@ -95,7 +96,7 @@ func (m *MongoDB) Create(data interface{}, collectionName string) (bson.M, error
 	collection := conn.db.Collection(collectionName)
 	result, err := collection.InsertOne(context.Background(), data)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		return nil, err
 	} else {
 		insertedID := result.InsertedID
@@ -106,13 +107,13 @@ func (m *MongoDB) Create(data interface{}, collectionName string) (bson.M, error
 func (m *MongoDB) FindOne(data interface{}, collectionName string) (bson.M, error) {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
-
+	log.Println("MongoDB | FindOne | Data: ", data, " | Collection: ", collectionName)
 	collection := conn.db.Collection(collectionName)
 	filter := data
 	var result primitive.M
 	err := collection.FindOne(context.Background(), filter).Decode(&result)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("MongoDB | Unable to find data in ", collectionName, " | Query: ", filter)
 		return nil, err
 	} else {
 		return result, nil

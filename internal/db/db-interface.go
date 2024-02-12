@@ -27,8 +27,8 @@ func GetDBInstance(dbType enum.DBType) (DBInterface, error) {
 	switch dbType {
 	case enum.MONGODB:
 		instance, err := GetInstance()
-		log.Println("Get Instance", instance, err)
 		if err != nil || (err == nil && instance == nil) {
+			log.Println("DBInterface | Error while getting DB Instance: ", err)
 			return nil, err
 		} else {
 			return instance, nil

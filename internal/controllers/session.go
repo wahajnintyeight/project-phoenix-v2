@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log"
 	"net/http"
+	"project-phoenix/v2/internal/cache"
 	"project-phoenix/v2/internal/db"
 	"time"
 )
@@ -34,8 +35,18 @@ func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Reques
 			log.Println("Unable to store session in DB", err)
 			return "", err
 		} else {
-			w.Header().Set("sessionId", sessionID)
-			return sessionID, nil
+			//help me out here
+			isAddedToRedis, err := cache.GetInstance().Set(sessionID, map[string]interface{}{"sessionID": sessionData["sessionID"]})
+			if err != nil {
+				log.Println("Unable to store session in Redis", err)
+				return "", err
+			} else if isAddedToRedis == true {
+				w.Header().Set("sessionId", sessionID)
+				return sessionID, nil
+			} else {
+				log.Println("Unable to store session in Redis")
+				return "", nil
+			}
 		}
 	}
 }
@@ -45,6 +56,7 @@ func (sc *SessionController) DoesSessionIDExist(sessionID string) (interface{}, 
 		"sessionID": sessionID,
 	}
 	sessionData, err := sc.DB.FindOne(sessionQuery, sc.GetCollectionName())
+	log.Println("Session Data", sessionData, err)
 	if err != nil {
 		log.Println("Error fetching session from DB", err)
 		return false, err

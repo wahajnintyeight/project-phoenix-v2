@@ -10,6 +10,7 @@ var responseMessage = map[int]string{
 	1006: "Session Not Found",
 	1007: "Session Created",
 	1008: "Session Not Created",
+	1010: "Please provide a Session ID, use the 'sessionId' header",
 }
 
 type MessageResponse struct {
