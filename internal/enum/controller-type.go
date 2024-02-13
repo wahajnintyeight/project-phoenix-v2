@@ -6,4 +6,5 @@ const (
 	// Define constants for each service type
 	SessionController ControllerType = iota
 	LocationController
+	UserController
 )

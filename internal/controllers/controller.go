@@ -21,10 +21,11 @@ var (
 
 	// Controllers
 	sessionControllerInstance *SessionController
+	userControllerInstance    *UserController
 )
 
-func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType, collectionName string) string {
-	return fmt.Sprintf("%s-%s-%s", controllerType, dbType, collectionName)
+func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
+	return fmt.Sprintf("%s-%s", controllerType, dbType)
 }
 
 func registerControllerInstance(key string, instance Controller) {
@@ -40,15 +41,14 @@ func getRegisteredControllerInstance(key string) (Controller, bool) {
 	return instance, exists
 }
 
-func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBType, collectionName string) Controller {
+func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBType) Controller {
 
-	key := getControllerKey(controllerType, dbType, collectionName)
+	key := getControllerKey(controllerType, dbType)
 
 	if instance, exists := getRegisteredControllerInstance(key); exists {
 		return instance
 	}
 
-	var instance Controller
 	switch controllerType {
 	case enum.SessionController:
 
@@ -60,16 +60,25 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 				return
 			}
 			sessionControllerInstance = &SessionController{
-				DB:             dbInstance,
-				CollectionName: collectionName,
+				DB: dbInstance,
 			}
-			log.Println("Session Controller Instance: ", sessionControllerInstance)
 		})
 		return sessionControllerInstance
-		// add more controllers here
+	case enum.UserController:
+		if userControllerInstance == nil {
+			log.Println("Initialize User Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+			}
+			userControllerInstance = &UserController{
+				DB: dbInstance,
+			}
+
+		}
+		return userControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil
 	}
-	return instance
 }

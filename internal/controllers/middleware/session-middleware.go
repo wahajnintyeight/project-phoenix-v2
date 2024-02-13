@@ -34,28 +34,27 @@ func NewSessionMiddleware() *SessionMiddleware {
 }
 
 func (sm *SessionMiddleware) GetSession(ctx context.Context, sessionID string) (interface{}, error) {
-	redisInstance := cache.GetInstance()
-	if redisInstance != nil {
-		redisSessionData, err := redisInstance.Get(sessionID)
-		if err != nil {
-			log.Println("Error fetching from Redis ", err)
-			controller := controllers.GetControllerInstance(enum.SessionController, enum.MONGODB, "sessions")
-			log.Println("Session Controller Instance .", controller)
-			sessionController := controller.(*controllers.SessionController)
-			dbSessionData, sessionErr := sessionController.DoesSessionIDExist(sessionID)
-			if sessionErr != nil {
-				return nil, sessionErr
-			} else {
-				return dbSessionData, nil
-			}
-		} else {
-			log.Println("Session Data from Redis", redisSessionData)
-			return redisSessionData, nil
-		}
+	// redisInstance := cache.GetInstance()
+	// if redisInstance != nil {
+	// 	redisSessionData, err := redisInstance.Get(sessionID)
+	// 	if err != nil {
+	// 		log.Println("Error fetching from Redis ", err)
+	controller := controllers.GetControllerInstance(enum.SessionController, enum.MONGODB)
+	sessionController := controller.(*controllers.SessionController)
+	dbSessionData, sessionErr := sessionController.DoesSessionIDExist(sessionID)
+	if sessionErr != nil {
+		return nil, sessionErr
 	} else {
-		log.Println("Redis client not initialized")
-		return nil, nil
+		return dbSessionData, nil
 	}
+	// 	} else {
+	// 		log.Println("Session Data from Redis", redisSessionData)
+	// 		return redisSessionData, nil
+	// 	}
+	// } else {
+	// 	log.Println("Redis client not initialized")
+	// 	return nil, nil
+	// }
 	// if err == redis.Nil {
 	// 	// If not found in Redis, look up in MongoDB
 	// 	var sessionData bson.M

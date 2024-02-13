@@ -51,7 +51,7 @@ func (apiHandler APIRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 func (apiHandler APIRequestHandler) PUTRoutes(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case apiRequestHandlerObj.Endpoint + "/createSession":
-		controller := controllers.GetControllerInstance(enum.SessionController, enum.MONGODB, "sessions")
+		controller := controllers.GetControllerInstance(enum.SessionController, enum.MONGODB)
 		sessionController := controller.(*controllers.SessionController)
 		res, ok := sessionController.CreateSession(w, r)
 		if ok != nil {
@@ -75,6 +75,17 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 	case apiRequestHandlerObj.Endpoint + "/login":
 		log.Println("Login")
 		break
+	case apiRequestHandlerObj.Endpoint + "/register":
+		log.Println("Register API Called")
+		controller := controllers.GetControllerInstance(enum.UserController, enum.MONGODB)
+		userController := controller.(*controllers.UserController)
+		code, res, data, ok := userController.Register(w, r)
+		if ok != nil {
+			response.SendResponse(w, code, res)
+		} else {
+			response.SendResponse(w, code, data)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}

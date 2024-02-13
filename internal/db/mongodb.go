@@ -95,12 +95,13 @@ func (m *MongoDB) Create(data interface{}, collectionName string) (bson.M, error
 
 	collection := conn.db.Collection(collectionName)
 	result, err := collection.InsertOne(context.Background(), data)
+	log.Println("Inserted Result", result)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	} else {
 		insertedID := result.InsertedID
-		return bson.M{"_id ": insertedID}, nil
+		return bson.M{"_id": insertedID}, nil
 	}
 }
 
