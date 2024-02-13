@@ -35,16 +35,26 @@ func MapToString(data map[string]interface{}) string {
 
 // convert interface to string
 func InterfaceToString(data interface{}) string {
-	// Check if the data is an ObjectID and convert to hex string directly.
+
 	if oid, ok := data.(primitive.ObjectID); ok {
 		return oid.Hex()
 	}
 
-	// For other data types, use JSON marshaling as fallback.
 	dataByte, err := json.Marshal(data)
 	if err != nil {
 		log.Println("Failed to marshal data: ", err)
 		return ""
 	}
 	return string(dataByte)
+}
+
+// convert map interface to struct
+func MapToStruct(data map[string]interface{}, target interface{}) error {
+	dataByte, _ := MarshalBinary(data)
+	err := UnmarshalBinary(dataByte, target)
+	if err != nil {
+		log.Println("Failed to unmarshal data: ", err)
+		return err
+	}
+	return nil
 }

@@ -74,7 +74,16 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 	switch urlPath {
 	case apiRequestHandlerObj.Endpoint + "/login":
 		log.Println("Login")
-		break
+		controller := controllers.GetControllerInstance(enum.UserController, enum.MONGODB)
+		userController := controller.(*controllers.UserController)
+		code, res, data, ok := userController.Login(w, r)
+		if ok != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, data)
+			return
+		}
 	case apiRequestHandlerObj.Endpoint + "/register":
 		log.Println("Register API Called")
 		controller := controllers.GetControllerInstance(enum.UserController, enum.MONGODB)
@@ -82,6 +91,7 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 		code, res, data, ok := userController.Register(w, r)
 		if ok != nil {
 			response.SendResponse(w, code, res)
+			return
 		} else {
 			response.SendResponse(w, code, data)
 			return

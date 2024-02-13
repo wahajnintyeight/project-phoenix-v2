@@ -15,6 +15,8 @@ var responseMessage = map[int]string{
 	1016: "Registration Successful",
 	1017: "User Already Exists",
 	1019: "Registration Failed",
+	1003: "User Not Found",
+	1002: "Login Successful",
 }
 
 type MessageResponse struct {

@@ -13,4 +13,5 @@ const (
 	EMAIL_EXISTS       AuthenticationResponseEnum = iota + 1010
 	REGISTER_FAILED    AuthenticationResponseEnum = iota + 1011
 	PASSWORD_MISMATCH  AuthenticationResponseEnum = iota + 1013
+	USER_NOT_FOUND     AuthenticationResponseEnum = iota + 993
 )

@@ -21,6 +21,7 @@ type DBInterface interface {
 	FindAll(interface{}, string) (string, error)
 	Update(interface{}, interface{}, string) (string, error)
 	Delete(interface{}, string) (string, error)
+	UpdateOrCreate(interface{}, interface{}, string)
 }
 
 func GetDBInstance(dbType enum.DBType) (DBInterface, error) {
