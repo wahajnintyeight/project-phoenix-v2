@@ -6,6 +6,7 @@ import (
 )
 
 var responseMessage = map[int]string{
+	-1:   "Internal Server Error",
 	1000: "Welcome to Project Phoenix V2",
 	1006: "Session Not Found",
 	1007: "Session Created",
@@ -15,8 +16,9 @@ var responseMessage = map[int]string{
 	1016: "Registration Successful",
 	1017: "User Already Exists",
 	1019: "Registration Failed",
-	1003: "User Not Found",
+	1003: "User Failed to Authourize",
 	1002: "Login Successful",
+	1021: "User Logged Out",
 }
 
 type MessageResponse struct {

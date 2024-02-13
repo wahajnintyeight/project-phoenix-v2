@@ -123,6 +123,27 @@ func (u *UserController) Login(w http.ResponseWriter, r *http.Request) (int, str
 	}
 }
 
+func (u *UserController) Logout(w http.ResponseWriter, r *http.Request) (int, string, interface{}, error) {
+	// userModel := model.User{}
+	//body will be empty
+	sessionId := r.Header.Get("sessionId")
+	_, hash, ok := r.BasicAuth()
+	if !ok {
+		return int(enum.USER_NOT_FOUND), "", nil, nil
+	}
+	userQuery := map[string]interface{}{
+		"token":     hash,
+		"sessionId": sessionId,
+	}
+	_, er := u.DB.Delete(userQuery, "loginActivity")
+	if er != nil {
+		log.Println("Error while logging out", er)
+		return int(enum.ERROR), "Error while logging out", nil, er
+	} else {
+		return int(enum.USER_LOGGED_OUT), "", nil, nil
+	}
+}
+
 func (u *UserController) HandleLoginActivity(userModel model.User, loginModel model.LoginModel, r *http.Request, token string) {
 	// Construct the query to check for existing loginActivity with the same sessionId and userId
 	sessionId := r.Header.Get("sessionId")

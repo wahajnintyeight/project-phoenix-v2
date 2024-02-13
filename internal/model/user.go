@@ -6,12 +6,12 @@ import (
 
 type User struct {
 	ID        string    `bson:"_id,omitempty" json:"_id,omitempty"`
-	Name      string    `bson:"name" validate:"required"`
-	Username  string    `bson:"username"`
-	Email     string    `bson:"email" validate:"required"`
-	Avatar    string    `bson:"avatar"`
-	Password  string    `bson:"password" validate:"required"`
-	Phone     string    `bson:"phone"`
-	CreatedAt time.Time `bson:"createdAt"`
-	UpdatedAt time.Time `bson:"updatedAt"`
+	Name      string    `bson:"name" validate:"required" json:"name"`
+	Username  string    `bson:"username" validate:"required" json:"username"`
+	Email     string    `bson:"email" validate:"required" json:"email"`
+	Avatar    string    `bson:"avatar" json:"avatar"`
+	Password  string    `bson:"password" validate:"required" json:"password"`
+	Phone     string    `bson:"phone" json:"phone"`
+	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
+	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt"`
 }

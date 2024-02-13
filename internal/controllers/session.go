@@ -30,7 +30,8 @@ func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Reques
 			"sessionID": sessionID,
 			"createdAt": time.Now(),
 		}
-		_, err := sc.DB.Create(sessionData, sc.CollectionName)
+		log.Println("Session Data", sessionData)
+		_, err := sc.DB.Create(sessionData, sc.GetCollectionName())
 		if err != nil {
 			log.Println("Unable to store session in DB", err)
 			return "", err

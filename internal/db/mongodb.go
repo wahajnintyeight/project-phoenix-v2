@@ -93,6 +93,7 @@ func (m *MongoDB) Create(data interface{}, collectionName string) (bson.M, error
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
 
+	log.Println("MongoDB | Create | Data: ", data, " | Collection: ", collectionName)
 	collection := conn.db.Collection(collectionName)
 	result, err := collection.InsertOne(context.Background(), data)
 	log.Println("Inserted Result", result)
@@ -144,5 +145,14 @@ func (m *MongoDB) UpdateOrCreate(query interface{}, update interface{}, collecti
 }
 
 func (m *MongoDB) Delete(data interface{}, collectionName string) (string, error) {
-	return "MongoDB delete", nil
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+	collection := conn.db.Collection(collectionName)
+	_, err := collection.DeleteOne(context.Background(), data)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	} else {
+		return "Deleted", nil
+	}
 }

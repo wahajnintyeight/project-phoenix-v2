@@ -72,12 +72,29 @@ func (s *APIGatewayService) registerRoutes() {
 				}
 			}
 
+			sessionMiddleware.Middleware(next).ServeHTTP(w, r)
+		})
+	}
+
+	openRoutesWithSession := []string{
+		s.serviceConfig.EndpointPrefix + "/login",
+	}
+	customMiddlewareWrapperWithSession := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if the request path is one of the open routes
+			for _, path := range openRoutesWithSession {
+				if strings.HasSuffix(r.URL.Path, path) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
 			sessionMiddleware.Middleware(authMiddleware.Middleware(next)).ServeHTTP(w, r)
 		})
 	}
 
 	s.router.Use(customMiddlewareWrapper)
-
+	s.router.Use(customMiddlewareWrapperWithSession)
 	s.router.PathPrefix(s.serviceConfig.EndpointPrefix).Handler(apiRequestHandler)
 }
 

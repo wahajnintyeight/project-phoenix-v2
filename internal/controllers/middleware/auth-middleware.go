@@ -3,6 +3,9 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"project-phoenix/v2/internal/db"
+	"project-phoenix/v2/internal/enum"
+	"project-phoenix/v2/internal/response"
 	internal "project-phoenix/v2/internal/service-configs"
 
 	"github.com/redis/go-redis/v9"
@@ -27,7 +30,35 @@ func NewAuthMiddleware() *AuthMiddleware {
 func (a *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 	log.Println("Auth Middleware")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
+		log.Println("Auth Middleware | Request URL: ", r.URL.Path)
+		email, hash, ok := r.BasicAuth()
+		log.Println(email, hash)
+		if !ok {
+			log.Println("Auth Middleware | No Basic Auth")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		} else if email == "" || hash == "" {
+			log.Println("Either Username or Hash not Provided in Basic Auth Header")
+			response.SendResponse(w, int(enum.USER_NOT_FOUND), nil)
+			return
+		}
+		loginActivityQuery := map[string]interface{}{
+			"token": hash,
+			"email": email,
+		}
+		dbInstance, er := db.GetDBInstance(enum.MONGODB)
+		if er != nil {
+			log.Println("Error while getting DB Instance: ", er)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		} else {
+			_, existingUserActivityError := dbInstance.FindOne(loginActivityQuery, "loginActivity")
+			if existingUserActivityError == nil {
+				log.Println("Auth Middleware | No User Activity")
+				response.SendResponse(w, int(enum.USER_NOT_FOUND), nil)
+				return
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }
