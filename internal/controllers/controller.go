@@ -13,12 +13,14 @@ var (
 )
 
 type Controller interface {
-	// CreateSession(w http.ResponseWriter, r *http.Request)
 }
 
 var (
 	controllerRegistry = make(map[string]Controller)
 	registryMutex      = sync.Mutex{}
+
+	// Controllers
+	sessionControllerInstance *SessionController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType, collectionName string) string {
@@ -49,7 +51,7 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 	var instance Controller
 	switch controllerType {
 	case enum.SessionController:
-		var sessionControllerInstance *SessionController
+
 		once.Do(func() {
 			dbInstance, err := db.GetDBInstance(dbType)
 			log.Println("DB Instance: ", dbInstance, err)
@@ -69,6 +71,5 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 		log.Println("Unknown controller type: ", controllerType)
 		return nil
 	}
-	registerControllerInstance(key, instance)
 	return instance
 }

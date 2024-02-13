@@ -20,6 +20,7 @@ var redisObj = &Redis{}
 
 func GetInstance() *Redis {
 	redisObj.once.Do(func() {
+		log.Println("Initializing Redis")
 		godotenv.Load()
 		redisHost := os.Getenv("REDIS_HOST")
 		redisPassword := os.Getenv("REDIS_PASSWORD")

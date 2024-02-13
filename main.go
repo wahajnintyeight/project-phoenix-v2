@@ -32,6 +32,7 @@ func main() {
 		Action: func(c *cli.Context) error {
 			serviceTypeFlag := c.String("service-name")
 			portFlag := c.Int("port")
+			log.Println(c)
 			log.Println("Service Name: ", serviceTypeFlag)
 			service := micro.NewService(
 				micro.Name(serviceTypeFlag),

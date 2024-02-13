@@ -40,6 +40,7 @@ func (sm *SessionMiddleware) GetSession(ctx context.Context, sessionID string) (
 		if err != nil {
 			log.Println("Error fetching from Redis ", err)
 			controller := controllers.GetControllerInstance(enum.SessionController, enum.MONGODB, "sessions")
+			log.Println("Session Controller Instance .", controller)
 			sessionController := controller.(*controllers.SessionController)
 			dbSessionData, sessionErr := sessionController.DoesSessionIDExist(sessionID)
 			if sessionErr != nil {
