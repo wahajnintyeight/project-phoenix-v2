@@ -106,6 +106,17 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, code, data)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/googleLogin":
+		controller := controllers.GetControllerInstance(enum.UserController, enum.MONGODB)
+		userController := controller.(*controllers.UserController)
+		code, res, data, ok := userController.GoogleLogin(w, r)
+		if ok != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, data)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}

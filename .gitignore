@@ -3,3 +3,4 @@ go.sum
 main.exe
 project-phoenix.exe
 tmp
+/internal/service-configs/api-gateway/firebase-auth-key.json

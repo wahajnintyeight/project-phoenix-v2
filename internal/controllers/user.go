@@ -13,10 +13,12 @@ import (
 	"project-phoenix/v2/pkg/helper"
 	"time"
 
+	firebase "firebase.google.com/go"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/api/option"
 )
 
 type UserController struct {
@@ -98,7 +100,7 @@ func (u *UserController) Login(w http.ResponseWriter, r *http.Request) (int, str
 			} else {
 				if u.MatchPasswords(loginModel.Password, userModel.Password) {
 					log.Println("User Model ", userModel)
-					generatedToken, generateEr := GenerateJWT()
+					generatedToken, generateEr := GenerateJWT("")
 					if generateEr != nil {
 						log.Println("Error while generating JWT", generateEr)
 						return int(enum.ERROR), "Error while generating JWT", nil, generateEr
@@ -137,12 +139,84 @@ func (u *UserController) Logout(w http.ResponseWriter, r *http.Request) (int, st
 		"token":     hash,
 		"sessionId": sessionId,
 	}
-	_, er := u.DB.Delete(userQuery, "loginActivity")
+	_, er := u.DB.Delete(userQuery, "loginactivities")
 	if er != nil {
 		log.Println("Error while logging out", er)
 		return int(enum.ERROR), "Error while logging out", nil, er
 	} else {
 		return int(enum.USER_LOGGED_OUT), "", nil, nil
+	}
+}
+
+func (u *UserController) GoogleLogin(w http.ResponseWriter, r *http.Request) (int, string, interface{}, error) {
+	// userModel := model.User{}
+	//body will be empty
+	log.Println("Google Login", r.Body)
+	googleLoginBody := model.GoogleLoginModel{}
+	decodeErr := json.NewDecoder(r.Body).Decode(&googleLoginBody)
+
+	if decodeErr == nil {
+		godotenv.Load()
+		firebaseConfigPath := os.Getenv("FIREBASE_AUTH_KEY_PATH")
+		log.Println("Firebase Config Path", firebaseConfigPath)
+		opt := option.WithCredentialsFile(firebaseConfigPath)
+		app, err := firebase.NewApp(r.Context(), nil, opt)
+		if err != nil {
+			log.Println("Error initializing app", err)
+			return int(enum.ERROR), "Error initializing app", nil, err
+		}
+		client, firebaseAuthErr := app.Auth(r.Context())
+		if firebaseAuthErr != nil {
+			log.Println("Error initializing app", firebaseAuthErr)
+			return int(enum.ERROR), "Error initializing app", nil, firebaseAuthErr
+		}
+		verifiedUser, verifyErr := client.VerifyIDToken(r.Context(), googleLoginBody.Token)
+		if verifyErr != nil {
+			log.Println("Error verifying token", verifyErr)
+			return int(enum.ERROR), "Error verifying token", nil, verifyErr
+		}
+		googleUserModel := model.GoogleUserModel{}
+		decErr := helper.MapToStruct(verifiedUser.Claims, &googleUserModel)
+		if decErr != nil {
+			log.Println("Error while decoding google user", decErr)
+			return int(enum.ERROR), "Error while decoding google user", nil, decErr
+		}
+		googleUserModel.Iss = verifiedUser.Issuer
+		googleUserModel.Aud = verifiedUser.Audience
+		a := helper.MapToStruct(verifiedUser.Firebase.Identities, &googleUserModel.Firebase.Identities)
+		if a != nil {
+			log.Println("Error while decoding google user", a)
+			return int(enum.ERROR), "Error while decoding google user", nil, a
+		}
+		// googleUserModel.Firebase.Identities.Email[0] = googleUserModel.Firebase.Identities.Email[0]
+		generatedToken, generateEr := GenerateJWT(googleUserModel.Iss)
+		if generateEr != nil {
+			log.Println("Error while generating JWT", generateEr)
+			return int(enum.ERROR), "Error while generating JWT", nil, generateEr
+		} else {
+			userModel := model.User{
+				Email:     googleUserModel.Firebase.Identities.Email[0],
+				Name:      googleUserModel.Name,
+				Avatar:    googleUserModel.Picture,
+				UpdatedAt: time.Now(),
+			}
+
+			returnedUserID := u.DB.UpdateOrCreate(map[string]interface{}{"email": googleUserModel.
+				Firebase.Identities.Email[0]}, userModel, "users")
+			if returnedUserID == nil {
+				log.Println("Error while creating user", returnedUserID)
+				return int(enum.ERROR), "Error while creating user", nil, nil
+			} else {
+				userModel.ID = helper.InterfaceToString(returnedUserID)
+				u.HandleLoginActivity(userModel, model.LoginModel{FcmKey: generatedToken}, r, generatedToken)
+
+				return int(enum.USER_LOGGED_IN), "", helper.MergeStructAndMap(userModel, map[string]interface{}{"token": generatedToken}), nil
+			}
+			// return int(enum.DATA_FETCHED), "", generatedToken, nil
+		}
+	} else {
+		log.Println("Unable to decode request body", decodeErr)
+		return int(enum.ERROR), "Unable to decode request body", nil, decodeErr
 	}
 }
 
@@ -165,16 +239,23 @@ func (u *UserController) HandleLoginActivity(userModel model.User, loginModel mo
 		"deviceName":  "",
 		"token":       token,
 		"email":       userModel.Email,
+		"updatedAt":   time.Now(),
 	}
 
 	// Call UpdateOrCreate with the constructed query and update data
-	u.DB.UpdateOrCreate(query, update, "loginActivity")
+	res := u.DB.UpdateOrCreate(query, update, "loginactivities")
+	log.Println("Login Activity", res)
 }
 
-func GenerateJWT() (string, error) {
+func GenerateJWT(issuer string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
-	godotenv.Load()
-	appName := os.Getenv("APP_NAME")
+	appName := ""
+	if issuer != "" {
+		godotenv.Load()
+		appName = os.Getenv("APP_NAME")
+	} else {
+		appName = issuer
+	}
 	jwtKey := os.Getenv("JWT_KEY")
 	claims := jwt.RegisteredClaims{
 		ExpiresAt: jwt.NewNumericDate(expirationTime),

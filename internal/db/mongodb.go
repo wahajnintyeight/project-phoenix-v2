@@ -130,18 +130,25 @@ func (m *MongoDB) Update(data interface{}, update interface{}, collectionName st
 	return "MongoDB update", nil
 }
 
-func (m *MongoDB) UpdateOrCreate(query interface{}, update interface{}, collectionName string) {
+func (m *MongoDB) UpdateOrCreate(query interface{}, update interface{}, collectionName string) interface{} {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
 	collection := conn.db.Collection(collectionName)
-	updateData := bson.M{"$set": update, "$currentDate": bson.M{
-		"updatedAt": true,
-	}}
-
-	_, err := collection.UpdateOne(context.Background(), query, updateData, options.Update().SetUpsert(true))
+	updateData := bson.M{"$set": update}
+	res, err := collection.UpdateOne(context.Background(), query, updateData, options.Update().SetUpsert(true))
 	if err != nil {
 		log.Printf("MongoDB | Unable to update or create data in %s | Error: %v | Query: %v\n", collectionName, err, query)
+		return nil
 	}
+	if res.UpsertedID == nil {
+		existingData, _ := m.FindOne(query, collectionName)
+		if existingData != nil {
+			return existingData["_id"]
+		}
+	}
+	log.Println("MongoDB | UpdateOrCreate | UpsertedID: ", res.UpsertedID)
+	return res.UpsertedID
+
 }
 
 func (m *MongoDB) Delete(data interface{}, collectionName string) (string, error) {
