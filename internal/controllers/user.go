@@ -112,7 +112,7 @@ func (u *UserController) Login(w http.ResponseWriter, r *http.Request) (int, str
 					}
 
 				} else {
-					return int(enum.USER_LOGIN_FAILED), "", nil, nil
+					return int(enum.LOGIN_FAILED), "", nil, nil
 				}
 			}
 		}
@@ -127,9 +127,11 @@ func (u *UserController) Logout(w http.ResponseWriter, r *http.Request) (int, st
 	// userModel := model.User{}
 	//body will be empty
 	sessionId := r.Header.Get("sessionId")
-	_, hash, ok := r.BasicAuth()
+	userName, hash, ok := r.BasicAuth()
 	if !ok {
 		return int(enum.USER_NOT_FOUND), "", nil, nil
+	} else if userName == "" || hash == "" {
+
 	}
 	userQuery := map[string]interface{}{
 		"token":     hash,
@@ -160,8 +162,9 @@ func (u *UserController) HandleLoginActivity(userModel model.User, loginModel mo
 		"fcmKey":      loginModel.FcmKey,
 		"isRider":     false,
 		"isSpectator": false,
-		"deviceName":  "",    // Add how you determine device name
-		"token":       token, // Assuming you set the token after this function
+		"deviceName":  "",
+		"token":       token,
+		"email":       userModel.Email,
 	}
 
 	// Call UpdateOrCreate with the constructed query and update data

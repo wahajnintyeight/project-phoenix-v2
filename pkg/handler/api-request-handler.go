@@ -70,7 +70,6 @@ func (apiHandler APIRequestHandler) PUTRoutes(w http.ResponseWriter, r *http.Req
 func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 	//switch case for handling all the POST routes
 	urlPath := r.URL.Path
-	log.Print("POST Routes: ", urlPath)
 	switch urlPath {
 	case apiRequestHandlerObj.Endpoint + "/login":
 		log.Println("Login")

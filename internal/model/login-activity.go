@@ -7,6 +7,7 @@ type LoginActivity struct {
 	UserAgent   string    `bson:"userAgent" json:"userAgent"`
 	IPAddress   string    `bson:"ipAddress" json:"ipAddress"`
 	Token       string    `bson:"token" json:"token"`
+	Email       string    `bson:"email" json:"email"`
 	GoogleToken string    `bson:"googleToken" json:"googleToken"`
 	FCMKey      string    `bson:"fcmKey" json:"fcmKey"`
 	SessionID   string    `bson:"sessionId" json:"sessionId"`

@@ -52,8 +52,8 @@ func (a *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		} else {
-			_, existingUserActivityError := dbInstance.FindOne(loginActivityQuery, "loginActivity")
-			if existingUserActivityError == nil {
+			existingActivity, existingUserActivityError := dbInstance.FindOne(loginActivityQuery, "loginActivity")
+			if existingUserActivityError == nil && existingActivity == nil {
 				log.Println("Auth Middleware | No User Activity")
 				response.SendResponse(w, int(enum.USER_NOT_FOUND), nil)
 				return

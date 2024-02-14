@@ -61,17 +61,20 @@ func (s *APIGatewayService) registerRoutes() {
 
 	openRoutes := []string{
 		s.serviceConfig.EndpointPrefix + "/createSession",
+		s.serviceConfig.EndpointPrefix + "/",
 	}
 	customMiddlewareWrapper := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Check if the request path is one of the open routes
+			log.Println("Request URL: ", r.URL.Path)
 			for _, path := range openRoutes {
 				if strings.HasSuffix(r.URL.Path, path) {
-					next.ServeHTTP(w, r)
+					apiRequestHandler.ServeHTTP(w, r)
+					// next.ServeHTTP(w, r)
 					return
 				}
 			}
-
+			// authMiddleware.Middleware(next).ServeHTTP(w, r)
 			sessionMiddleware.Middleware(next).ServeHTTP(w, r)
 		})
 	}
@@ -82,6 +85,8 @@ func (s *APIGatewayService) registerRoutes() {
 	customMiddlewareWrapperWithSession := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Check if the request path is one of the open routes
+			log.Println("Request URL: ", r.URL.Path)
+
 			for _, path := range openRoutesWithSession {
 				if strings.HasSuffix(r.URL.Path, path) {
 					next.ServeHTTP(w, r)
