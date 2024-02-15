@@ -1,8 +1,11 @@
 package broker
 
 import (
+	"log"
+	"os"
 	"sync"
 
+	"github.com/joho/godotenv"
 	"github.com/rabbitmq/amqp091-go"
 )
 
@@ -16,16 +19,36 @@ var (
 	rabbitMqInstance *RabbitMQ
 )
 
-func (r *RabbitMQ) PublishMessage() {
+func (r *RabbitMQ) PublishMessage(data interface{}) {
+	return
 }
 
-func (r *RabbitMQ) GetInstance() *RabbitMQ {
-	rOnce.Do(func() {
-		rabbitMqInstance = &RabbitMQ{}
-	})
-	return rabbitMqInstance
-}
+// func (r *RabbitMQ) GetInstance() *RabbitMQ {
+// 	rOnce.Do(func() {
+// 		//do the connect thing here
+// 		r.ConnectBroker()
+// 	})
+// 	return r
+// }
 
-func (r *RabbitMQ) Connect(con string) error {
+func (r *RabbitMQ) ConnectBroker() error {
+	godotenv.Load()
+	rHost := os.Getenv("RABBITMQ_HOST")
+	rUser := os.Getenv("RABBITMQ_USERNAME")
+	rPass := os.Getenv("RABBITMQ_PASSWORD")
+	rPort := os.Getenv("RABBITMQ_PORT")
+	connString := "amqp://" + rUser + ":" + rPass + "@" + rHost + ":" + rPort + "/"
+	rabbitConn, connErr := amqp091.Dial(connString)
+	if connErr != nil {
+		return connErr
+	}
+	r.conn = rabbitConn
+	r.ch, connErr = rabbitConn.Channel()
+	if connErr != nil {
+		return connErr
+	}
+	log.Println("Connected to RabbitMQ", r.conn, r.ch)
+	defer r.conn.Close()
+
 	return nil
 }

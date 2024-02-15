@@ -7,20 +7,20 @@ type Kafka struct {
 
 var (
 	kOnce         sync.Once
-	kafkaInstance *Kafka
+	kafkaObj *Kafka
 )
 
-func (k *Kafka) GetInstance() *Kafka {
-	kOnce.Do(func() {
-		kafkaInstance = &Kafka{}
-	})
-	return kafkaInstance
+// func (k *Kafka) GetInstance() *Kafka {
+// 	kOnce.Do(func() {
+// 		kafkaObj = &Kafka{}
+// 	})
+// 	return kafkaInstance
+// }
+
+func (k *Kafka) PublishMessage(data interface{}) {
+	return
 }
 
-func (k *Kafka) PublishMessage() {
-
-}
-
-func (k *Kafka) Connect(con string) error {
+func (k *Kafka) ConnectBroker() error {
 	return nil
 }

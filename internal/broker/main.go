@@ -1,33 +1,40 @@
 package broker
 
-import "errors"
-
-type Broker struct {
-	PublishMessage (interface{})
-	// Connect(string) (error)
-	GetInstance (int)
-}
-
-type BrokerType int
-
-const (
-	RABBITMQ BrokerType = iota
-	KAFKA
+import (
+	"project-phoenix/v2/internal/enum"
+	"sync"
 )
 
-func CreateBroker(brokerType BrokerType) (*Broker, error) {
-	switch {
-	case RABBITMQ:
-		broker := rabbitMqInstance.GetInstance()
-		e := broker.Connect("7")
-		return broker, nil
+type Broker interface {
+	PublishMessage(interface{})
+	ConnectBroker() error
+	// GetInstance()
+}
 
-	case KAFKA:
-		broker := kafkaInstance.GetInstance()
-		e := broker.Connect("7")
+var (
+	rabbitOnce       sync.Once
+	kafkaOnce        sync.Once
+	rabbitMQInstance *RabbitMQ
+	kafkaInstance    *Kafka
+)
 
-		return broker, nil
+func CreateBroker(brokerType enum.BrokerType) Broker {
+	switch brokerType {
+	case enum.RABBITMQ:
+		rabbitOnce.Do(func() {
+			broker := &RabbitMQ{}
+			broker.ConnectBroker()
+			rabbitMQInstance = broker
+		})
+		return rabbitMQInstance
+	case enum.KAFKA:
+		kafkaOnce.Do(func() {
+			broker := &Kafka{}
+			// Initialize Kafka connection here if necessary
+			kafkaInstance = broker
+		})
+		return kafkaInstance
 	default:
-		return nil, errors.New("unknown broker type")
+		return nil
 	}
 }
