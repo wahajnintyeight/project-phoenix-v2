@@ -3,15 +3,21 @@
     "port": "8882",
     "serviceExchange": "location-exchange",
     "serviceQueue": "location-queue",
-    "subscribedTopics": [
+    "subscribedServices": [
         {
-            "start-tracking": "handleStartTracking"
-        },
-        {
-            "stop-tracking": "handleStopTracking"
+            "name": "api-gateway",
+            "exchange": "api-gateway-exchange",
+            "queue": "api-gateway-queue",
+            "subscribedTopics": [
+                {
+                    "topicName": "start-tracking",
+                    "topicHandler": "handleStartTracking"
+                },
+                {
+                    "topicName": "stop-tracking",
+                    "topicHandler": "handleStopTracking"
+                }
+            ]
         }
-    ],
-    "subscribedQueues": [
-        "api-gateway-queue"
     ]
 }

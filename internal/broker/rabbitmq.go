@@ -52,6 +52,7 @@ func (r *RabbitMQ) ConnectBroker() error {
 	rPass := os.Getenv("RABBITMQ_PASSWORD")
 	rPort := os.Getenv("RABBITMQ_PORT")
 	connString := "amqp://" + rUser + ":" + rPass + "@" + rHost + ":" + rPort + "/"
+	log.Println("COnn string",connString)
 	r.rabbitMQBroker = broker.NewBroker(
 		// Set the broker to RabbitMQ
 		broker.Addrs(connString),

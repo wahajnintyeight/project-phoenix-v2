@@ -12,7 +12,7 @@ type ServiceInterface interface {
 	Start() error
 	Stop() error
 	InitializeService(micro.Service, string) (ServiceInterface)
-	GetSubscribedTopics() ([]internal.SubscribedTopicsMap)
+	GetSubscribedTopics() ([]internal.SubscribedServices)
 	ListenSubscribedTopics(microBroker.Event) error
 	SubscribeTopics()
 	InitServiceConfig()

@@ -30,13 +30,13 @@ type APIGatewayService struct {
 	router        *mux.Router
 	server        *http.Server
 	serviceConfig internal.ServiceConfig
-	subscribedTopics []internal.SubscribedTopicsMap
+	subscribedServices []internal.SubscribedServices
 	brokerObj        microBroker.Broker
 }
 
 var once sync.Once
 
-func (api *APIGatewayService) GetSubscribedTopics() []internal.SubscribedTopicsMap {
+func (api *APIGatewayService) GetSubscribedTopics() []internal.SubscribedServices {
 	return nil
 }
 
@@ -65,9 +65,9 @@ func (api *APIGatewayService) ListenSubscribedTopics(broker microBroker.Event) e
 
 func (ls *APIGatewayService) SubscribeTopics() {
 	ls.InitServiceConfig()
-	for _, topic := range ls.subscribedTopics {
-		ls.brokerObj.Subscribe(topic.TopicName, ls.ListenSubscribedTopics, microBroker.Queue(ls.serviceConfig.ServiceQueue))
-	}
+	// for _, topic := range ls.subscribedTopics {
+	// 	ls.brokerObj.Subscribe(topic.TopicName, ls.ListenSubscribedTopics, microBroker.Queue(ls.serviceConfig.ServiceQueue))
+	// }
 }
 
 func (ls *APIGatewayService) InitServiceConfig() {

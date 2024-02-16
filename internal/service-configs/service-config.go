@@ -8,15 +8,21 @@ import (
 )
 
 type ServiceConfig struct {
-	Port                   string                `json:"port`
-	ServiceName            string                `json:"serviceName"`
-	ServiceExchange        string                `json:"serviceExchange"`
-	ServiceQueue           string                `json:"serviceQueue"`
-	EndpointPrefix         string                `json:"endpointPrefix"`
-	SessionIDMiddlewareKey string                `json:"sessionIdMiddleware"`
-	SubscribedTopics       []SubscribedTopicsMap `json:"subscribedTopics"`
+	Port                   string               `json:"port`
+	ServiceName            string               `json:"serviceName"`
+	ServiceExchange        string               `json:"serviceExchange"`
+	ServiceQueue           string               `json:"serviceQueue"`
+	EndpointPrefix         string               `json:"endpointPrefix"`
+	SessionIDMiddlewareKey string               `json:"sessionIdMiddleware"`
+	SubscribedServices     []SubscribedServices `json:"subscribedServices"`
 }
 
+type SubscribedServices struct {
+	Name             string                `json:"name"`
+	Exchange         string                `json:"exchange"`
+	Queue            string                `json:"queue"`
+	SubscribedTopics []SubscribedTopicsMap `json:"subscribedTopics"`
+}
 type SubscribedTopicsMap struct {
 	TopicName    string `json:"topicName"`
 	TopicHandler string `json:"topicHandler"`
