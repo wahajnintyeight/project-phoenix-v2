@@ -163,3 +163,33 @@ func (m *MongoDB) Delete(data interface{}, collectionName string) (string, error
 		return "Deleted", nil
 	}
 }
+
+func (m *MongoDB) ValidateIndexing(collectionName string, indexKeys interface{}) error{
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+	collection := conn.db.Collection(collectionName)
+	indexView, e := collection.Indexes().List(context.Background())
+	//first check if the index exist
+	if e != nil {
+		log.Println("Error while fetching indexes: ", e)
+		//if there is no index, create them
+		indexModel := mongo.IndexModel{
+			Keys: indexKeys,
+		}
+		_, err := collection.Indexes().CreateOne(context.Background(), indexModel)
+		if err != nil {
+			log.Println("Error while creating index: ", err)
+			return err
+		}
+		return nil
+	}
+	for indexView.Next(context.Background()) {
+		var index bson.M
+		indexView.Decode(&index)
+		if index["key"] == indexKeys {
+			log.Println("Index already exists")
+			return nil
+		}
+	}
+	return nil
+}

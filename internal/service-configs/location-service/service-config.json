@@ -1,6 +1,14 @@
 {
-    "name": "socket-service",
+    "serviceName": "location-service",
     "port": "8080",
     "serviceExchange": "api-gateway-exchange",
-    "serviceQueue": "api-gateway-queue"
+    "serviceQueue": "api-gateway-queue",
+    "subscribedTopics": [
+        {
+            "start-tracking": "handleStartTracking"
+        },
+        {
+            "stop-tracking": "handleStopTracking"
+        }
+    ]
 }

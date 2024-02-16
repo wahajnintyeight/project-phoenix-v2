@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"project-phoenix/v2/internal/cache"
 	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/enum"
@@ -64,7 +63,7 @@ func (sm *SessionMiddleware) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		serviceConfigPath := os.Getenv("API_GATEWAY_SERVICE_CONFIG_PATH")
+		serviceConfigPath := "api-gateway"
 		apiGatewayServiceConfig, err := internal.ReturnServiceConfig(serviceConfigPath)
 		ctx := context.WithValue(r.Context(), apiGatewayServiceConfig.(internal.ServiceConfig).SessionIDMiddlewareKey, session)
 		r = r.WithContext(ctx)

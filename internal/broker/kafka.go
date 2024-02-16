@@ -17,7 +17,7 @@ var (
 // 	return kafkaInstance
 // }
 
-func (k *Kafka) PublishMessage(data interface{}) {
+func (k *Kafka) PublishMessage(data map[string]interface{},serviceName string,topicName string) {
 	return
 }
 

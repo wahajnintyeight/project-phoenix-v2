@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/controllers/middleware"
 	"project-phoenix/v2/internal/enum"
@@ -117,6 +116,18 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, code, data)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/startTracking":
+		controller := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB)
+		userTripController := controller.(*controllers.UserTripController)
+		code, res, data, ok := userTripController.StartTracking(w, r)
+		if ok != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, data)
+			return
+		}
+		return
 	default:
 		http.NotFound(w, r)
 	}
@@ -124,7 +135,7 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 
 func ValidateSession(w http.ResponseWriter, r *http.Request) bool {
 	godotenv.Load()
-	serviceConfigPath := os.Getenv("API_GATEWAY_SERVICE_CONFIG_PATH")
+	serviceConfigPath := "api-gateway"
 	apiGatewayServiceConfig, err := internal.ReturnServiceConfig(serviceConfigPath)
 	if err != nil {
 		return false

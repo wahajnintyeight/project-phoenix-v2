@@ -5,6 +5,6 @@ type ControllerType int
 const (
 	// Define constants for each service type
 	SessionController ControllerType = iota
-	LocationController
+	UserTripController
 	UserController
 )

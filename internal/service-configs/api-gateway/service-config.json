@@ -1,5 +1,5 @@
 {
-    "name": "api-gateway",
+    "serviceName": "api-gateway",
     "port": "8881",
     "serviceExchange": "api-gateway-exchange",
     "serviceQueue": "api-gateway-queue",

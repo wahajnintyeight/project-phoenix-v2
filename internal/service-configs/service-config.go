@@ -8,19 +8,25 @@ import (
 )
 
 type ServiceConfig struct {
-	Port            string `json:"port`
-	ServiceName     string `json:"serviceName"`
-	ServiceExchange string `json:"serviceExchange"`
-	ServiceQueue    string `json:"serviceQueue"`
-	EndpointPrefix  string `json:"endpointPrefix"`
-	SessionIDMiddlewareKey string `json:"sessionIdMiddleware"`
+	Port                   string                `json:"port`
+	ServiceName            string                `json:"serviceName"`
+	ServiceExchange        string                `json:"serviceExchange"`
+	ServiceQueue           string                `json:"serviceQueue"`
+	EndpointPrefix         string                `json:"endpointPrefix"`
+	SessionIDMiddlewareKey string                `json:"sessionIdMiddleware"`
+	SubscribedTopics       []SubscribedTopicsMap `json:"subscribedTopics"`
+}
+
+type SubscribedTopicsMap struct {
+	TopicName    string `json:"topicName"`
+	TopicHandler string `json:"topicHandler"`
 }
 
 var serviceConfigObj ServiceConfig
 
-func ReturnServiceConfig(path string) (interface{}, error) {
+func ReturnServiceConfig(serviceName string) (interface{}, error) {
 	//read the path, and return. the file is in json format
-	serviceConfig, err := os.Open(path)
+	serviceConfig, err := os.Open("internal/service-configs/" + serviceName + "/service-config.json")
 
 	if err != nil {
 		fmt.Println("Unable to read file")
@@ -29,7 +35,9 @@ func ReturnServiceConfig(path string) (interface{}, error) {
 	defer serviceConfig.Close()
 
 	byteValue, _ := ioutil.ReadAll(serviceConfig)
-	// var result map[string]interface{}
-	json.Unmarshal([]byte(byteValue), &serviceConfigObj)
+	if err := json.Unmarshal(byteValue, &serviceConfigObj); err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return nil, err
+	}
 	return serviceConfigObj, nil
 }

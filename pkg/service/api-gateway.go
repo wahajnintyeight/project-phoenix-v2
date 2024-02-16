@@ -33,6 +33,10 @@ type APIGatewayService struct {
 
 var once sync.Once
 
+func (api *APIGatewayService) GetSubscribedTopics() []string{
+	return nil
+}
+
 func (api *APIGatewayService) InitializeService(serviceObj micro.Service, serviceName string) ServiceInterface {
 
 	once.Do(func() {
@@ -40,7 +44,7 @@ func (api *APIGatewayService) InitializeService(serviceObj micro.Service, servic
 		api.service = service
 		api.router = mux.NewRouter()
 		godotenv.Load()
-		servicePath := os.Getenv("API_GATEWAY_SERVICE_CONFIG_PATH")
+		servicePath := "api-gateway"
 		serviceConfig, _ := internal.ReturnServiceConfig(servicePath)
 		api.serviceConfig = serviceConfig.(internal.ServiceConfig)
 	})
@@ -106,7 +110,7 @@ func (s *APIGatewayService) registerRoutes() {
 
 func (s *APIGatewayService) Start() error {
 	godotenv.Load()
-	serviceConfig, serviceConfigErr := internal.ReturnServiceConfig(os.Getenv("API_GATEWAY_SERVICE_CONFIG_PATH"))
+	serviceConfig, serviceConfigErr := internal.ReturnServiceConfig("api-gateway")
 	fmt.Println("Starting API Gateway Service on", serviceConfig.(internal.ServiceConfig).Port)
 	var serverPort string
 	if serviceConfigErr != nil {

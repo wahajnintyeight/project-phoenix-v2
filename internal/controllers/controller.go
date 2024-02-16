@@ -20,8 +20,9 @@ var (
 	registryMutex      = sync.Mutex{}
 
 	// Controllers
-	sessionControllerInstance *SessionController
-	userControllerInstance    *UserController
+	sessionControllerInstance  *SessionController
+	userControllerInstance     *UserController
+	userTripControllerInstance *UserTripController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
@@ -77,6 +78,19 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 
 		}
 		return userControllerInstance
+	case enum.UserTripController:
+		if userTripControllerInstance == nil {
+			log.Println("Initialize User Trip Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+				return nil
+			}
+			userTripControllerInstance = &UserTripController{
+				DB: dbInstance,
+			}
+		}
+		return userTripControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil
