@@ -2,7 +2,6 @@ package service
 
 import (
 	"log"
-	"project-phoenix/v2/internal/broker"
 	internal "project-phoenix/v2/internal/service-configs"
 	"sync"
 	microBroker "go-micro.dev/v4/broker"
@@ -13,6 +12,7 @@ import (
 type LocationService struct {
 	service          micro.Service
 	subscribedTopics []internal.SubscribedTopicsMap
+	serviceConfig    internal.ServiceConfig
 	brokerObj        microBroker.Broker
 }
 
@@ -30,15 +30,28 @@ func (ls *LocationService) GetSubscribedTopics() []internal.SubscribedTopicsMap 
 	return ls.subscribedTopics
 }
 
+func (ls *LocationService) InitServiceConfig() {
+	serviceConfig, er := internal.ReturnServiceConfig("location-service")
+	if er != nil {
+		log.Println("Unable to read service config", er)
+		return
+	}
+	ls.serviceConfig = serviceConfig.(internal.ServiceConfig)
+}
+
 func (ls *LocationService) SubscribeTopics() {
+	ls.InitServiceConfig()
 	for _, topic := range ls.subscribedTopics {
-		ls.brokerObj.Subscribe(topic.TopicName,ls.ListenSubscribedTopics,microBroker.SubscribeOptions.Queue(topic.TopicName))
+		ls.brokerObj.Subscribe(topic.TopicName, ls.ListenSubscribedTopics, microBroker.Queue(ls.serviceConfig.ServiceQueue))
 	}
 }
 
-func (ls *LocationService) ListenSubscribedTopics(broker broker.Event) {
+func (ls *LocationService) ListenSubscribedTopics(broker microBroker.Event) error {
 	// ls.brokerObj.Subscribe()
 	// broker
+	log.Println("Broker Event: ", broker)
+	log.Println("Broker Event: ", broker.Message().Header)
+	return nil
 }
 
 func (ls *LocationService) InitializeService(serviceObj micro.Service, serviceName string) ServiceInterface {

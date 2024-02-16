@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"go-micro.dev/v4"
+	microBroker "go-micro.dev/v4/broker"
 	// "log"
 )
 
@@ -29,11 +30,13 @@ type APIGatewayService struct {
 	router        *mux.Router
 	server        *http.Server
 	serviceConfig internal.ServiceConfig
+	subscribedTopics []internal.SubscribedTopicsMap
+	brokerObj        microBroker.Broker
 }
 
 var once sync.Once
 
-func (api *APIGatewayService) GetSubscribedTopics() []string{
+func (api *APIGatewayService) GetSubscribedTopics() []internal.SubscribedTopicsMap {
 	return nil
 }
 
@@ -51,6 +54,31 @@ func (api *APIGatewayService) InitializeService(serviceObj micro.Service, servic
 
 	return api
 }
+
+func (api *APIGatewayService) ListenSubscribedTopics(broker microBroker.Event) error {
+	// ls.brokerObj.Subscribe()
+	// broker
+	log.Println("Broker Event: ", broker)
+	log.Println("Broker Event: ", broker.Message().Header)
+	return nil
+}
+
+func (ls *APIGatewayService) SubscribeTopics() {
+	ls.InitServiceConfig()
+	for _, topic := range ls.subscribedTopics {
+		ls.brokerObj.Subscribe(topic.TopicName, ls.ListenSubscribedTopics, microBroker.Queue(ls.serviceConfig.ServiceQueue))
+	}
+}
+
+func (ls *APIGatewayService) InitServiceConfig() {
+	serviceConfig, er := internal.ReturnServiceConfig("api-gateway")
+	if er != nil {
+		log.Println("Unable to read service config", er)
+		return
+	}
+	ls.serviceConfig = serviceConfig.(internal.ServiceConfig)
+}
+
 
 func NewAPIGatewayService(serviceObj micro.Service, serviceName string) ServiceInterface {
 	apiGatewayService := &APIGatewayService{}

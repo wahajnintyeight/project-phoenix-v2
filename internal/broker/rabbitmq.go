@@ -41,14 +41,6 @@ func (r *RabbitMQ) PublishMessage(data map[string]interface{}, serviceName strin
 	return
 }
 
-// func (r *RabbitMQ) GetInstance() *RabbitMQ {
-// 	rOnce.Do(func() {
-// 		//do the connect thing here
-// 		r.ConnectBroker()
-// 	})
-// 	return r
-// }
-
 func (r *RabbitMQ) SubscribeTopic (){
 	
 }
