@@ -1,8 +1,8 @@
 {
     "serviceName": "location-service",
-    "port": "8080",
-    "serviceExchange": "api-gateway-exchange",
-    "serviceQueue": "api-gateway-queue",
+    "port": "8882",
+    "serviceExchange": "location-exchange",
+    "serviceQueue": "location-queue",
     "subscribedTopics": [
         {
             "start-tracking": "handleStartTracking"
@@ -10,5 +10,8 @@
         {
             "stop-tracking": "handleStopTracking"
         }
+    ],
+    "subscribedQueues": [
+        "api-gateway-queue"
     ]
 }
