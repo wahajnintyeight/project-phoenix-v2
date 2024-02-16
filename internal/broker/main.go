@@ -6,7 +6,7 @@ import (
 )
 
 type Broker interface {
-	PublishMessage(interface{})
+	PublishMessage(map[string]interface{},string,string)
 	ConnectBroker() error
 	// GetInstance()
 }
