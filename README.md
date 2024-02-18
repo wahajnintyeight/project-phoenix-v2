@@ -23,7 +23,6 @@
   <p>What things you need to install the software and how to install them:</p>
   <ul>
     <li>Go (version 1.x or later)</li>
-    <li>Docker (optional for containerization)</li>
   </ul>
 
   <h3>Installing</h3>
