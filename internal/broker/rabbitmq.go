@@ -6,15 +6,16 @@ import (
 	"project-phoenix/v2/pkg/helper"
 	"sync"
 
+	"github.com/go-micro/plugins/v4/broker/rabbitmq"
 	"github.com/joho/godotenv"
-	"github.com/rabbitmq/amqp091-go"
+	amqp091 "github.com/rabbitmq/amqp091-go"
 	"go-micro.dev/v4/broker"
 )
 
 type RabbitMQ struct {
 	conn *amqp091.Connection
 	// ch   *amqp091.Channel
-	rabbitMQBroker broker.Broker
+	RabbitMQBroker broker.Broker
 }
 
 var (
@@ -41,28 +42,36 @@ func (r *RabbitMQ) PublishMessage(data map[string]interface{}, serviceName strin
 	return
 }
 
-func (r *RabbitMQ) SubscribeTopic (){
-	
+func (r *RabbitMQ) SubscribeTopic() {
+
 }
 
 func (r *RabbitMQ) ConnectBroker() error {
+
+	// connString := fmt.Sprintf("amqp://%s:%s@%s", rUser, rPass, rHost)
+	rabbitMQConnString := ReturnRabbitMQConnString()
+	// log.Println("Connection string", (connString))
+	r.RabbitMQBroker = rabbitmq.NewBroker(
+		broker.Addrs(rabbitMQConnString),
+	)
+	if initEr := r.RabbitMQBroker.Init(); initEr != nil {
+		log.Println(initEr)
+		return initEr
+	}
+	if e := r.RabbitMQBroker.Connect(); e != nil {
+		log.Println(e)
+		return e
+	}
+
+	return nil
+}
+
+func ReturnRabbitMQConnString() string {
 	godotenv.Load()
 	rHost := os.Getenv("RABBITMQ_HOST")
 	rUser := os.Getenv("RABBITMQ_USERNAME")
 	rPass := os.Getenv("RABBITMQ_PASSWORD")
 	rPort := os.Getenv("RABBITMQ_PORT")
 	connString := "amqp://" + rUser + ":" + rPass + "@" + rHost + ":" + rPort + "/"
-	log.Println("COnn string",connString)
-	r.rabbitMQBroker = broker.NewBroker(
-		// Set the broker to RabbitMQ
-		broker.Addrs(connString),
-	)
-	if e := r.rabbitMQBroker.Connect(); e != nil {
-		log.Println("Error occurred while connecting to RabbitMQ", e)
-		return e
-	}
-
-	defer r.rabbitMQBroker.Disconnect()
-
-	return nil
+	return connString
 }

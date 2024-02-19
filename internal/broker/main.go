@@ -1,12 +1,15 @@
 package broker
 
 import (
+	"log"
+
+	// "project-phoenix/v2/internal/broker"
 	"project-phoenix/v2/internal/enum"
 	"sync"
 )
 
 type Broker interface {
-	PublishMessage(map[string]interface{},string,string)
+	PublishMessage(map[string]interface{}, string, string)
 	ConnectBroker() error
 	// GetInstance()
 }
@@ -25,6 +28,7 @@ func CreateBroker(brokerType enum.BrokerType) Broker {
 			broker := &RabbitMQ{}
 			broker.ConnectBroker()
 			rabbitMQInstance = broker
+			log.Println("RabbitMQ Instance Created")
 		})
 		return rabbitMQInstance
 	case enum.KAFKA:
@@ -36,5 +40,17 @@ func CreateBroker(brokerType enum.BrokerType) Broker {
 		return kafkaInstance
 	default:
 		return nil
+	}
+}
+
+func ReturnBrokerConnectionString(brokerType enum.BrokerType) string {
+	switch brokerType {
+	case enum.RABBITMQ:
+		// broker := &RabbitMQ{}
+		return ReturnRabbitMQConnString()
+	case enum.KAFKA:
+		return "host:port"
+	default:
+		return ""
 	}
 }

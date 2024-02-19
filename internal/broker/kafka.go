@@ -1,13 +1,17 @@
 package broker
 
-import "sync"
+import (
+	"sync"
+
+	"go-micro.dev/v4/broker"
+)
 
 type Kafka struct {
+	KafkaObj broker.Broker
 }
 
 var (
-	kOnce         sync.Once
-	kafkaObj *Kafka
+	kOnce sync.Once
 )
 
 // func (k *Kafka) GetInstance() *Kafka {
@@ -17,7 +21,7 @@ var (
 // 	return kafkaInstance
 // }
 
-func (k *Kafka) PublishMessage(data map[string]interface{},serviceName string,topicName string) {
+func (k *Kafka) PublishMessage(data map[string]interface{}, serviceName string, topicName string) {
 	return
 }
 

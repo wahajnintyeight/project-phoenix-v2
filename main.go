@@ -2,11 +2,14 @@ package main
 
 import (
 	// "flag"
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/pkg/factory"
+	"syscall"
 
 	"github.com/urfave/cli/v2"
 	"go-micro.dev/v4"
@@ -34,6 +37,9 @@ func main() {
 			portFlag := c.Int("port")
 			log.Println(c)
 			log.Println("Service Name: ", serviceTypeFlag)
+
+			ctx, _ := context.WithCancel(context.Background())
+
 			service := micro.NewService(
 				micro.Name(serviceTypeFlag),
 				micro.Address(fmt.Sprintf(":%d", portFlag)),
@@ -45,6 +51,11 @@ func main() {
 					Name:  "port",
 					Usage: "The port on which the service will be running",
 				}),
+				micro.Context(ctx),
+				// using rabbitmq for now
+				// micro.Broker(rabbitmq.NewBroker(
+				// 	broker.Addrs(brokerConnString),
+				// )),
 			)
 
 			// Initialize the service
@@ -61,10 +72,43 @@ func main() {
 				os.Exit(1)
 			}
 
+			go func() {
+				// Start Go-Micro service in a goroutine to avoid blocking
+				if err := service.Run(); err != nil {
+					log.Fatalf("Go-Micro service encountered an error: %v", err)
+				}
+			}()
+
 			serviceObj := factory.ServiceFactory(service, serviceType, serviceTypeFlag)
 			if err := serviceObj.Start(); err != nil {
-				log.Fatal(err)
+				log.Fatal("Service start error:", err)
 			}
+
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+			<-sigChan // Block until a signal is received for graceful shutdown
+			log.Println("Received shutdown signal, shutting down services...")
+
+			// First, gracefully stop the API Gateway or HTTP service
+			if err := serviceObj.Stop(); err != nil {
+				log.Printf("Error during service shutdown: %v", err)
+			}
+
+			// Then, stop the Go-Micro service
+			if err := service.Server().Stop(); err != nil {
+				log.Printf("Error during Go-Micro service shutdown: %v", err)
+			}
+			// go func() {
+			// 	<-sigChan // Block until a signal is received
+			// 	log.Println("Received shutdown signal, shutting down service...")
+			// 	if err := service.Server().Stop(); err != nil {
+			// 		log.Printf("Error during service shutdown: %v", err)
+			// 	}
+			// 	cancel()
+			// 	log.Println("Service stopped successfully")
+			// 	os.Exit(0)
+			// }()
 			return nil
 		},
 	}

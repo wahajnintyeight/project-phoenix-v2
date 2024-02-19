@@ -2,21 +2,18 @@ package service
 
 import (
 	// "context"
-	"context"
+
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 
-	"os"
-	"os/signal"
 	"project-phoenix/v2/internal/controllers/middleware"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/handler"
-	"sync"
 
-	"syscall"
-	"time"
+	// "sync"
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
@@ -26,12 +23,12 @@ import (
 )
 
 type APIGatewayService struct {
-	service       micro.Service
-	router        *mux.Router
-	server        *http.Server
-	serviceConfig internal.ServiceConfig
+	service            micro.Service
+	router             *mux.Router
+	server             *http.Server
+	serviceConfig      internal.ServiceConfig
 	subscribedServices []internal.SubscribedServices
-	brokerObj        microBroker.Broker
+	brokerObj          microBroker.Broker
 }
 
 var once sync.Once
@@ -78,7 +75,6 @@ func (ls *APIGatewayService) InitServiceConfig() {
 	}
 	ls.serviceConfig = serviceConfig.(internal.ServiceConfig)
 }
-
 
 func NewAPIGatewayService(serviceObj micro.Service, serviceName string) ServiceInterface {
 	apiGatewayService := &APIGatewayService{}
@@ -141,6 +137,7 @@ func (s *APIGatewayService) Start() error {
 	serviceConfig, serviceConfigErr := internal.ReturnServiceConfig("api-gateway")
 	fmt.Println("Starting API Gateway Service on", serviceConfig.(internal.ServiceConfig).Port)
 	var serverPort string
+	// s.service.Run()
 	if serviceConfigErr != nil {
 		return serviceConfigErr
 	} else {
@@ -153,30 +150,17 @@ func (s *APIGatewayService) Start() error {
 	}
 	s.registerRoutes()
 
-	go func() {
-		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTP server ListenAndServe error: %v\n", err)
-		}
-	}()
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop // Block until a signal is received
-
-	log.Println("Shutting down the server...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := s.server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server shutdown error: %v\n", err)
+	// if true {
+	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("HTTP server ListenAndServe error: %v\n", err)
 	}
 
-	log.Println("Server gracefully stopped")
 	return nil
 }
 
 func (s *APIGatewayService) Stop() error {
 	// Stop the API Gateway service
+	log.Println("Stopping API Gateway")
 	// Implementation depends on how you manage service lifecycle
 	return nil
 }
