@@ -81,6 +81,7 @@ func (ls *LocationService) InitializeService(serviceObj micro.Service, serviceNa
 	locationOnce.Do(func() {
 		service := serviceObj
 		ls.service = service
+		// ls.service.Run()
 	})
 	return ls
 }
@@ -97,7 +98,8 @@ func NewLocationService(serviceObj micro.Service, serviceName string) ServiceInt
 
 func (ls *LocationService) Start() error {
 	log.Print("Location Service started")
-	ls.service.Init()
+	// ls.service.Init()
+	// ls.service.Run()
 	return nil
 }
 
