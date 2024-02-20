@@ -13,8 +13,7 @@ import (
 )
 
 type RabbitMQ struct {
-	conn *amqp091.Connection
-	// ch   *amqp091.Channel
+	conn           *amqp091.Connection
 	RabbitMQBroker broker.Broker
 }
 
@@ -35,11 +34,14 @@ func (r *RabbitMQ) PublishMessage(data map[string]interface{}, serviceName strin
 		},
 		Body: byteData,
 	}
-	if pubErr := broker.Publish(topicName, message); pubErr != nil {
+	if pubErr := r.RabbitMQBroker.Publish(topicName, message); pubErr != nil {
 		log.Println("Unable to publish message to: ", topicName, " Error: ", pubErr)
 		return
+	} else {
+		log.Println("Broker Instance | Publish", &r.RabbitMQBroker)
+		log.Println("Message published to: ", topicName, " | Data: ", data, " | Service: ", serviceName)
 	}
-	return
+
 }
 
 func (r *RabbitMQ) SubscribeTopic() {

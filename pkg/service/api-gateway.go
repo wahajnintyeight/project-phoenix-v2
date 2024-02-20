@@ -43,10 +43,12 @@ func (api *APIGatewayService) InitializeService(serviceObj micro.Service, servic
 		service := serviceObj
 		api.service = service
 		api.router = mux.NewRouter()
+		api.brokerObj = service.Options().Broker
 		godotenv.Load()
 		servicePath := "api-gateway"
 		serviceConfig, _ := internal.ReturnServiceConfig(servicePath)
 		api.serviceConfig = serviceConfig.(internal.ServiceConfig)
+		log.Println("API Gateway Service Broker Instance: ", api.brokerObj)
 	})
 
 	return api
@@ -135,7 +137,7 @@ func (s *APIGatewayService) registerRoutes() {
 func (s *APIGatewayService) Start() error {
 	godotenv.Load()
 	serviceConfig, serviceConfigErr := internal.ReturnServiceConfig("api-gateway")
-	fmt.Println("Starting API Gateway Service on Port: ", s.service.Server().Options().Address)
+	fmt.Println("Starting API Gateway Service on Port:", s.service.Server().Options().Address)
 	var serverPort string
 	if serviceConfigErr != nil {
 		return serviceConfigErr

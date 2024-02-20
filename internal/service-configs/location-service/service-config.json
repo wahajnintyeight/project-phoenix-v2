@@ -11,11 +11,11 @@
             "subscribedTopics": [
                 {
                     "topicName": "start-tracking",
-                    "topicHandler": "handleStartTracking"
+                    "topicHandler": "HandleStartTracking"
                 },
                 {
                     "topicName": "stop-tracking",
-                    "topicHandler": "handleStopTracking"
+                    "topicHandler": "HandleStopTracking"
                 }
             ]
         }

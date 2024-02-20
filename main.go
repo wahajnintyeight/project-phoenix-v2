@@ -7,12 +7,15 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"project-phoenix/v2/internal/broker"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/pkg/factory"
 	"syscall"
 
+	"github.com/go-micro/plugins/v4/broker/rabbitmq"
 	"github.com/urfave/cli/v2"
 	"go-micro.dev/v4"
+	goMicroBroker "go-micro.dev/v4/broker"
 )
 
 func main() {
@@ -50,10 +53,13 @@ func main() {
 					Usage: "The port on which the service will be running",
 				}),
 				micro.Context(ctx),
+				micro.Broker(rabbitmq.NewBroker(goMicroBroker.Addrs(broker.ReturnRabbitMQConnString()))),
 			)
 
 			// Initialize the service
-			service.Init()
+			service.Init(
+			// server.Wait(nil),
+			)
 
 			var serviceType enum.ServiceType
 			switch serviceTypeFlag {
@@ -66,29 +72,42 @@ func main() {
 				os.Exit(1)
 			}
 
-			serviceObj := factory.ServiceFactory(service, serviceType, serviceTypeFlag)
+			// goMicroDone := make(chan bool)
+
 			go func() {
+				log.Println("Starting Go-Micro Service...")
 				if err := service.Run(); err != nil {
 					log.Fatalf("Go-Micro Service Encountered an error: %v", err)
+				} else {
+					//Go Micro Runs
+					// goMicroDone <- true
 				}
 			}()
 
+			serviceObj := factory.ServiceFactory(service, serviceType, serviceTypeFlag)
 			go func() {
+				// <-goMicroDone // Wait for Go-Micro to start
+				log.Println("Go-Micro Service started successfully")
+				log.Println("Starting Service...")
 				if err := serviceObj.Start(); err != nil {
 					log.Fatal("Service start error:", err)
+				} else {
+					goMicroBroker.Subscribe("start-tracking", func(p goMicroBroker.Event) error {
+						fmt.Println("[sub] received message:", string(p.Message().Body), "header", p.Message().Header)
+						return nil
+					})
 				}
 			}()
-
 			sigChan := make(chan os.Signal, 1)
 			signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 			<-sigChan
 			log.Println("Received shutdown signal, shutting down services...")
-
 			// First, gracefully stop the service
 			if err := serviceObj.Stop(); err != nil {
 				log.Printf("Error during service shutdown: %v", err)
 			} else {
+				log.Println("Service stopped successfully")
 				os.Exit(0)
 			}
 
@@ -96,6 +115,7 @@ func main() {
 			if err := service.Server().Stop(); err != nil {
 				log.Printf("Error during Go-Micro service shutdown: %v", err)
 			}
+
 			return nil
 		},
 	}

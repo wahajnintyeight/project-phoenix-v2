@@ -11,7 +11,6 @@ import (
 type Broker interface {
 	PublishMessage(map[string]interface{}, string, string)
 	ConnectBroker() error
-	// GetInstance()
 }
 
 var (
@@ -34,7 +33,6 @@ func CreateBroker(brokerType enum.BrokerType) Broker {
 	case enum.KAFKA:
 		kafkaOnce.Do(func() {
 			broker := &Kafka{}
-			// Initialize Kafka connection here if necessary
 			kafkaInstance = broker
 		})
 		return kafkaInstance
@@ -46,7 +44,6 @@ func CreateBroker(brokerType enum.BrokerType) Broker {
 func ReturnBrokerConnectionString(brokerType enum.BrokerType) string {
 	switch brokerType {
 	case enum.RABBITMQ:
-		// broker := &RabbitMQ{}
 		return ReturnRabbitMQConnString()
 	case enum.KAFKA:
 		return "host:port"

@@ -43,14 +43,17 @@ func (ls *LocationService) InitServiceConfig() {
 
 func (ls *LocationService) SubscribeTopics() {
 	ls.InitServiceConfig()
-	for _, service := range ls.subscribedServices {
+	log.Println("Broker Instance", ls.brokerObj.String(), &ls.brokerObj)
+	for _, service := range ls.serviceConfig.SubscribedServices {
+		log.Println("Subscribed Service: ", service.Name)
 		// Assuming a method exists on ls to handle the topic appropriately
 		subscribedTopic := service.SubscribedTopics
 		for _, topic := range subscribedTopic {
+			log.Println("Subscribed Topic: ", topic.TopicName, topic.TopicHandler, "| Queue: ", service.Queue)
 			if handler, ok := reflect.TypeOf(ls).MethodByName(topic.TopicHandler); ok {
 				_, err := ls.brokerObj.Subscribe(topic.TopicName, func(p microBroker.Event) error {
 					// Use reflection to call the handler method dynamically
-					returnValues := handler.Func.Call([]reflect.Value{reflect.ValueOf(ls), reflect.ValueOf(p)})
+					returnValues := handler.Func.Call([]reflect.Value{reflect.ValueOf(&ls), reflect.ValueOf(p)})
 					// Assuming the handler method returns only an error
 					if err, ok := returnValues[0].Interface().(error); ok && err != nil {
 						return err
@@ -81,13 +84,20 @@ func (ls *LocationService) InitializeService(serviceObj micro.Service, serviceNa
 	locationOnce.Do(func() {
 		service := serviceObj
 		ls.service = service
+		ls.brokerObj = serviceObj.Options().Broker
 		// ls.service.Run()
+		log.Println("Location Service Broker Instance: ", ls.brokerObj)
 	})
 	return ls
 }
 
-func (ls *LocationService) StartTracking(p microBroker.Event) error {
+func (ls *LocationService) HandleStartTracking(p microBroker.Event) error {
 	log.Println("Start Tracking Func Called")
+	return nil
+}
+
+func (ls *LocationService) HandleStopTracking(p microBroker.Event) error {
+	log.Println("Stop Tracking Func Called")
 	return nil
 }
 
@@ -97,9 +107,10 @@ func NewLocationService(serviceObj micro.Service, serviceName string) ServiceInt
 }
 
 func (ls *LocationService) Start() error {
-	log.Print("Location Service Started on Port: ", ls.service.Server().Options().Address)
+	log.Print("Location Service Started on Port:", ls.service.Server().Options().Address)
 	// ls.service.Init()
 	// ls.service.Run()
+	ls.SubscribeTopics()
 	return nil
 }
 

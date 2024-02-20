@@ -1,6 +1,6 @@
 {
     "serviceName": "api-gateway",
-    "port": "8881",
+    "port": "8889",
     "serviceExchange": "api-gateway-exchange",
     "serviceQueue": "api-gateway-queue",
     "endpointPrefix": "/v2/api",
