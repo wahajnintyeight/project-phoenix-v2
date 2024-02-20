@@ -135,9 +135,8 @@ func (s *APIGatewayService) registerRoutes() {
 func (s *APIGatewayService) Start() error {
 	godotenv.Load()
 	serviceConfig, serviceConfigErr := internal.ReturnServiceConfig("api-gateway")
-	fmt.Println("Starting API Gateway Service on", serviceConfig.(internal.ServiceConfig).Port)
+	fmt.Println("Starting API Gateway Service on Port: ", s.service.Server().Options().Address)
 	var serverPort string
-	// s.service.Run()
 	if serviceConfigErr != nil {
 		return serviceConfigErr
 	} else {
@@ -150,7 +149,6 @@ func (s *APIGatewayService) Start() error {
 	}
 	s.registerRoutes()
 
-	// if true {
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("HTTP server ListenAndServe error: %v\n", err)
 	}
@@ -161,6 +159,5 @@ func (s *APIGatewayService) Start() error {
 func (s *APIGatewayService) Stop() error {
 	// Stop the API Gateway service
 	log.Println("Stopping API Gateway")
-	// Implementation depends on how you manage service lifecycle
 	return nil
 }

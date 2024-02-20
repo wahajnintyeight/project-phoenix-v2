@@ -97,7 +97,7 @@ func NewLocationService(serviceObj micro.Service, serviceName string) ServiceInt
 }
 
 func (ls *LocationService) Start() error {
-	log.Print("Location Service started")
+	log.Print("Location Service Started on Port: ", ls.service.Server().Options().Address)
 	// ls.service.Init()
 	// ls.service.Run()
 	return nil
