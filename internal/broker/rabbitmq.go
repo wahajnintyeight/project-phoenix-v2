@@ -48,9 +48,7 @@ func (r *RabbitMQ) SubscribeTopic() {
 
 func (r *RabbitMQ) ConnectBroker() error {
 
-	// connString := fmt.Sprintf("amqp://%s:%s@%s", rUser, rPass, rHost)
 	rabbitMQConnString := ReturnRabbitMQConnString()
-	// log.Println("Connection string", (connString))
 	r.RabbitMQBroker = rabbitmq.NewBroker(
 		broker.Addrs(rabbitMQConnString),
 	)
