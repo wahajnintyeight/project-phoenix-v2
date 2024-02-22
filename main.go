@@ -88,9 +88,6 @@ func main() {
 				log.Println("Starting Service...")
 				if err := serviceObj.Start(); err != nil {
 					log.Fatal("Service start error:", err)
-				} else {
-					// serviceObj.SubscribeTopics()
-
 				}
 			}()
 			sigChan := make(chan os.Signal, 1)

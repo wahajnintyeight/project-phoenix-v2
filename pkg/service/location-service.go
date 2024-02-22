@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	internal "project-phoenix/v2/internal/service-configs"
@@ -50,12 +51,10 @@ func (ls *LocationService) InitServiceConfig() {
 }
 
 func (ls *LocationService) SubscribeTopics() {
-	log.Printf("Initializing subscriptions for broker: %v", ls.brokerObj)
 	ls.InitServiceConfig()
 	for _, service := range ls.serviceConfig.SubscribedServices {
-		log.Println("Service: ", service.Name)
 		for _, topic := range service.SubscribedTopics {
-			log.Printf("Preparing to subscribe to service: %s, topic: %s, queue: %s", service.Name, topic.TopicName, service.Queue)
+			log.Println("Preparing to subscribe to service: ", service.Name, " | Topic: ", topic.TopicName, " | Queue: ", service.Queue, " | Handler: ", topic.TopicHandler)
 			if err := ls.attemptSubscribe(service.Queue, topic); err != nil {
 				log.Printf("Subscription failed for topic %s: %v", topic.TopicName, err)
 			}
@@ -98,7 +97,7 @@ func (ls *LocationService) subscribeToTopic(queueName string, topic internal.Sub
 		return err
 	}
 
-	log.Printf("Successfully subscribed to topic %s", topic.TopicName)
+	log.Printf("Successfully subscribed to topic %s | Handler: %s", topic.TopicName, topic.TopicHandler)
 	return nil
 }
 
@@ -123,12 +122,21 @@ func (ls *LocationService) InitializeService(serviceObj micro.Service, serviceNa
 
 func (ls *LocationService) HandleStartTracking(p microBroker.Event) error {
 	log.Println("Start Tracking Func Called | Data: ", p.Message().Header, " | Body: ", p.Message().Body)
-
+	data := make(map[string]interface{})
+	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
+		log.Println("Error occurred while unmarshalling the data", err)
+	}
+	log.Println("Data Received: ", data)
 	return nil
 }
 
 func (ls *LocationService) HandleStopTracking(p microBroker.Event) error {
 	log.Println("Stop Tracking Func Called | Data: ", p.Message().Header, " | Body: ", p.Message().Body)
+	data := make(map[string]interface{})
+	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
+		log.Println("Error occurred while unmarshalling the data", err)
+	}
+	log.Println("Data Received: ", data)
 	return nil
 }
 
@@ -139,8 +147,6 @@ func NewLocationService(serviceObj micro.Service, serviceName string) ServiceInt
 
 func (ls *LocationService) Start() error {
 	log.Print("Location Service Started on Port:", ls.service.Server().Options().Address)
-	// ls.service.Init()
-	// ls.service.Run()
 	ls.SubscribeTopics()
 	return nil
 }
