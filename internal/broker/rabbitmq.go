@@ -61,6 +61,8 @@ func (r *RabbitMQ) ConnectBroker() error {
 	if e := r.RabbitMQBroker.Connect(); e != nil {
 		log.Println(e)
 		return e
+	} else {
+		log.Println("RabbitMQ Connected")
 	}
 
 	return nil
