@@ -12,6 +12,8 @@ import (
 	"project-phoenix/v2/pkg/factory"
 	"syscall"
 
+	// "syscall"
+
 	"github.com/go-micro/plugins/v4/broker/rabbitmq"
 	"github.com/urfave/cli/v2"
 	"go-micro.dev/v4"
@@ -72,15 +74,10 @@ func main() {
 				os.Exit(1)
 			}
 
-			// goMicroDone := make(chan bool)
-
 			go func() {
 				log.Println("Starting Go-Micro Service...")
 				if err := service.Run(); err != nil {
 					log.Fatalf("Go-Micro Service Encountered an error: %v", err)
-				} else {
-					//Go Micro Runs
-					// goMicroDone <- true
 				}
 			}()
 
@@ -92,10 +89,8 @@ func main() {
 				if err := serviceObj.Start(); err != nil {
 					log.Fatal("Service start error:", err)
 				} else {
-					goMicroBroker.Subscribe("start-tracking", func(p goMicroBroker.Event) error {
-						fmt.Println("[sub] received message:", string(p.Message().Body), "header", p.Message().Header)
-						return nil
-					})
+					// serviceObj.SubscribeTopics()
+
 				}
 			}()
 			sigChan := make(chan os.Signal, 1)

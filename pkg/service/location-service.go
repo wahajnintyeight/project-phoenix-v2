@@ -1,10 +1,12 @@
 package service
 
 import (
+	"fmt"
 	"log"
 	internal "project-phoenix/v2/internal/service-configs"
 	"reflect"
 	"sync"
+	"time"
 
 	microBroker "go-micro.dev/v4/broker"
 
@@ -20,10 +22,16 @@ type LocationService struct {
 
 // var locationServiceObj *LocationService
 
+const (
+	MaxRetries  = 5
+	RetryDelay  = 2 * time.Second
+	serviceName = "location-service"
+)
+
 var locationOnce sync.Once
 
 func (ls *LocationService) GetSubscribedTopics() []internal.SubscribedServices {
-	serviceConfig, e := internal.ReturnServiceConfig("location-service")
+	serviceConfig, e := internal.ReturnServiceConfig(serviceName)
 	if e != nil {
 		log.Println("Unable to read service config", e)
 		return nil
@@ -33,7 +41,7 @@ func (ls *LocationService) GetSubscribedTopics() []internal.SubscribedServices {
 }
 
 func (ls *LocationService) InitServiceConfig() {
-	serviceConfig, er := internal.ReturnServiceConfig("location-service")
+	serviceConfig, er := internal.ReturnServiceConfig(serviceName)
 	if er != nil {
 		log.Println("Unable to read service config", er)
 		return
@@ -42,33 +50,56 @@ func (ls *LocationService) InitServiceConfig() {
 }
 
 func (ls *LocationService) SubscribeTopics() {
+	log.Printf("Initializing subscriptions for broker: %v", ls.brokerObj)
 	ls.InitServiceConfig()
-	log.Println("Broker Instance", ls.brokerObj.String(), &ls.brokerObj)
 	for _, service := range ls.serviceConfig.SubscribedServices {
-		log.Println("Subscribed Service: ", service.Name)
-		// Assuming a method exists on ls to handle the topic appropriately
-		subscribedTopic := service.SubscribedTopics
-		for _, topic := range subscribedTopic {
-			log.Println("Subscribed Topic: ", topic.TopicName, topic.TopicHandler, "| Queue: ", service.Queue)
-			if handler, ok := reflect.TypeOf(ls).MethodByName(topic.TopicHandler); ok {
-				_, err := ls.brokerObj.Subscribe(topic.TopicName, func(p microBroker.Event) error {
-					// Use reflection to call the handler method dynamically
-					returnValues := handler.Func.Call([]reflect.Value{reflect.ValueOf(&ls), reflect.ValueOf(p)})
-					// Assuming the handler method returns only an error
-					if err, ok := returnValues[0].Interface().(error); ok && err != nil {
-						return err
-					}
-					return nil
-				}, microBroker.Queue(service.Queue))
-
-				if err != nil {
-					log.Printf("Failed to subscribe to topic %s: %v", topic.TopicName, err)
-				}
-			} else {
-				log.Printf("Handler method %s not found for topic %s", topic.TopicHandler, topic.TopicName)
+		log.Println("Service: ", service.Name)
+		for _, topic := range service.SubscribedTopics {
+			log.Printf("Preparing to subscribe to service: %s, topic: %s, queue: %s", service.Name, topic.TopicName, service.Queue)
+			if err := ls.attemptSubscribe(service.Queue, topic); err != nil {
+				log.Printf("Subscription failed for topic %s: %v", topic.TopicName, err)
 			}
 		}
 	}
+}
+
+// attemptSubscribe tries to subscribe to a topic with retries until successful or max retries reached.
+func (ls *LocationService) attemptSubscribe(queueName string, topic internal.SubscribedTopicsMap) error {
+	for i := 0; i <= MaxRetries; i++ {
+		if err := ls.subscribeToTopic(queueName, topic); err != nil {
+			if err.Error() == "not connected" && i < MaxRetries {
+				log.Printf("Broker not connected, retrying %d/%d for topic %s", i+1, MaxRetries, topic.TopicName)
+				time.Sleep(RetryDelay)
+				continue
+			}
+			return err
+		}
+		break
+	}
+	return nil
+}
+
+func (ls *LocationService) subscribeToTopic(queueName string, topic internal.SubscribedTopicsMap) error {
+	handler, ok := reflect.TypeOf(ls).MethodByName(topic.TopicHandler)
+	if !ok {
+		return fmt.Errorf("Handler method %s not found for topic %s", topic.TopicHandler, topic.TopicName)
+	}
+
+	_, err := ls.brokerObj.Subscribe(topic.TopicName, func(p microBroker.Event) error {
+		returnValues := handler.Func.Call([]reflect.Value{reflect.ValueOf(ls), reflect.ValueOf(p)})
+		if err, ok := returnValues[0].Interface().(error); ok && err != nil {
+			return err
+		}
+		return nil
+	}, microBroker.Queue(queueName))
+
+	if err != nil {
+		log.Printf("Failed to subscribe to topic %s due to error: %v", topic.TopicName, err)
+		return err
+	}
+
+	log.Printf("Successfully subscribed to topic %s", topic.TopicName)
+	return nil
 }
 
 func (ls *LocationService) ListenSubscribedTopics(broker microBroker.Event) error {
@@ -85,19 +116,19 @@ func (ls *LocationService) InitializeService(serviceObj micro.Service, serviceNa
 		service := serviceObj
 		ls.service = service
 		ls.brokerObj = serviceObj.Options().Broker
-		// ls.service.Run()
 		log.Println("Location Service Broker Instance: ", ls.brokerObj)
 	})
 	return ls
 }
 
 func (ls *LocationService) HandleStartTracking(p microBroker.Event) error {
-	log.Println("Start Tracking Func Called")
+	log.Println("Start Tracking Func Called | Data: ", p.Message().Header, " | Body: ", p.Message().Body)
+
 	return nil
 }
 
 func (ls *LocationService) HandleStopTracking(p microBroker.Event) error {
-	log.Println("Stop Tracking Func Called")
+	log.Println("Stop Tracking Func Called | Data: ", p.Message().Header, " | Body: ", p.Message().Body)
 	return nil
 }
 

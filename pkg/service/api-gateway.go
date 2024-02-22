@@ -3,7 +3,6 @@ package service
 import (
 	// "context"
 
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -137,7 +136,7 @@ func (s *APIGatewayService) registerRoutes() {
 func (s *APIGatewayService) Start() error {
 	godotenv.Load()
 	serviceConfig, serviceConfigErr := internal.ReturnServiceConfig("api-gateway")
-	fmt.Println("Starting API Gateway Service on Port:", s.service.Server().Options().Address)
+	log.Println("Starting API Gateway Service on Port:", s.service.Server().Options().Address)
 	var serverPort string
 	if serviceConfigErr != nil {
 		return serviceConfigErr
