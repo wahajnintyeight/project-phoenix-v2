@@ -127,7 +127,6 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, code, data)
 			return
 		}
-		return
 	default:
 		http.NotFound(w, r)
 	}

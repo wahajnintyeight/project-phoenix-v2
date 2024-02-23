@@ -164,7 +164,32 @@ func (m *MongoDB) Delete(data interface{}, collectionName string) (string, error
 	}
 }
 
-func (m *MongoDB) ValidateIndexing(collectionName string, indexKeys interface{}) error{
+func (m *MongoDB) FindRecentDocument(query interface{}, collectionName string) (interface{}, error) {
+
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+	collection := conn.db.Collection(collectionName)
+	resultInterface := map[string]interface{}{}
+	log.Println("Find Recent Document Query:", query, " | Collection: ", collectionName)
+	result := collection.FindOne(
+		context.Background(),
+		query,
+		options.FindOne().SetSort(bson.M{"createdAt": -1}))
+	log.Println("Error", result.Err())
+	if result.Err() != nil {
+		log.Println("Error while finding recent document: ", result.Err())
+		return nil, result.Err()
+	}
+	if err := result.Decode(&resultInterface); err != nil {
+		log.Println("Error decoding result: ", err)
+		return nil, err
+	}
+	log.Println("Result: ", resultInterface)
+	return resultInterface, nil // Return the actual document found
+
+}
+
+func (m *MongoDB) ValidateIndexing(collectionName string, indexKeys interface{}) error {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
 	collection := conn.db.Collection(collectionName)

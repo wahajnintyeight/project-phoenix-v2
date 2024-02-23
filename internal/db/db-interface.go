@@ -21,8 +21,11 @@ type DBInterface interface {
 	FindAll(interface{}, string) (string, error)
 	Update(interface{}, interface{}, string) (string, error)
 	Delete(interface{}, string) (string, error)
+	//FindOneAndUpdate finds a single document and updates it, returning either the original or the updated document.
 	UpdateOrCreate(interface{}, interface{}, string) interface{}
-	ValidateIndexing(string,interface{}) error
+	ValidateIndexing(string, interface{}) error
+	//Fetches the single most recent document from the collection based on the query.
+	FindRecentDocument(query interface{}, collectionName string) (interface{}, error)
 }
 
 func GetDBInstance(dbType enum.DBType) (DBInterface, error) {

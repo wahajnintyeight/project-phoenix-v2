@@ -34,3 +34,9 @@ type GoogleUserModel struct {
 	Name    string `json:"name"`
 	Picture string `json:"picture"`
 }
+
+type StartTrackingModel struct {
+	TripID     string  `json:"tripId"`
+	CurrentLat float64 `json:"currentLat"`
+	CurrentLng float64 `json:"currentLng"`
+}

@@ -7,4 +7,5 @@ const (
 	SessionController ControllerType = iota
 	UserTripController
 	UserController
+	UserLocationController
 )

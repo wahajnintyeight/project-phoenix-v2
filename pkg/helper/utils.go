@@ -30,13 +30,13 @@ func MarshalBinary(input interface{}) ([]byte, error) {
 	return data, nil
 }
 
-// convert map to string
+// Converts a map to string
 func MapToString(data map[string]interface{}) string {
 	dataByte, _ := MarshalBinary(data)
 	return string(dataByte)
 }
 
-// convert interface to string
+// Converts an interface{} to a string
 func InterfaceToString(data interface{}) string {
 
 	if oid, ok := data.(primitive.ObjectID); ok {
@@ -51,7 +51,9 @@ func InterfaceToString(data interface{}) string {
 	return string(dataByte)
 }
 
-// convert map interface to struct
+/*
+MapToStruct takes a map[string]interface{} and a target interface{} as input. It attempts to marshal the map into a JSON byte slice,
+*/
 func MapToStruct(data map[string]interface{}, target interface{}) error {
 	dataByte, _ := MarshalBinary(data)
 	err := UnmarshalBinary(dataByte, target)
@@ -60,6 +62,25 @@ func MapToStruct(data map[string]interface{}, target interface{}) error {
 		return err
 	}
 	return nil
+}
+
+/*
+StructToMap takes an interface{} as input and attempts to marshal it into a map[string]interface{}.
+*/
+func StructToMap(data interface{}) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	dataByte, err := MarshalBinary(data)
+	if err != nil {
+		log.Println("Failed to marshal data: ", err)
+		return nil, err
+	}
+
+	err = UnmarshalBinary(dataByte, &result)
+	if err != nil {
+		log.Println("Failed to unmarshal data: ", err)
+		return nil, err
+	}
+	return result, nil
 }
 
 func MergeStructAndMap(structData interface{}, additionalData map[string]interface{}) map[string]interface{} {

@@ -53,9 +53,15 @@ func (a *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 			return
 		} else {
 			existingActivity, existingUserActivityError := dbInstance.FindOne(loginActivityQuery, "loginactivities")
+			log.Println("Existing Activity: ", existingActivity, "Error: ", existingUserActivityError)
 			if existingUserActivityError == nil && existingActivity == nil {
 				log.Println("Auth Middleware | No User Activity")
-				response.SendResponse(w, int(enum.USER_NOT_FOUND), nil)
+				response.SendResponse(w, int(enum.LOGIN_SESSION_EXPIRED), nil)
+				return
+			} else if existingUserActivityError != nil {
+				//No login activity found. Throw error in response
+				log.Println("Auth Middleware | User Login Activity Not Found")
+				response.SendResponse(w, int(enum.LOGIN_SESSION_EXPIRED), nil)
 				return
 			}
 		}
