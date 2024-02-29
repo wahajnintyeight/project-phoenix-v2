@@ -114,3 +114,17 @@ func MergeStructAndMap(structData interface{}, additionalData map[string]interfa
 
 	return result
 }
+
+func InterfaceToStruct(data interface{},target interface{}) error {
+	dataByte, err := MarshalBinary(data)
+	if err != nil {
+		log.Println("Failed to marshal data: ", err)
+		return err
+	}
+	err = UnmarshalBinary(dataByte, &target)
+	if err != nil {
+		log.Println("Failed to unmarshal data: ", err)
+		return err
+	}
+	return nil
+}

@@ -5,6 +5,8 @@ import (
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
+	"project-phoenix/v2/pkg/helper"
+	"time"
 )
 
 type UserLocationController struct {
@@ -39,11 +41,12 @@ func (ul *UserLocationController) CreateOrUpdate(locationParam model.StartTracki
 	if err != nil {
 		return nil, err
 	}
-	log.Println("Data Location:", data)
 	userLocationObj := model.UserLocation{}
-	// utilsErr := json.Marshal() //helper.MapToStruct(data, &userLocationObj)
-	// if utilsErr != nil {
-	// 	return nil, utilsErr
-	// }
+	currentDate := time.Now()
+	log.Println("Current Date: ", currentDate)
+	utilsErr := helper.InterfaceToStruct(data, &userLocationObj)
+	if utilsErr == nil {
+
+	}
 	return nil, nil
 }
