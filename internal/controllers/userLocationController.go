@@ -45,8 +45,9 @@ func (ul *UserLocationController) CreateOrUpdate(locationParam model.StartTracki
 	currentDate := time.Now()
 	log.Println("Current Date: ", currentDate)
 	utilsErr := helper.InterfaceToStruct(data, &userLocationObj)
-	if utilsErr == nil {
-
+	if utilsErr != nil {
+		return nil, utilsErr
 	}
+	log.Println("User Location Object: ", userLocationObj)
 	return nil, nil
 }

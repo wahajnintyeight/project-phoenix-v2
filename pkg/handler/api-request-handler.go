@@ -133,6 +133,18 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, code, data)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/createTrip":
+		controller := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB)
+		userTripController := controller.(*controllers.UserTripController)
+		code, message, data, er := userTripController.CreateTrip(w, r)
+		if er != nil {
+			response.SendResponse(w, code, message)
+			return
+		} else {
+			response.SendResponse(w, code, data)
+			return
+
+		}
 	default:
 		http.NotFound(w, r)
 	}

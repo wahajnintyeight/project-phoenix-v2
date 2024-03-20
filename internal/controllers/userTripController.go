@@ -61,3 +61,28 @@ func (sc *UserTripController) StartTracking(w http.ResponseWriter, r *http.Reque
 		return int(enum.LOCATION_TRACKING_STARTED), "Tracking Started", nil, nil
 	}
 }
+
+func (sc *UserTripController) CreateTrip(w http.ResponseWriter, r *http.Request) (int, string, interface{}, error) {
+	createTripRequestModel := model.CreateTripModel{}
+
+	decodeErr := json.NewDecoder(r.Body).Decode(&createTripRequestModel)
+	if decodeErr != nil {
+		log.Println("Error decoding request body", decodeErr)
+		return int(enum.ERROR), "Error decoding request body", nil, decodeErr
+	} else {
+		userTripModel := model.UserTrip{}
+		userTripModel.Name = createTripRequestModel.TripName
+		userTripModel.CreatedAt = helper.GetCurrentTime()
+		userTripModel.UpdatedAt = helper.GetCurrentTime()
+		userTripModel.IsNotificationsEnabled = createTripRequestModel.EnableNotification
+		userTripModel.TripID = helper.GenerateTripID()
+		userTripModel.UserID = helper.GetCurrentUser(r)
+		addedTrip, err := sc.DB.Create(userTripModel, sc.GetCollectionName())
+		userTripModel.ID = helper.InterfaceToString(addedTrip["_id"])
+		if err != nil {
+			log.Println("Error creating trip", err)
+			return int(enum.ERROR), "Error creating trip", nil, err
+		}
+		return int(enum.TRIP_CREATED), "Trip Created", userTripModel, nil
+	}
+}

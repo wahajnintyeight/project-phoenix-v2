@@ -4,3 +4,5 @@ main.exe
 project-phoenix.exe
 tmp
 /internal/service-configs/api-gateway/firebase-auth-key.json
+pkg/handler/*.pem
+cmd/*.pem

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"project-phoenix/v2/internal/db"
@@ -54,6 +55,9 @@ func (a *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		} else {
 			existingActivity, existingUserActivityError := dbInstance.FindOne(loginActivityQuery, "loginactivities")
 			log.Println("Existing Activity: ", existingActivity, "Error: ", existingUserActivityError)
+			//store the user id in the request context
+			ctx := context.WithValue(r.Context(), "userId", existingActivity["userId"])
+			r = r.WithContext(ctx)
 			if existingUserActivityError == nil && existingActivity == nil {
 				log.Println("Auth Middleware | No User Activity")
 				response.SendResponse(w, int(enum.LOGIN_SESSION_EXPIRED), nil)

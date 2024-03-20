@@ -3,10 +3,12 @@ package helper
 import (
 	"encoding/json"
 	"log"
+	"net/http"
 	"reflect"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -115,7 +117,7 @@ func MergeStructAndMap(structData interface{}, additionalData map[string]interfa
 	return result
 }
 
-func InterfaceToStruct(data interface{},target interface{}) error {
+func InterfaceToStruct(data interface{}, target interface{}) error {
 	dataByte, err := MarshalBinary(data)
 	if err != nil {
 		log.Println("Failed to marshal data: ", err)
@@ -127,4 +129,18 @@ func InterfaceToStruct(data interface{},target interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func GetCurrentTime() time.Time {
+	return time.Now()
+}
+
+func GenerateTripID() string {
+	// return 'trip-' +
+	//add uuid4 to the trip id
+	return "trip-" + uuid.New().String()
+}
+
+func GetCurrentUser(r *http.Request) string {
+	return r.Context().Value("userId").(string)
 }
