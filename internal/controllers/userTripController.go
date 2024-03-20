@@ -10,6 +10,8 @@ import (
 	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/helper"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type UserTripController struct {
@@ -85,4 +87,25 @@ func (sc *UserTripController) CreateTrip(w http.ResponseWriter, r *http.Request)
 		}
 		return int(enum.TRIP_CREATED), "Trip Created", userTripModel, nil
 	}
+}
+
+func (sc *UserTripController) ListAllTrips(w http.ResponseWriter, r *http.Request) (int, map[string]interface{}, error) {
+	userID := helper.GetCurrentUser(r)
+	page := helper.StringToInt(r.URL.Query().Get("page"))
+	query := map[string]interface{}{
+		"userId": userID,
+	}
+	totlaPages, currentPage, result, err := sc.DB.FindAllWithPagination(query, (page), sc.GetCollectionName())
+	if err != nil {
+		log.Println("Error getting trips", err)
+		return int(enum.ERROR), nil, err
+	}
+	if result == nil {
+		result = []primitive.M{}
+	}
+	return int(enum.TRIP_FOUND), map[string]interface{}{
+		"totalPages": totlaPages,
+		"page":       currentPage,
+		"trips":      result,
+	}, nil
 }

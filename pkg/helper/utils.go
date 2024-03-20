@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -143,4 +144,13 @@ func GenerateTripID() string {
 
 func GetCurrentUser(r *http.Request) string {
 	return r.Context().Value("userId").(string)
+}
+
+func StringToInt(s string) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		log.Println("Failed to convert string to int: ", err)
+		return 0
+	}
+	return i
 }

@@ -225,7 +225,16 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 
 		response.SendResponse(w, int(enum.DATA_FETCHED), signedToken)
+	case apiRequestHandlerObj.Endpoint + "/getTrips":
+		controller := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB)
+		userTripController := controller.(*controllers.UserTripController)
+		code, data, e := userTripController.ListAllTrips(w, r)
+		if e != nil {
+			response.SendResponse(w, code, e)
+		}
+		response.SendResponse(w, code, data)
 
+		break
 	default:
 		http.NotFound(w, r)
 	}

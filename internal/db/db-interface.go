@@ -18,7 +18,7 @@ type DBInterface interface {
 	Disconnect() (string, error)
 	Create(interface{}, string) (bson.M, error)
 	FindOne(interface{}, string) (bson.M, error)
-	FindAll(interface{}, string) (string, error)
+	// FindAll(interface{}, string) (string, error)
 	Update(interface{}, interface{}, string) (string, error)
 	Delete(interface{}, string) (string, error)
 	//FindOneAndUpdate finds a single document and updates it, returning either the original or the updated document.
@@ -26,6 +26,7 @@ type DBInterface interface {
 	ValidateIndexing(string, interface{}) error
 	//Fetches the single most recent document from the collection based on the query.
 	FindRecentDocument(query interface{}, collectionName string) (interface{}, error)
+	FindAllWithPagination(interface{}, int, string) (int64, int, []bson.M, error)
 }
 
 func GetDBInstance(dbType enum.DBType) (DBInterface, error) {

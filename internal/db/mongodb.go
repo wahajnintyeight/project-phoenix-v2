@@ -122,8 +122,44 @@ func (m *MongoDB) FindOne(data interface{}, collectionName string) (bson.M, erro
 	}
 }
 
-func (m *MongoDB) FindAll(data interface{}, collectionName string) (string, error) {
-	return "MongoDB find all", nil
+func (m *MongoDB) FindAllWithPagination(query interface{}, page int, collectionName string) (int64, int, []bson.M, error) {
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+	collection := conn.db.Collection(collectionName)
+	const pageSize = 10
+	if page < 1 {
+		page = 1
+	}
+	// Calculate the total number of documents
+	totalDocs, err := collection.CountDocuments(context.Background(), query)
+	if err != nil {
+		log.Println(err)
+		return 0, 0, nil, err
+	}
+
+	// Calculate total pages
+	totalPages := totalDocs / pageSize
+	if totalDocs%pageSize > 0 {
+		totalPages++
+	}
+
+	// Fetch documents with pagination
+	opts := options.Find().SetLimit(pageSize).SetSkip(pageSize * int64(page-1))
+	cursor, err := collection.Find(context.Background(), query, opts)
+	if err != nil {
+		log.Println(err)
+		return 0, 0, nil, err
+	}
+	defer cursor.Close(context.Background())
+
+	var results []bson.M
+	if err = cursor.All(context.Background(), &results); err != nil {
+		log.Println(err)
+		return 0, 0, nil, err
+	}
+
+	return totalPages, page, results, nil
+
 }
 
 func (m *MongoDB) Update(data interface{}, update interface{}, collectionName string) (string, error) {
