@@ -6,3 +6,4 @@ tmp
 /internal/service-configs/api-gateway/firebase-auth-key.json
 pkg/handler/*.pem
 cmd/*.pem
+pkg/handler/barclays_secret_key.txt

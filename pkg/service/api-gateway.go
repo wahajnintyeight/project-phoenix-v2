@@ -92,6 +92,7 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/createSession",
 		s.serviceConfig.EndpointPrefix + "/",
 		s.serviceConfig.EndpointPrefix + "/signJWT",
+		s.serviceConfig.EndpointPrefix + "/returnJWK",
 	}
 	customMiddlewareWrapper := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,11 +1,16 @@
 package handler
 
 import (
+	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/big"
+	"math/rand"
 	"net/http"
 	"os"
 	"project-phoenix/v2/internal/controllers"
@@ -180,7 +185,7 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		response.SendResponse(w, int(enum.SESSIONS_LISTED), nil)
 		break
 	case apiRequestHandlerObj.Endpoint + "/signJWT":
-		privateKeyFile, err := os.Open("pkg/handler/private_key_quo.pem")
+		privateKeyFile, err := os.Open("pkg/handler/barclays_secret_key.txt")
 		if err != nil {
 			log.Fatalf("Error opening os private key: %v", err)
 		}
@@ -204,14 +209,17 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 			log.Fatalf("Failed to parse private key: %v", err)
 		}
 		app_id := "bdn-ZEW0OPtCnFaTHERLcgBPO4c6qpA1DZgMEFn4oKBA"
-		kid := "1289"
+		kid := "20332916849186968444295078258678577337"
+		//I want to generate 3 random digit number and append to jti
+		jti := "jti1111111111116734169315" + fmt.Sprintf("%d", (rand.Intn(90)+10))
 		// Create the JWT token
+		//make the expiry -> 2025-03-19T23:59:59.000Z
 		token := jwt.NewWithClaims(jwt.SigningMethodPS256, jwt.MapClaims{
 			"iss": app_id,
 			"sub": app_id,
-			"exp": time.Now().Add(5 * time.Minute).Unix(),
+			"exp": time.Now().Add(5 * time.Minute).Unix(), //time.Date(2025, time.March, 19, 23, 59, 59, 0, time.UTC).Unix(),
 			"iat": time.Now().Unix(),
-			"jti": "jti111111111111673416931591",
+			"jti": jti, //"jti111111111111673416931593",
 			"aud": "https://token.sandbox.barclays.com/oauth/oauth20/token",
 		})
 		// Here you might also need to set "kid" in the token's header
@@ -225,6 +233,83 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 
 		response.SendResponse(w, int(enum.DATA_FETCHED), signedToken)
+	case apiRequestHandlerObj.Endpoint + "/returnJWK":
+		pemFile, err := os.Open("pkg/handler/public_key.pem")
+		log.Println("PEM FILE", pemFile)
+		if err != nil {
+			fmt.Println(err)
+			response.SendResponse(w, int(enum.ERROR), "Error in reading public key")
+			return
+		}
+		defer pemFile.Close() // Don't forget to close the file
+
+		pemData, err := ioutil.ReadAll(pemFile)
+		if err != nil {
+			fmt.Println(err)
+			response.SendResponse(w, int(enum.ERROR), "Error in reading public key data")
+			return
+		}
+
+		// Extract the PEM-encoded data block
+		block, _ := pem.Decode(pemData)
+		if block == nil {
+			fmt.Println("no key found")
+			response.SendResponse(w, int(enum.ERROR), "Error in decoding public key")
+			return
+		}
+
+		// Parse the public key
+		pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			fmt.Println(err)
+			response.SendResponse(w, int(enum.ERROR), "Error in parsing public key")
+			break
+		}
+
+		// Type assert to *rsa.PublicKey
+		rsaPub, ok := pub.(*rsa.PublicKey)
+		if !ok {
+			fmt.Println("not an RSA public key")
+			response.SendResponse(w, int(enum.ERROR), "Error in parsing RSA public key")
+			break
+		}
+
+		// Construct the JWKS
+		jwks := map[string]interface{}{
+			"keys": []map[string]string{
+				{
+					"kty": "RSA",
+					"use": "sig",
+					"kid": "your-kid-here", // Replace with your actual kid
+					"n":   base64.RawURLEncoding.EncodeToString(rsaPub.N.Bytes()),
+					"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(rsaPub.E)).Bytes()),
+				},
+			},
+		}
+
+		// Convert JWKS to JSON
+		jwksJson, err := json.MarshalIndent(jwks, "", "    ")
+		if err != nil {
+			fmt.Println(err)
+			response.SendResponse(w, int(enum.ERROR), "Error in marshalling JWKS")
+			return
+		}
+
+		// Set Content-Type header to application/json
+		w.Header().Set("Content-Type", "application/json")
+
+		// Write the JWKS JSON directly to the response
+		w.WriteHeader(http.StatusOK) // Replace with the appropriate status code if needed
+		_, err = w.Write(jwksJson)
+		if err != nil {
+			// Handle the error, maybe log it or send a different response
+			fmt.Println(err)
+			return
+		}
+
+		// Print the JWKS in JSON format
+		fmt.Println(string(jwksJson))
+		response.SendResponse(w, int(enum.DATA_FETCHED), (jwksJson))
 	case apiRequestHandlerObj.Endpoint + "/getTrips":
 		controller := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB)
 		userTripController := controller.(*controllers.UserTripController)
