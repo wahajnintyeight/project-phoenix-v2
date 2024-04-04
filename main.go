@@ -69,6 +69,8 @@ func main() {
 				serviceType = enum.APIGateway
 			case "location-service":
 				serviceType = enum.Location
+			case "data-communicator":
+				serviceType = enum.DataCommunicator
 			default:
 				fmt.Println("Error occurred: Invalid service type")
 				os.Exit(1)

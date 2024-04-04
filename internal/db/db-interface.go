@@ -20,7 +20,7 @@ type DBInterface interface {
 	FindOne(interface{}, string) (bson.M, error)
 	// FindAll(interface{}, string) (string, error)
 	Update(interface{}, interface{}, string) (string, error)
-	Delete(interface{}, string) (string, error)
+	Delete(interface{}, string) (bool, error)
 	//FindOneAndUpdate finds a single document and updates it, returning either the original or the updated document.
 	UpdateOrCreate(interface{}, interface{}, string) interface{}
 	ValidateIndexing(string, interface{}) error

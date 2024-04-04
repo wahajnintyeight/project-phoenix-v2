@@ -89,6 +89,26 @@ func (sc *UserTripController) CreateTrip(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+func (sc *UserTripController) DeleteTrip(w http.ResponseWriter, r *http.Request) (int, map[string]interface{}, error) {
+	deleteTripModel := model.DeleteTripModel{}
+	decodeErr := json.NewDecoder(r.Body).Decode(&deleteTripModel)
+	if decodeErr != nil {
+		log.Println("Error while decoding delete trip model", decodeErr)
+		return int(enum.ERROR), nil, decodeErr
+	} else {
+		query := map[string]interface{}{
+			"tripId": deleteTripModel.TripId,
+		}
+		isDeleted, err := sc.DB.Delete(query, sc.GetCollectionName())
+		if err != nil {
+			log.Println("Error while deleting", err)
+			return int(enum.TRIP_NOT_DELETED), nil, err
+		} else {
+			log.Println(isDeleted)
+			return int(enum.TRIP_DELETED), nil, nil
+		}
+	}
+}
 func (sc *UserTripController) ListAllTrips(w http.ResponseWriter, r *http.Request) (int, map[string]interface{}, error) {
 	userID := helper.GetCurrentUser(r)
 	page := helper.StringToInt(r.URL.Query().Get("page"))

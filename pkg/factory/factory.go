@@ -17,6 +17,9 @@ func ServiceFactory(serviceObj micro.Service, serviceType enum.ServiceType, serv
 	case enum.Location:
 		locationService := service.NewLocationService(serviceObj, serviceName)
 		return locationService
+	case enum.DataCommunicator:
+		dataCommunicatorService := service.NewDataCommunicatorService(serviceObj, serviceName)
+		return dataCommunicatorService
 	default:
 		panic("Invalid service type")
 	}

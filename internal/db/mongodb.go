@@ -187,16 +187,16 @@ func (m *MongoDB) UpdateOrCreate(query interface{}, update interface{}, collecti
 
 }
 
-func (m *MongoDB) Delete(data interface{}, collectionName string) (string, error) {
+func (m *MongoDB) Delete(data interface{}, collectionName string) (bool, error) {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
 	collection := conn.db.Collection(collectionName)
 	_, err := collection.DeleteOne(context.Background(), data)
 	if err != nil {
 		log.Println(err)
-		return "", err
+		return false, err
 	} else {
-		return "Deleted", nil
+		return true, nil
 	}
 }
 

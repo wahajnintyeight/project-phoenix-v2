@@ -45,3 +45,7 @@ type CreateTripModel struct {
 	TripName           string `json:"name"`
 	EnableNotification bool   `json:"enableNotification"`
 }
+
+type DeleteTripModel struct {
+	TripId string `json:"tripId"`
+}

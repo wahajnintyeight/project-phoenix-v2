@@ -6,6 +6,7 @@ const (
 	// Define constants for each service type
 	APIGateway ServiceType = iota
 	Location
+	DataCommunicator
 )
 
 // String provides the string representation of the ServiceType for easier debugging and logging

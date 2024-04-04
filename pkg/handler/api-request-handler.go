@@ -55,6 +55,26 @@ func (apiHandler APIRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 		break
 	case "POST":
 		POSTRoutes(w, r)
+	case "DELETE":
+
+	}
+}
+
+func (apiHandler APIRequestHandler) DELETERoutes(w http.ResponseWriter, r *http.Request) {
+	switch r.URL.Path {
+	case apiRequestHandlerObj.Endpoint + "/deleteTrip":
+		controller := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB)
+		userTripController := controller.(*controllers.UserTripController)
+		code, message, er := userTripController.DeleteTrip(w, r)
+		if er != nil {
+			response.SendResponse(w, code, message)
+			return
+		} else {
+			response.SendResponse(w, code, message)
+			return
+		}
+	default:
+		http.NotFound(w, r)
 	}
 }
 
@@ -150,6 +170,17 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 
 		}
+	case apiRequestHandlerObj.Endpoint + "/deleteTrip":
+		controller := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB)
+		userTripController := controller.(*controllers.UserTripController)
+		code, message, er := userTripController.DeleteTrip(w, r)
+		if er != nil {
+			response.SendResponse(w, code, message)
+			return
+		} else {
+			response.SendResponse(w, code, message)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}
@@ -212,16 +243,61 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		kid := "20332916849186968444295078258678577337"
 		//I want to generate 3 random digit number and append to jti
 		jti := "jti1111111111116734169315" + fmt.Sprintf("%d", (rand.Intn(90)+10))
+		resourceType := r.URL.Query().Get("resourceType")
+		log.Println("Resource Type:", resourceType)
+		if resourceType != "consent" {
+			resourceType = "token"
+		}
 		// Create the JWT token
-		//make the expiry -> 2025-03-19T23:59:59.000Z
-		token := jwt.NewWithClaims(jwt.SigningMethodPS256, jwt.MapClaims{
-			"iss": app_id,
-			"sub": app_id,
-			"exp": time.Now().Add(5 * time.Minute).Unix(), //time.Date(2025, time.March, 19, 23, 59, 59, 0, time.UTC).Unix(),
-			"iat": time.Now().Unix(),
-			"jti": jti, //"jti111111111111673416931593",
-			"aud": "https://token.sandbox.barclays.com/oauth/oauth20/token",
-		})
+		token := jwt.NewWithClaims(jwt.SigningMethodPS256, jwt.MapClaims{})
+		switch resourceType {
+		case "token":
+			log.Println("Token")
+			token = jwt.NewWithClaims(jwt.SigningMethodPS256, jwt.MapClaims{
+				"iss": app_id,
+				"sub": app_id,
+				"exp": time.Now().Add(5 * time.Minute).Unix(),
+				"iat": time.Now().Unix(),
+				"jti": jti, //"jti111111111111673416931593",
+				"aud": "https://token.sandbox.barclays.com/oauth/oauth20/token",
+			})
+			break
+		case "consent":
+			log.Println("Consent")
+			consent := r.URL.Query().Get("consentId")
+			log.Println("ConsentId:", consent)
+			token = jwt.NewWithClaims(jwt.SigningMethodPS256, jwt.MapClaims{
+				"iss":           app_id,
+				"sub":           app_id,
+				"response_type": "code id_token",
+				"nonce":         "1234567890",
+				"claims": map[string]interface{}{
+					"userinfo": map[string]interface{}{
+						"openbanking_intent_id": map[string]interface{}{
+							"value":     consent,
+							"essential": "true",
+						},
+					},
+					"id_token": map[string]interface{}{
+						"openbanking_intent_id": map[string]string{
+							"value":     consent,
+							"essential": "true",
+						},
+					},
+					"acr": map[string]string{
+						"essential": "true",
+					},
+				},
+				"aud":        "https://token.sandbox.barclays.com/",
+				"state":      "inprogressState",
+				"scope":      "openid fundsconfirmations",
+				"max_age":    86400,
+				"acr_values": "urn:openbanking:psd2:sca urn:openbanking:psd2:ca",
+			})
+			break
+		default:
+
+		}
 		// Here you might also need to set "kid" in the token's header
 		// This is an example, replace "{KID}" with your actual key ID
 		token.Header["kid"] = kid

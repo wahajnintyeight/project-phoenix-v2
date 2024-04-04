@@ -1,0 +1,10 @@
+version: 1
+services:
+  api-gateway:
+    build: ./pkg/service/api-gateway
+    ports:
+      - "8889:8889"
+  location-service:
+    build: ./pkg/service/location-service
+    ports:
+      - "8882:8882"
