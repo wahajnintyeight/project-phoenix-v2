@@ -4,7 +4,8 @@ FROM golang:1.21.6 AS builder
 WORKDIR /app
 
 # Copy the go mod and sum files to download dependencies
-COPY go.mod go.sum ./
+COPY go.mod .
+COPY go.sum .
 RUN go mod download
 
 # Copy the source code into the container
