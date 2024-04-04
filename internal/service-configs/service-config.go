@@ -32,7 +32,7 @@ var serviceConfigObj ServiceConfig
 
 func ReturnServiceConfig(serviceName string) (interface{}, error) {
 	//read the path, and return. the file is in json format
-	serviceConfig, err := os.Open("../internal/service-configs/" + serviceName + "/service-config.json")
+	serviceConfig, err := os.Open("internal/service-configs/" + serviceName + "/service-config.json")
 
 	if err != nil {
 		fmt.Println("Unable to read file",err)
