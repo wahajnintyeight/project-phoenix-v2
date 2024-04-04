@@ -35,7 +35,7 @@ func ReturnServiceConfig(serviceName string) (interface{}, error) {
 	serviceConfig, err := os.Open("../internal/service-configs/" + serviceName + "/service-config.json")
 
 	if err != nil {
-		fmt.Println("Unable to read file")
+		fmt.Println("Unable to read file",err)
 		return nil, err
 	}
 	defer serviceConfig.Close()
