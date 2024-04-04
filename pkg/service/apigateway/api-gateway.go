@@ -11,6 +11,7 @@ import (
 	"project-phoenix/v2/internal/controllers/middleware"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/handler"
+	"project-phoenix/v2/pkg/service"
 
 	// "sync"
 
@@ -36,7 +37,7 @@ func (api *APIGatewayService) GetSubscribedTopics() []internal.SubscribedService
 	return nil
 }
 
-func (api *APIGatewayService) InitializeService(serviceObj micro.Service, serviceName string) ServiceInterface {
+func (api *APIGatewayService) InitializeService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
 
 	once.Do(func() {
 		service := serviceObj
@@ -77,7 +78,7 @@ func (ls *APIGatewayService) InitServiceConfig() {
 	ls.serviceConfig = serviceConfig.(internal.ServiceConfig)
 }
 
-func NewAPIGatewayService(serviceObj micro.Service, serviceName string) ServiceInterface {
+func NewAPIGatewayService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
 	apiGatewayService := &APIGatewayService{}
 	return apiGatewayService.InitializeService(serviceObj, serviceName)
 }

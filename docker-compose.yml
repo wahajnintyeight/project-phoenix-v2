@@ -2,13 +2,13 @@ version: "1"
 services:
   api-gateway:
     build:
-      dockerfile: pkg/service/api-gateway/Dockerfile
+      dockerfile: pkg/service/apigateway/Dockerfile
       context: .
     ports:
       - "8889:8889"
   location-service:
     build:
-      dockerfile: pkg/service/location-service/Dockerfile
+      dockerfile: pkg/service/locationservice/Dockerfile
       context: .
     ports:
       - "8882:8882"

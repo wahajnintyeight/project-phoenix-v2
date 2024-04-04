@@ -10,6 +10,7 @@ import (
 	"time"
 
 	microBroker "go-micro.dev/v4/broker"
+	"project-phoenix/v2/pkg/service"
 
 	"go-micro.dev/v4"
 )
@@ -109,7 +110,7 @@ func (ls *LocationService) ListenSubscribedTopics(broker microBroker.Event) erro
 	return nil
 }
 
-func (ls *LocationService) InitializeService(serviceObj micro.Service, serviceName string) ServiceInterface {
+func (ls *LocationService) InitializeService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
 
 	locationOnce.Do(func() {
 		service := serviceObj
@@ -140,7 +141,7 @@ func (ls *LocationService) HandleStopTracking(p microBroker.Event) error {
 	return nil
 }
 
-func NewLocationService(serviceObj micro.Service, serviceName string) ServiceInterface {
+func NewLocationService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
 	locationService := &LocationService{}
 	return locationService.InitializeService(serviceObj, serviceName)
 }

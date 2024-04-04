@@ -10,6 +10,7 @@ import (
 	"time"
 
 	internal "project-phoenix/v2/internal/service-configs"
+	"project-phoenix/v2/pkg/service"
 
 	// "sync"
 
@@ -25,11 +26,11 @@ type DataCommunicator struct {
 	brokerObj          microBroker.Broker
 }
 
-// const (
-// 	MaxRetries  = 5
-// 	RetryDelay  = 2 * time.Second
-// 	serviceName = "data-communicator"
-// )
+const (
+	DCMaxRetries  = 5
+	DCRetryDelay  = 2 * time.Second
+	serviceName = "data-communicator"
+)
 
 var dataCommunicatorOnce sync.Once
 
@@ -66,11 +67,11 @@ func (dc *DataCommunicator) SubscribeTopics() {
 
 // attemptSubscribe tries to subscribe to a topic with retries until successful or max retries reached.
 func (dc *DataCommunicator) attemptSubscribe(queueName string, topic internal.SubscribedTopicsMap) error {
-	for i := 0; i <= MaxRetries; i++ {
+	for i := 0; i <= DCMaxRetries; i++ {
 		if err := dc.subscribeToTopic(queueName, topic); err != nil {
-			if err.Error() == "not connected" && i < MaxRetries {
-				log.Printf("Broker not connected, retrying %d/%d for topic %s", i+1, MaxRetries, topic.TopicName)
-				time.Sleep(RetryDelay)
+			if err.Error() == "not connected" && i < DCMaxRetries {
+				log.Printf("Broker not connected, retrying %d/%d for topic %s", i+1, DCMaxRetries, topic.TopicName)
+				time.Sleep(DCRetryDelay)
 				continue
 			}
 			return err
@@ -111,9 +112,9 @@ func (dc *DataCommunicator) ListenSubscribedTopics(broker microBroker.Event) err
 	return nil
 }
 
-func (dc *DataCommunicator) InitializeService(serviceObj micro.Service, serviceName string) ServiceInterface {
+func (dc *DataCommunicator) InitializeService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
 
-	locationOnce.Do(func() {
+	dataCommunicatorOnce.Do(func() {
 		service := serviceObj
 		dc.service = service
 		dc.brokerObj = serviceObj.Options().Broker
@@ -122,7 +123,7 @@ func (dc *DataCommunicator) InitializeService(serviceObj micro.Service, serviceN
 	return dc
 }
 
-func NewDataCommunicatorService(serviceObj micro.Service, serviceName string) ServiceInterface {
+func NewDataCommunicatorService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
 	dataCommunicatorService := &DataCommunicator{}
 	return dataCommunicatorService.InitializeService(serviceObj, serviceName)
 }
