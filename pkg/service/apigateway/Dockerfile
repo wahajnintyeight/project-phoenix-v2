@@ -29,4 +29,4 @@ EXPOSE 8889
 
 # Command to run the executable
 # main.go --service-name api-gateway --port 8889
-CMD ["./main", "--service-name", "api-gateway", "--port", "8889"]
+CMD ["go run","main.go", "--service-name", "api-gateway", "--port", "8889"]
