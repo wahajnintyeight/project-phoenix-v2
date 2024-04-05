@@ -35,7 +35,7 @@
       <code>cd project-phoenix-v2</code>
     </li>
     <li><strong>Run the Application</strong>
-      <code>go run main.go --service-name api-gateway --port 8881</code>
+      <code>go run main.go --service-name api-gateway --port 8981</code>
     </li>
   </ol>
 

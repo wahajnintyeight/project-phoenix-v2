@@ -3,10 +3,10 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-args_bin = ["--service-name", "api-gateway", "--port", "8881"]
+args_bin = ["--service-name", "api-gateway", "--port", "8981"]
 bin = "./tmp/main.exe"
 cmd = "go build -o ./tmp/main.exe ."
-args = ["--service-name", "api-gateway", "--port", "8881"]
+args = ["--service-name", "api-gateway", "--port", "8981"]
 delay = 1000
 exclude_dir = ["assets", "tmp", "vendor", "testdata"]
 exclude_file = []
