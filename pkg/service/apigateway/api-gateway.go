@@ -48,6 +48,7 @@ func (api *APIGatewayService) InitializeService(serviceObj micro.Service, servic
 		servicePath := "api-gateway"
 		serviceConfig, _ := internal.ReturnServiceConfig(servicePath)
 		api.serviceConfig = serviceConfig.(internal.ServiceConfig)
+		log.Println("API Service Config",api.serviceConfig)
 		log.Println("API Gateway Service Broker Instance: ", api.brokerObj)
 	})
 

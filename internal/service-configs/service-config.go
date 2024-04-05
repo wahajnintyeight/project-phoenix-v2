@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
+	"log"
 )
 
 type ServiceConfig struct {
@@ -32,18 +32,34 @@ var serviceConfigObj ServiceConfig
 
 func ReturnServiceConfig(serviceName string) (interface{}, error) {
 	//read the path, and return. the file is in json format
-	serviceConfig, err := os.Open("internal/service-configs/" + serviceName + "/service-config.json")
+	// serviceConfig, err := os.Open("internal/service-configs/" + serviceName + "/service-config.json")
 
+	// if err != nil {
+	// 	fmt.Println("Unable to read file",err)
+	// 	return nil, err
+	// }
+	// defer serviceConfig.Close()
+
+	// byteValue, _ := ioutil.ReadAll(serviceConfig)
+	// if err := json.Unmarshal(byteValue, &serviceConfigObj); err != nil {
+	// 	fmt.Println("Error parsing JSON:", err)
+	// 	return nil, err
+	// }
+	filePath := "internal/service-configs/" + serviceName + "/service-config.json"
+	byteValue, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		fmt.Println("Unable to read file",err)
+		fmt.Println("Unable to read file", err)
 		return nil, err
 	}
-	defer serviceConfig.Close()
 
-	byteValue, _ := ioutil.ReadAll(serviceConfig)
+	// Unmarshal JSON
+	// var serviceConfigObj interface{}
 	if err := json.Unmarshal(byteValue, &serviceConfigObj); err != nil {
 		fmt.Println("Error parsing JSON:", err)
 		return nil, err
 	}
+
+	log.Println("Service config obj", serviceConfigObj)
+
 	return serviceConfigObj, nil
 }
