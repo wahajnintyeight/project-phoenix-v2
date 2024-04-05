@@ -27,4 +27,4 @@ EXPOSE 8882
 
 # Command to run the executable
 # main.go --service-name api-gateway --port 8889
-CMD ["go run","main.go","--service-name", "location-service", "--port", "8882"]
+CMD ["./main","--service-name", "location-service", "--port", "8882"]
