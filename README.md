@@ -39,6 +39,35 @@
     </li>
   </ol>
 
+   <h2>Docker Commands</h2>
+  <p>Below are some useful Docker commands for managing the containers associated with Project Phoenix V2.</p>
+
+  <h3>Building and Running Containers</h3>
+  <p>To build the Docker images and run the containers in detached mode, use the following command:</p>
+  <code>docker compose up --build -d</code>
+
+  <h3>Stopping All Containers</h3>
+  <p>To stop all running containers:</p>
+  <code>sudo docker stop $(sudo docker ps -a -q)</code>
+
+  <h3>Removing All Containers</h3>
+  <p>To remove all containers, ensuring you can rebuild and start fresh, use:</p>
+  <code>sudo docker rm $(sudo docker ps -a -q)</code>
+
+  <h3>Viewing Logs of a Container</h3>
+  <p>To follow the logs of a specific container, which is useful for debugging and monitoring the application's output:</p>
+  <code>sudo docker logs --follow containername</code>
+
+  <h3>Other Useful Docker Commands</h3>
+  <ul>
+    <li><strong>List All Containers:</strong> <code>docker ps -a</code></li>
+    <li><strong>List Running Containers:</strong> <code>docker ps</code></li>
+    <li><strong>Access Container Shell:</strong> <code>docker exec -it containername /bin/sh</code></li>
+    <li><strong>Build Docker Images:</strong> <code>docker build -t imagename .</code></li>
+    <li><strong>Removing Docker Images:</strong> <code>docker rmi imagename</code></li>
+    <li><strong>Viewing Docker Images:</strong> <code>docker images</code></li>
+  </ul>
+
   <h2>Running the Tests</h2>
   <p>Explain how to run the automated tests for this system:</p>
   <code>go test ./...</code>
