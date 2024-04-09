@@ -74,11 +74,11 @@
       <h2>Docker Commands for API Gateway</h2>
       <p>To containerize the API Gateway Service, use the provided Docker commands to build images, run containers, and view logs.</p>
       
-      <h3>Building Docker Images</h3>
-      <code>docker build -t api-gateway .</code>
+  <h3>Building Docker Images</h3>
+  <code>docker build -t api-gateway .</code>
 
-      <h3>Running the API Gateway Container</h3>
-      <code>docker run -d -p 8981:8981 api-gateway</code>
+  <h3>Running the API Gateway Container</h3>
+  <code>docker run -d -p 8981:8981 api-gateway</code>
   </section>    
   <h3>Key Features</h3>
   <ul>
