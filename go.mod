@@ -19,6 +19,7 @@ require (
 require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/streadway/amqp v1.0.0 // indirect
+	github.com/urfave/cli v1.22.14 // indirect
 )
 
 require (

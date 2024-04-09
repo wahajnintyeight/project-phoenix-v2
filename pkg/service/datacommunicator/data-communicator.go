@@ -128,8 +128,8 @@ func NewDataCommunicatorService(serviceObj micro.Service, serviceName string) se
 	return dataCommunicatorService.InitializeService(serviceObj, serviceName)
 }
 
-func (dc *DataCommunicator) Start() error {
-	log.Print("Location Service Started on Port:", dc.service.Server().Options().Address)
+func (dc *DataCommunicator) Start(port string) error {
+	log.Print("Location Service Started on Port:", port)
 	dc.SubscribeTopics()
 	return nil
 }

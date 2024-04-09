@@ -146,8 +146,8 @@ func NewLocationService(serviceObj micro.Service, serviceName string) service.Se
 	return locationService.InitializeService(serviceObj, serviceName)
 }
 
-func (ls *LocationService) Start() error {
-	log.Print("Location Service Started on Port:", ls.service.Server().Options().Address)
+func (ls *LocationService) Start(port string) error {
+	log.Print("Location Service Started on Port:", port)
 	ls.SubscribeTopics()
 	return nil
 }

@@ -48,7 +48,7 @@ func (api *APIGatewayService) InitializeService(serviceObj micro.Service, servic
 		servicePath := "api-gateway"
 		serviceConfig, _ := internal.ReturnServiceConfig(servicePath)
 		api.serviceConfig = serviceConfig.(internal.ServiceConfig)
-		log.Println("API Service Config",api.serviceConfig)
+		log.Println("API Service Config", api.serviceConfig)
 		log.Println("API Gateway Service Broker Instance: ", api.brokerObj)
 	})
 
@@ -137,19 +137,20 @@ func (s *APIGatewayService) registerRoutes() {
 	s.router.PathPrefix(s.serviceConfig.EndpointPrefix).Handler(apiRequestHandler)
 }
 
-func (s *APIGatewayService) Start() error {
+func (s *APIGatewayService) Start(port string) error {
 	godotenv.Load()
-	serviceConfig, serviceConfigErr := internal.ReturnServiceConfig("api-gateway")
-	log.Println("Starting API Gateway Service on Port:", s.service.Server().Options().Address)
-	var serverPort string
-	if serviceConfigErr != nil {
-		return serviceConfigErr
-	} else {
-		serverPort = serviceConfig.(internal.ServiceConfig).Port
-	}
+	// serviceConfig, serviceConfigErr := internal.ReturnServiceConfig("api-gateway")
+	log.Println("Starting API Gateway Service on Port:", port)
+	// var serverPort string
+	// if serviceConfigErr != nil {
+	// return serviceConfigErr
+	// } else {
+	// serverPort = port// serviceConfig.(internal.ServiceConfig).Port
+	// }
+	// log.Println("Port: ", port)
 	s.router = mux.NewRouter()
 	s.server = &http.Server{
-		Addr:    ":" + serverPort,
+		Addr:    ":" + port,
 		Handler: s.router,
 	}
 	s.registerRoutes()

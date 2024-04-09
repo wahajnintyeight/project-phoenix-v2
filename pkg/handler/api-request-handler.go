@@ -56,13 +56,14 @@ func (apiHandler APIRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	case "POST":
 		POSTRoutes(w, r)
 	case "DELETE":
-
+		apiHandler.DELETERoutes(w, r)
 	}
 }
 
 func (apiHandler APIRequestHandler) DELETERoutes(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case apiRequestHandlerObj.Endpoint + "/deleteTrip":
+		log.Println("Delete TRIP")
 		controller := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB)
 		userTripController := controller.(*controllers.UserTripController)
 		code, message, er := userTripController.DeleteTrip(w, r)

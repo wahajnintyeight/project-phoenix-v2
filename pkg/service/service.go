@@ -9,7 +9,7 @@ import (
 )
 
 type ServiceInterface interface {
-	Start() error
+	Start(string) error
 	Stop() error
 	InitializeService(micro.Service, string) (ServiceInterface)
 	GetSubscribedTopics() ([]internal.SubscribedServices)

@@ -10,6 +10,7 @@ import (
 	"project-phoenix/v2/internal/broker"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/pkg/factory"
+	"strconv"
 	"syscall"
 
 	// "syscall"
@@ -42,10 +43,9 @@ func main() {
 			portFlag := c.Int("port")
 
 			ctx, _ := context.WithCancel(context.Background())
-
 			service := micro.NewService(
 				micro.Name(serviceTypeFlag),
-				micro.Address(fmt.Sprintf(":%d", portFlag)),
+				micro.Address(fmt.Sprintf(":0")),
 				micro.Flags(&cli.StringFlag{
 					Name:  "service-name",
 					Usage: "Name of the service",
@@ -88,7 +88,9 @@ func main() {
 				// <-goMicroDone // Wait for Go-Micro to start
 				log.Println("Go-Micro Service started successfully")
 				log.Println("Starting Service...")
-				if err := serviceObj.Start(); err != nil {
+				//convert int to string
+				portInt := strconv.Itoa(portFlag)
+				if err := serviceObj.Start(portInt); err != nil {
 					log.Fatal("Service start error:", err)
 				}
 			}()

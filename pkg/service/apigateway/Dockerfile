@@ -30,8 +30,8 @@ WORKDIR /app
 # Copy the pre-built binary file from the previous stage
 COPY --from=builder /build .
 
-EXPOSE 8901
+EXPOSE 8881
 
 # Command to run the executable
 # main.go --service-name api-gateway --port 8889
-CMD ["./main", "--service-name", "api-gateway", "--port", "8911"]
+CMD ["./main", "--service-name", "api-gateway", "--port", "8881"]
