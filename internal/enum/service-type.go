@@ -7,6 +7,7 @@ const (
 	APIGateway ServiceType = iota
 	Location
 	DataCommunicator
+	SocketService
 )
 
 // String provides the string representation of the ServiceType for easier debugging and logging

@@ -8,7 +8,7 @@ import (
     apiGateway	"project-phoenix/v2/pkg/service/apigateway"
 	dataCommunicator "project-phoenix/v2/pkg/service/datacommunicator"
 	locationService "project-phoenix/v2/pkg/service/locationservice"
-
+	socketService "project-phoenix/v2/pkg/service/socketservice"
 	"go-micro.dev/v4"
 )
 
@@ -24,6 +24,9 @@ func ServiceFactory(serviceObj micro.Service, serviceType enum.ServiceType, serv
 	case enum.DataCommunicator:
 		dataCommunicatorService := dataCommunicator.NewDataCommunicatorService(serviceObj, serviceName)
 		return dataCommunicatorService
+	case enum.SocketService:
+		socketService := socketService.NewSocketService(serviceObj,serviceName)
+		return socketService
 	default:
 		panic("Invalid service type")
 	}

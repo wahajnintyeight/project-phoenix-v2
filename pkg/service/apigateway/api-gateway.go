@@ -139,15 +139,9 @@ func (s *APIGatewayService) registerRoutes() {
 
 func (s *APIGatewayService) Start(port string) error {
 	godotenv.Load()
-	// serviceConfig, serviceConfigErr := internal.ReturnServiceConfig("api-gateway")
+
 	log.Println("Starting API Gateway Service on Port:", port)
-	// var serverPort string
-	// if serviceConfigErr != nil {
-	// return serviceConfigErr
-	// } else {
-	// serverPort = port// serviceConfig.(internal.ServiceConfig).Port
-	// }
-	// log.Println("Port: ", port)
+
 	s.router = mux.NewRouter()
 	s.server = &http.Server{
 		Addr:    ":" + port,

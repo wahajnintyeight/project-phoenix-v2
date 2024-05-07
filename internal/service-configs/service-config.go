@@ -59,7 +59,7 @@ func ReturnServiceConfig(serviceName string) (interface{}, error) {
 		return nil, err
 	}
 
-	log.Println("Service config obj", serviceConfigObj)
+	// log.Println("Service config obj", serviceConfigObj)
 
 	return serviceConfigObj, nil
 }

@@ -71,6 +71,8 @@ func main() {
 				serviceType = enum.Location
 			case "data-communicator":
 				serviceType = enum.DataCommunicator
+			case "socket-service":
+				serviceType = enum.SocketService
 			default:
 				fmt.Println("Error occurred: Invalid service type")
 				os.Exit(1)
