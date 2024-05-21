@@ -1,7 +1,21 @@
 {
     "port": "9000",
-    "readBufferSize": 1024,
-    "writeBufferSize": 1024,
-    "connection_limit": 100,
-    "servicePort":"8884"
+    "servicePort":"8884",
+    "subscribedServices": [
+        {
+            "name": "location-service",
+            "exchange": "location-exchange",
+            "queue": "location-queue",
+            "subscribedTopics": [
+                {
+                    "topicName": "start-tracking",
+                    "topicHandler": "HandleStartTracking"
+                },
+                {
+                    "topicName": "stop-tracking",
+                    "topicHandler": "HandleStopTracking"
+                }
+            ]
+        }
+    ]
 }

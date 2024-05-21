@@ -182,6 +182,21 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, code, message)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/handle-webhook":
+		//log the request body
+		request := map[string]interface{}{}
+		decodeErr := json.NewDecoder(r.Body).Decode(&request)
+		if decodeErr != nil {
+			log.Println("Error decoding request body: ", decodeErr)
+			response.SendErrorResponse(w, int(enum.ERROR), "Error decoding request body")
+			return
+		} else {
+			log.Println("Request Body: ", request["steps"])
+		}
+		// response.SendErrorResponse(w, int(enum.ERROR), "Error decoding request body")
+
+		response.SendResponse(w, int(enum.DATA_FETCHED), "Webhook Received")
+		return
 	default:
 		http.NotFound(w, r)
 	}

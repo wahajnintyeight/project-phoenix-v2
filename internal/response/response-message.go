@@ -91,6 +91,12 @@ func SendResponse(w http.ResponseWriter, responseCode int, response interface{})
 	json.NewEncoder(w).Encode(extractMessage(responseCode, response))
 }
 
+func SendErrorResponse(w http.ResponseWriter, responseCode int, response interface{}){
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	json.NewEncoder(w).Encode(extractMessage(responseCode, response))
+}
+
 func extractMessage(responseCode int, response interface{}) interface{} {
 
 	return MessageResponse{

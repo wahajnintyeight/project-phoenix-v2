@@ -9,6 +9,7 @@ import (
 	"project-phoenix/v2/pkg/service"
 	"sync"
 
+	socketio "github.com/googollee/go-socket.io"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"go-micro.dev/v4"
@@ -22,6 +23,7 @@ type SocketService struct {
 	serviceConfig      internal.ServiceConfig
 	subscribedServices []internal.SubscribedServices
 	brokerObj          microBroker.Broker
+	socketObj  		   socketio.Server
 }
 
 var socketOnce sync.Once
@@ -46,9 +48,20 @@ func (ss *SocketService) InitializeService(serviceObj micro.Service, serviceName
 	return ss
 }
 
-func (api *SocketService) ListenSubscribedTopics(broker microBroker.Event) error {
+func (ss *SocketService) ListenSubscribedTopics(broker microBroker.Event) error {
 
 	return nil
+}
+
+func (ss *SocketService) InitServer() socketio.Server {
+	// Initialize socket.io server
+	server := socketio.NewServer(nil)
+	log.Println("Server Instance: ", server)
+	ss.socketObj = *server
+	return *server
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 }
 
 func (ss *SocketService) SubscribeTopics() {
@@ -72,12 +85,10 @@ func (s *SocketService) Start(port string) error {
 	return nil
 }
 
-
 func NewSocketService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
 	socketService := &SocketService{}
 	return socketService.InitializeService(serviceObj, serviceName)
 }
-
 
 func (s *SocketService) Stop() error {
 	log.Println("Stopping Socket Service")

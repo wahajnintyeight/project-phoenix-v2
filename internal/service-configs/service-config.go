@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 )
 
 type ServiceConfig struct {
@@ -15,6 +14,7 @@ type ServiceConfig struct {
 	EndpointPrefix         string               `json:"endpointPrefix"`
 	SessionIDMiddlewareKey string               `json:"sessionIdMiddleware"`
 	SubscribedServices     []SubscribedServices `json:"subscribedServices"`
+	ServicePort            string               `json:"servicePort"`
 }
 
 type SubscribedServices struct {
