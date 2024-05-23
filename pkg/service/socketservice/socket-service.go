@@ -69,48 +69,66 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Fatal("Upgrade:", err)
+	} else {
+		log.Println(conn.LocalAddr(), conn.RemoteAddr(), conn.LocalAddr().String())
+		ss.socketObj = conn
 	}
 	defer conn.Close()
 
-	roomID := r.URL.Query().Get("room")
-	if roomID == "" {
-		roomID = "default"
-	}
+	// roomID := r.URL.Query().Get("room")
+	// if roomID == "" {
+	// 	roomID = "default"
+	// }
 
-	ss.JoinRoom(roomID, conn)
+	// ss.JoinRoom(roomID, conn)
 
 	for {
 		var msg map[string]string
 		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Println("Read error:", err)
-			ss.RemoveClient(roomID, conn)
+			// ss.RemoveClient(roomID, conn)
 			break
 		}
 
-		if action, ok := msg["action"]; ok && action == "broadcast" {
-			ss.Broadcast(roomID, msg)
-		}
+		// if action, ok := msg["action"]; ok && action == "broadcast" {
+		// 	ss.Broadcast(roomID, msg)
+		// }
+		log.Println("JSON READ:", msg)
 		if action, ok := msg["action"]; ok {
 			switch action {
 			case "identifyUser":
-				handleIdentifyUser(roomID, conn, msg)
-			case "broadcast":
-				ss.Broadcast(roomID, msg)
+				ss.handleIdentifyUser(conn, msg)
+				// case "broadcast":
+				// ss.Broadcast(roomID, msg)
+			case "connect":
+				log.Println("Connected to the server | connect")
+			case "connected":
+				log.Println("Connected to the server | connected")
+			case "disconnect":
+				log.Println("Disconnected from the server", msg)
 			}
 		}
 	}
 }
 
-func handleIdentifyUser(roomID string, conn *websocket.Conn, msg map[string]string) {
+func (ss *SocketService) handleIdentifyUser(conn *websocket.Conn, msg map[string]string) {
 	// log.Println("Identify User Event:", msg)
 	dat, e := helper.StructToMap(msg)
 	if e != nil {
 		log.Println(e)
 	} else {
-		log.Println(dat["userId"])
+		log.Println("User ", dat["userId"], " joined the room - ", getSocketRoom(dat))
+		ss.JoinRoom(getSocketRoom(dat), conn)
+		ss.Broadcast(getSocketRoom(dat), msg)
 	}
 	// Handle the identifyUser event (e.g., log the user info or perform some action)
+}
+
+func getSocketRoom(msg map[string]interface{}) string {
+	// invalid operation: "user-" + msg["userID"] (mismatched types string and interface{})
+	roomName := "user-" + msg["userId"].(string) + "_" + msg["tripId"].(string)
+	return roomName
 }
 
 func (ss *SocketService) InitServer() {
@@ -182,13 +200,13 @@ func (ss *SocketService) Broadcast(roomID string, msg map[string]string) {
 	}
 }
 
-func (ls *SocketService) InitServiceConfig() {
+func (ss *SocketService) InitServiceConfig() {
 	serviceConfig, er := internal.ReturnServiceConfig("socket")
 	if er != nil {
 		log.Println("Unable to read service config", er)
 		return
 	}
-	ls.serviceConfig = serviceConfig.(internal.ServiceConfig)
+	ss.serviceConfig = serviceConfig.(internal.ServiceConfig)
 }
 
 func (s *SocketService) Start(port string) error {

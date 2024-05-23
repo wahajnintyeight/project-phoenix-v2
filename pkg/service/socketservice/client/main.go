@@ -9,7 +9,7 @@ import (
 
 func main() {
 	u := url.URL{Scheme: "ws", Host: "localhost:9000", Path: "/socket.io", RawQuery: "room=room1"}
-	log.Printf("Connecting to %s", u.String())
+	log.Println("Connecting to ", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
@@ -35,7 +35,7 @@ func main() {
 		"userId": "572385732857345",
 		"tripId": "1234567890",
 	}
-	e := sendEvent(*c, "identifyUser", msg)
+	e := sendEvent(c, "identifyUser", msg)
 	if e != nil {
 		log.Println("Error sending event")
 	}
@@ -50,7 +50,7 @@ func main() {
 	select {}
 }
 
-func sendEvent(con websocket.Conn, eventName string, message map[string]interface{}) error {
+func sendEvent(con *websocket.Conn, eventName string, message map[string]interface{}) error {
 	msg := message
 	msg["action"] = eventName
 
