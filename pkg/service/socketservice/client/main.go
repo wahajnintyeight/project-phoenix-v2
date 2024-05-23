@@ -1,47 +1,65 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"net/url"
 
-	socketio "github.com/zhouhui8915/go-socket.io-client"
+	"github.com/gorilla/websocket"
 )
 
 func main() {
-	opts := &socketio.Options{
-		Transport: "websocket",
-		Query:     make(map[string]string),
-	}
-	client, err := socketio.NewClient("http://127.0.0.1:9000", opts)
-	log.Println("Client Instance: ", client)
+	u := url.URL{Scheme: "ws", Host: "localhost:9000", Path: "/socket.io", RawQuery: "room=room1"}
+	log.Printf("Connecting to %s", u.String())
+
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		log.Fatalf("Error creating client: %v", err)
+		log.Fatal("dial:", err)
 	}
+	defer c.Close()
+
+	done := make(chan struct{})
+
 	go func() {
-		client.Emit("identifyUser", map[string]interface{}{"userId": "3275832u5893u5834", "tripId": "421794729347324"})
+		defer close(done)
+		for {
+			_, message, err := c.ReadMessage()
+			if err != nil {
+				log.Println("read:", err)
+				return
+			}
+			log.Printf("Received: %s", message)
+		}
 	}()
-	client.On("connection", func() {
-		fmt.Println("Connected to the server")
-		client.Emit("notice", "Hello from Go client!")
-	})
 
-	client.On("connected", func() {
-		fmt.Println("Connected to the server")
-		client.Emit("notice", "Hello from Go client!")
-	})
-
-	client.On("reply", func(msg string) {
-		fmt.Printf("Server reply: %s\n", msg)
-	})
-
-	client.On("disconnection", func() {
-		fmt.Println("Disconnected from server")
-	})
-
-	client.On("error", func(err string) {
-		fmt.Println("Error:", err)
-	})
+	msg := map[string]interface{}{
+		"userId": "572385732857345",
+		"tripId": "1234567890",
+	}
+	e := sendEvent(*c, "identifyUser", msg)
+	if e != nil {
+		log.Println("Error sending event")
+	}
+	// Send a message to broadcast to the room
+	// err = c.WriteJSON(msg)
+	// if err != nil {
+	// 	log.Println("write:", err)
+	// 	return
+	// }
 
 	// Keep the client running
 	select {}
+}
+
+func sendEvent(con websocket.Conn, eventName string, message map[string]interface{}) error {
+	msg := message
+	msg["action"] = eventName
+
+	err := con.WriteJSON(msg)
+	if err != nil {
+		log.Println("write:", err)
+		return err
+	}
+	log.Println("Sent Event: ", eventName, " Data: ", message)
+	return nil
+
 }
