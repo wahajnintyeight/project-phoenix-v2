@@ -23,6 +23,7 @@ require (
 	github.com/googollee/go-socket.io v1.7.0 // indirect
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
+	github.com/rs/cors v1.11.0 // indirect
 	github.com/streadway/amqp v1.0.0 // indirect
 	github.com/urfave/cli v1.22.14 // indirect
 	github.com/zhouhui8915/engine.io-go v0.0.0-20150910083302-02ea08f0971f // indirect

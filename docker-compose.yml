@@ -12,3 +12,9 @@ services:
       context: .
     ports:
       - "8882:8882"
+  socket-service:
+    build:
+      dockerfile: pkg/service/socketservice/Dockerfile
+      context: .
+    ports:
+      - "8884:8884"

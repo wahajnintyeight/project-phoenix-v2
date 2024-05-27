@@ -10,10 +10,12 @@ import (
 	"project-phoenix/v2/pkg/service"
 	"sync"
 
+	socketio "github.com/googollee/go-socket.io"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
+	"github.com/rs/cors"
 	"go-micro.dev/v4"
 	microBroker "go-micro.dev/v4/broker"
 )
@@ -75,13 +77,6 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 	}
 	defer conn.Close()
 
-	// roomID := r.URL.Query().Get("room")
-	// if roomID == "" {
-	// 	roomID = "default"
-	// }
-
-	// ss.JoinRoom(roomID, conn)
-
 	for {
 		var msg map[string]string
 		err := conn.ReadJSON(&msg)
@@ -90,10 +85,6 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 			// ss.RemoveClient(roomID, conn)
 			break
 		}
-
-		// if action, ok := msg["action"]; ok && action == "broadcast" {
-		// 	ss.Broadcast(roomID, msg)
-		// }
 		log.Println("JSON READ:", msg)
 		if action, ok := msg["action"]; ok {
 			switch action {
@@ -131,32 +122,45 @@ func getSocketRoom(msg map[string]interface{}) string {
 	return roomName
 }
 
+func (ss *SocketService) InitServerIO() {
+	server := socketio.NewServer(nil)
+	log.Println("SOCKETIO | Server Instance: ", server)
+
+	log.Println("Total connections: ", server.Count())
+	server.OnConnect("/", func(s socketio.Conn) error {
+		s.SetContext("")
+		log.Println("Connected:", s.ID())
+		s.Emit("/connected", "Connected to the server")
+		return nil
+	})
+	server.OnDisconnect("/", func(s socketio.Conn, reason string) {
+		log.Println("Disconnected:", reason)
+	})
+	server.OnEvent("/", "notice", func(s socketio.Conn, msg string) {
+		log.Println("Notice event", msg)
+	})
+	server.OnEvent("notice", "notice", func(s socketio.Conn, data string) {
+		log.Println("notice event", data)
+	})
+	server.OnEvent("/", "identifyUser", func(s socketio.Conn, msg string) {
+		log.Println("Identify User Event", msg)
+	})
+
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowCredentials: true,
+	})
+	handler := c.Handler(server)
+	// http.Handle("/socket.io/", server)
+	http.Handle("/socket.io/", handler)
+	log.Fatal(http.ListenAndServe(":9000", nil))
+
+}
+
 func (ss *SocketService) InitServer() {
 	// Initialize socket.io server
 	http.HandleFunc("/socket.io", ss.HandleConnections)
 	http.HandleFunc("/", ss.HandleConnections)
-	// server := socketio.NewServer(nil)
-	// log.Println("Server Instance: ", server)
-	// // ss.socketObj = server
-
-	// ss.socketObj.OnConnect("/", func(s socketio.Conn) error {
-	// 	s.SetContext("")
-	// 	log.Println("Connected:", s.ID())
-	// 	s.Emit("/connected", "Connected to the server")
-	// 	return nil
-	// })
-	// ss.socketObj.OnDisconnect("/", func(s socketio.Conn, reason string) {
-	// 	log.Println("Disconnected:", reason)
-	// })
-	// ss.socketObj.OnEvent("/", "notice", func(s socketio.Conn, msg string) {
-	// 	log.Println("Notice event", msg)
-	// })
-	// server.OnEvent("notice", "notice", func(s socketio.Conn, data string) {
-	// 	log.Println("notice event", data)
-	// })
-	// ss.socketObj.OnEvent("/", "identifyUser", func(s socketio.Conn, msg string) {
-	// 	log.Println("Identify User Event", msg)
-	// })
 
 }
 
@@ -212,28 +216,19 @@ func (ss *SocketService) InitServiceConfig() {
 func (s *SocketService) Start(port string) error {
 	godotenv.Load()
 	log.Println("Starting Socket Service on Port:", port)
+	isIO := true
+	if isIO {
+		s.InitServerIO()
+	} else {
+		s.InitServer()
+		s.server = &http.Server{
+			Addr:    ":" + s.serviceConfig.Port,
+			Handler: handlers.CORS(handlers.AllowedOrigins([]string{"*"}))(s.router), // Allow all origins
+		}
+		log.Fatal(http.ListenAndServe(":9000", nil))
 
-	s.InitServer()
-
-	// Setup router with socket.io and static file handlers
-	// s.router.Handle("/socket.io/", http.StripPrefix("/socket.io", s.socketObj))
-	// s.router.Handle("/", http.FileServer(http.Dir("./public")))
-
-	s.server = &http.Server{
-		Addr:    ":" + s.serviceConfig.Port,
-		Handler: handlers.CORS(handlers.AllowedOrigins([]string{"*"}))(s.router), // Allow all origins
 	}
 
-	// go func() {
-	// 	if err := s.socketObj.Serve(); err != nil {
-	// 		log.Fatalf("SocketIO listen error: %s\n", err)
-	// 	}
-	// }()
-
-	log.Fatal(http.ListenAndServe(":9000", nil))
-	// if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-	// 	log.Fatalf("ListenAndServe(): %s\n", err)
-	// }
 	return nil
 }
 
