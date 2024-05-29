@@ -5,17 +5,21 @@ import (
 
 	"log"
 	"net/http"
+	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/helper"
 	"project-phoenix/v2/pkg/service"
 	"sync"
 
 	socketio "github.com/googollee/go-socket.io"
+	"github.com/googollee/go-socket.io/engineio"
+	"github.com/googollee/go-socket.io/engineio/transport"
+	"github.com/googollee/go-socket.io/engineio/transport/polling"
+	ws "github.com/googollee/go-socket.io/engineio/transport/websocket"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
-	"github.com/rs/cors"
 	"go-micro.dev/v4"
 	microBroker "go-micro.dev/v4/broker"
 )
@@ -78,7 +82,7 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 	defer conn.Close()
 
 	for {
-		var msg map[string]string
+		var msg map[string]interface{}
 		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Println("Read error:", err)
@@ -90,70 +94,124 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 			switch action {
 			case "identifyUser":
 				ss.handleIdentifyUser(conn, msg)
-				// case "broadcast":
-				// ss.Broadcast(roomID, msg)
 			case "connect":
 				log.Println("Connected to the server | connect")
 			case "connected":
 				log.Println("Connected to the server | connected")
 			case "disconnect":
 				log.Println("Disconnected from the server", msg)
+			case "notice":
+				log.Println("Notice Event", msg)
+			case "locationUpdate":
+				log.Println("Location Update Event Received")
+				ss.handleLocationUpdate(conn, msg)
 			}
 		}
 	}
 }
 
-func (ss *SocketService) handleIdentifyUser(conn *websocket.Conn, msg map[string]string) {
-	// log.Println("Identify User Event:", msg)
+func (ss *SocketService) handleIdentifyUser(conn *websocket.Conn, msg map[string]interface{}) {
 	dat, e := helper.StructToMap(msg)
+	identifyUser := &model.IdentifyUser{}
+	log.Println("Data:", dat)
+
+	if e != nil {
+		log.Println(e)
+		return
+	} else {
+		er := helper.InterfaceToStruct(dat["data"], &identifyUser)
+		if er != nil {
+			log.Println(er)
+		}
+		log.Println("User ", identifyUser.UserId, " joined the room - ", getSocketRoom(identifyUser.UserId, identifyUser.TripId))
+		ss.JoinRoom(getSocketRoom(identifyUser.UserId, identifyUser.TripId), conn)
+		// ss.Broadcast(getSocketRoom(dat), msg)
+	}
+}
+
+func (ss *SocketService) handleLocationUpdate(conn *websocket.Conn, msg map[string]interface{}) {
+	dat, e := helper.StructToMap(msg)
+	locationData := &model.LocationData{}
 	if e != nil {
 		log.Println(e)
 	} else {
-		log.Println("User ", dat["userId"], " joined the room - ", getSocketRoom(dat))
-		ss.JoinRoom(getSocketRoom(dat), conn)
-		ss.Broadcast(getSocketRoom(dat), msg)
+		er := helper.InterfaceToStruct(dat["data"], &locationData)
+		if er != nil {
+			log.Println(er)
+		}
+		log.Println("Location Data Received:", locationData)
+		ss.Broadcast(getSocketRoom(locationData.UserId, locationData.TripId), msg, conn)
 	}
-	// Handle the identifyUser event (e.g., log the user info or perform some action)
 }
 
-func getSocketRoom(msg map[string]interface{}) string {
-	// invalid operation: "user-" + msg["userID"] (mismatched types string and interface{})
-	roomName := "user-" + msg["userId"].(string) + "_" + msg["tripId"].(string)
+func getSocketRoom(userId string, tripId string) string {
+	roomName := "user-" + userId + "_" + tripId
 	return roomName
 }
 
+var allowOriginFunc = func(r *http.Request) bool {
+	return true
+}
+
 func (ss *SocketService) InitServerIO() {
-	server := socketio.NewServer(nil)
+	server := socketio.NewServer(&engineio.Options{
+		Transports: []transport.Transport{
+			&polling.Transport{
+				CheckOrigin: allowOriginFunc,
+			},
+			&ws.Transport{
+				CheckOrigin: allowOriginFunc,
+			},
+		},
+	})
 	log.Println("SOCKETIO | Server Instance: ", server)
 
-	log.Println("Total connections: ", server.Count())
 	server.OnConnect("/", func(s socketio.Conn) error {
-		s.SetContext("")
+		// s.SetContext("")
 		log.Println("Connected:", s.ID())
-		s.Emit("/connected", "Connected to the server")
+		s.Emit("/connected", map[string]interface{}{"message": "Connected to the server"})
+
+		server.OnEvent("/", "disconnected", func(s socketio.Conn, msg string) {
+			log.Println("Disconnected Event", msg)
+		})
+		log.Println("Total connections: ", server.Count())
+
 		return nil
 	})
 	server.OnDisconnect("/", func(s socketio.Conn, reason string) {
 		log.Println("Disconnected:", reason)
 	})
-	server.OnEvent("/", "notice", func(s socketio.Conn, msg string) {
-		log.Println("Notice event", msg)
-	})
-	server.OnEvent("notice", "notice", func(s socketio.Conn, data string) {
-		log.Println("notice event", data)
-	})
-	server.OnEvent("/", "identifyUser", func(s socketio.Conn, msg string) {
+
+	server.OnEvent("/", "identifyUser", func(s socketio.Conn, msg string) string {
 		log.Println("Identify User Event", msg)
+		return msg
 	})
 
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowCredentials: true,
+	server.OnEvent("/", "identifyUser", func(s socketio.Conn, msg string) {
+		s.Emit("identifyUser", msg)
 	})
-	handler := c.Handler(server)
-	// http.Handle("/socket.io/", server)
-	http.Handle("/socket.io/", handler)
-	log.Fatal(http.ListenAndServe(":9000", nil))
+
+	server.OnEvent("/", "disconnected", func(s socketio.Conn, msg string) {
+		log.Println("Disconnected Event", msg)
+	})
+
+	// c := cors.New(cors.Options{
+	// 	AllowedOrigins:   []string{"*"},
+	// 	AllowCredentials: true,
+	// })
+
+	go func() {
+		if err := server.Serve(); err != nil {
+			log.Fatalf("Socket listen error: %s\n", err)
+		}
+	}()
+	defer server.Close()
+
+	// handler := c.Handler(server)
+	http.Handle("/socket.io/", server)
+	// http.Handle("/socket.io/", handler)
+	// log.Fatal(http.ListenAndServe(":"+ss.serviceConfig.Port, handler))
+	log.Fatal(http.ListenAndServe(":"+ss.serviceConfig.Port, nil))
 
 }
 
@@ -179,6 +237,7 @@ func (ss *SocketService) JoinRoom(roomID string, conn *websocket.Conn) {
 	room.mu.Lock()
 	room.clients[conn] = true
 	room.mu.Unlock()
+	log.Println("Room", rooms)
 }
 
 func (ss *SocketService) RemoveClient(roomID string, conn *websocket.Conn) {
@@ -189,16 +248,19 @@ func (ss *SocketService) RemoveClient(roomID string, conn *websocket.Conn) {
 	}
 }
 
-func (ss *SocketService) Broadcast(roomID string, msg map[string]string) {
+func (ss *SocketService) Broadcast(roomID string, msg map[string]interface{}, sender *websocket.Conn) {
 	if room, exists := rooms[roomID]; exists {
 		room.mu.Lock()
 		defer room.mu.Unlock()
 		for client := range room.clients {
-			err := client.WriteJSON(msg)
-			if err != nil {
-				log.Println("Write error:", err)
-				client.Close()
-				delete(room.clients, client)
+			if client != sender {
+				log.Println("Broadcasting to User", client.LocalAddr(), client.RemoteAddr())
+				err := client.WriteJSON(msg)
+				if err != nil {
+					log.Println("Write error:", err)
+					client.Close()
+					delete(room.clients, client)
+				}
 			}
 		}
 	}
@@ -216,7 +278,7 @@ func (ss *SocketService) InitServiceConfig() {
 func (s *SocketService) Start(port string) error {
 	godotenv.Load()
 	log.Println("Starting Socket Service on Port:", port)
-	isIO := true
+	isIO := false
 	if isIO {
 		s.InitServerIO()
 	} else {
@@ -225,7 +287,7 @@ func (s *SocketService) Start(port string) error {
 			Addr:    ":" + s.serviceConfig.Port,
 			Handler: handlers.CORS(handlers.AllowedOrigins([]string{"*"}))(s.router), // Allow all origins
 		}
-		log.Fatal(http.ListenAndServe(":9000", nil))
+		log.Fatal(http.ListenAndServe(":"+s.serviceConfig.Port, nil))
 
 	}
 
