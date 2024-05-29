@@ -287,6 +287,7 @@ func (s *SocketService) Start(port string) error {
 			Addr:    ":" + s.serviceConfig.Port,
 			Handler: handlers.CORS(handlers.AllowedOrigins([]string{"*"}))(s.router), // Allow all origins
 		}
+		log.Println("Running on port: ", s.server.Addr, s.serviceConfig.Port)
 		log.Fatal(http.ListenAndServe(":"+s.serviceConfig.Port, nil))
 
 	}
