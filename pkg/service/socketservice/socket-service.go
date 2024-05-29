@@ -284,11 +284,11 @@ func (s *SocketService) Start(port string) error {
 	} else {
 		s.InitServer()
 		s.server = &http.Server{
-			Addr:    ":" + s.serviceConfig.Port,
+			Addr:    "0.0.0.0:" + s.serviceConfig.Port,
 			Handler: handlers.CORS(handlers.AllowedOrigins([]string{"*"}))(s.router), // Allow all origins
 		}
 		log.Println("Running on port: ", s.server.Addr, s.serviceConfig.Port)
-		log.Fatal(http.ListenAndServe(":"+s.serviceConfig.Port, nil))
+		log.Fatal(http.ListenAndServe("0.0.0.0:"+s.serviceConfig.Port, nil))
 
 	}
 
