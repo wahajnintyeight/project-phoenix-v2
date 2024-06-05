@@ -15,11 +15,14 @@ import (
 type RabbitMQ struct {
 	conn           *amqp091.Connection
 	RabbitMQBroker broker.Broker
+	channel        *amqp091.Channel
 }
 
 var (
 	rOnce            sync.Once
 	rabbitMqInstance *RabbitMQ
+	channel *amqp091.Channel
+	channelOnce sync.Once
 )
 
 func (r *RabbitMQ) PublishMessage(data map[string]interface{}, serviceName string, topicName string) {
@@ -50,22 +53,29 @@ func (r *RabbitMQ) SubscribeTopic() {
 
 func (r *RabbitMQ) ConnectBroker() error {
 
-	rabbitMQConnString := ReturnRabbitMQConnString()
-	r.RabbitMQBroker = rabbitmq.NewBroker(
-		broker.Addrs(rabbitMQConnString),
-	)
-	if initEr := r.RabbitMQBroker.Init(); initEr != nil {
-		log.Println(initEr)
-		return initEr
-	}
-	if e := r.RabbitMQBroker.Connect(); e != nil {
-		log.Println(e)
-		return e
+	var connErr error
+	connErr = nil
+	rOnce.Do(func() {
+		rabbitMQConnString := ReturnRabbitMQConnString()
+		r.RabbitMQBroker = rabbitmq.NewBroker(
+			broker.Addrs(rabbitMQConnString),
+		)
+		if initEr := r.RabbitMQBroker.Init(); initEr != nil {
+			log.Println(initEr)
+			connErr = initEr
+		}
+		if e := r.RabbitMQBroker.Connect(); e != nil {
+			log.Println(e)
+			connErr = e
+		} else {
+			log.Println("RabbitMQ Connected")
+		}
+	})
+	if connErr != nil {
+		return connErr
 	} else {
-		log.Println("RabbitMQ Connected")
+		return nil
 	}
-
-	return nil
 }
 
 func ReturnRabbitMQConnString() string {
@@ -76,4 +86,16 @@ func ReturnRabbitMQConnString() string {
 	rPort := os.Getenv("RABBITMQ_PORT")
 	connString := "amqp://" + rUser + ":" + rPass + "@" + rHost + ":" + rPort + "/"
 	return connString
+}
+
+// Close closes the RabbitMQ connection and channel
+func (r *RabbitMQ) Close() {
+	if r.channel != nil {
+		log.Println("r.channel | Closing RabbitMQ Channel")
+		r.channel.Close()
+	}
+	if r.conn != nil {
+		log.Println("r.conn | Closing RabbitMQ Connection")
+		r.conn.Close()
+	}
 }

@@ -14,7 +14,7 @@ import (
 )
 
 type MongoDB struct {
-	client *mongo.Client
+	Client *mongo.Client
 	db     *mongo.Database
 }
 
@@ -53,7 +53,7 @@ func GetInstance() (*MongoDB, error) {
 
 			db := client.Database(dbName)
 			dbInstance = &MongoDB{
-				client: client,
+				Client: client,
 				db:     db,
 			}
 
@@ -65,6 +65,10 @@ func GetInstance() (*MongoDB, error) {
 	})
 	return dbInstance, nil
 
+}
+
+func (m *MongoDB) GetClient() *mongo.Client {
+	return m.Client
 }
 
 func GetConnectionFromPool() *MongoDB {
@@ -81,7 +85,7 @@ func (m *MongoDB) Connect(uri string) (string, error) {
 }
 
 func (m *MongoDB) Disconnect() (string, error) {
-	err := m.client.Disconnect(context.Background())
+	err := m.Client.Disconnect(context.Background())
 	if err != nil {
 		log.Println(err)
 	}
@@ -211,7 +215,6 @@ func (m *MongoDB) FindRecentDocument(query interface{}, collectionName string) (
 		context.Background(),
 		query,
 		options.FindOne().SetSort(bson.M{"createdAt": -1}))
-	log.Println("Error", result.Err())
 	if result.Err() != nil {
 		log.Println("Error while finding recent document: ", result.Err())
 		return nil, result.Err()

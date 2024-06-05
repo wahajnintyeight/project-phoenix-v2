@@ -6,7 +6,8 @@ import (
 	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/helper"
-	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type UserLocationController struct {
@@ -32,22 +33,40 @@ func (ul *UserLocationController) PerformIndexing() error {
 
 }
 
-func (ul *UserLocationController) CreateOrUpdate(locationParam model.StartTrackingModel) (interface{}, error) {
+func (ul *UserLocationController) CreateOrUpdate(locationParamQuery map[string]interface{}, locationData map[string]interface{}) (interface{}, error) {
 	log.Println("Create or Update User Location")
 	userLocationQuery := map[string]interface{}{
-		"tripId": locationParam.TripID,
+		"tripId": locationParamQuery["tripId"],
+		"userId": locationParamQuery["userId"],
+		"_id":    locationParamQuery["_id"],
 	}
 	data, err := ul.DB.FindRecentDocument(userLocationQuery, ul.GetCollectionName())
 	if err != nil {
 		return nil, err
 	}
 	userLocationObj := model.UserLocation{}
-	currentDate := time.Now()
-	log.Println("Current Date: ", currentDate)
 	utilsErr := helper.InterfaceToStruct(data, &userLocationObj)
 	if utilsErr != nil {
 		return nil, utilsErr
 	}
+	ul.DB.UpdateOrCreate(userLocationQuery, locationData, ul.GetCollectionName())
 	log.Println("User Location Object: ", userLocationObj)
 	return nil, nil
+}
+
+func (ul *UserLocationController) FindLastDocument(query map[string]interface{}) (interface{}, error) {
+	data, e := ul.DB.FindRecentDocument(query, ul.GetCollectionName())
+	if e != nil {
+		return nil, e
+	}
+	return data, nil
+}
+
+func (ul *UserLocationController) Create(userLocation model.UserLocation) (bson.M, error) {
+	d, e := ul.DB.Create(userLocation, ul.GetCollectionName())
+	if e != nil {
+		log.Println("Error occurred while creating the user location", e)
+		return nil, e
+	}
+	return d, nil
 }

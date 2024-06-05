@@ -18,6 +18,17 @@
                     "topicHandler": "HandleStopTracking"
                 }
             ]
+        },
+        {
+            "name": "socket-service",
+            "exchange": "socket-service-exchange",
+            "queue": "socket-service-queue",
+            "subscribedTopics": [
+                {
+                    "topicName": "process-location",
+                    "topicHandler": "HandleProcessLocation"
+                }
+            ]
         }
     ]
 }

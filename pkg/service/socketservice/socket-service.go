@@ -5,6 +5,8 @@ import (
 
 	"log"
 	"net/http"
+	"project-phoenix/v2/internal/broker"
+	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/helper"
@@ -141,6 +143,9 @@ func (ss *SocketService) handleLocationUpdate(conn *websocket.Conn, msg map[stri
 		}
 		log.Println("Location Data Received:", locationData)
 		ss.Broadcast(getSocketRoom(locationData.UserId, locationData.TripId), msg, conn)
+
+		//Publish the message back to location service to store it.
+		broker.CreateBroker(enum.RABBITMQ).PublishMessage(dat, ss.serviceConfig.ServiceQueue, "process-location")
 	}
 }
 
@@ -207,10 +212,7 @@ func (ss *SocketService) InitServerIO() {
 	}()
 	defer server.Close()
 
-	// handler := c.Handler(server)
 	http.Handle("/socket.io/", server)
-	// http.Handle("/socket.io/", handler)
-	// log.Fatal(http.ListenAndServe(":"+ss.serviceConfig.Port, handler))
 	log.Fatal(http.ListenAndServe(":"+ss.serviceConfig.Port, nil))
 
 }
@@ -264,6 +266,7 @@ func (ss *SocketService) Broadcast(roomID string, msg map[string]interface{}, se
 			}
 		}
 	}
+	return
 }
 
 func (ss *SocketService) InitServiceConfig() {

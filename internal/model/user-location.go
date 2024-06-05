@@ -3,6 +3,7 @@ package model
 import "time"
 
 type UserLocation struct {
+	ID         string    `bson:"_id,omitempty" json:"_id,omitempty"`
 	UserID     string    `bson:"userId" json:"userId"`
 	TripID     string    `bson:"tripId" json:"tripId"`
 	CurrentLat string    `bson:"currentLat" json:"currentLat"`

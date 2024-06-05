@@ -1,21 +1,6 @@
 {
     "port": "8884",
     "servicePort":"8884",
-    "subscribedServices": [
-        {
-            "name": "location-service",
-            "exchange": "location-exchange",
-            "queue": "location-queue",
-            "subscribedTopics": [
-                {
-                    "topicName": "start-tracking",
-                    "topicHandler": "HandleStartTracking"
-                },
-                {
-                    "topicName": "stop-tracking",
-                    "topicHandler": "HandleStopTracking"
-                }
-            ]
-        }
-    ]
+    "serviceExchange": "socket-service-exchange",
+    "serviceQueue": "socket-service-queue"
 }

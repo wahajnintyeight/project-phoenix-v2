@@ -28,6 +28,7 @@ func CreateBroker(brokerType enum.BrokerType) Broker {
 			broker.ConnectBroker()
 			rabbitMQInstance = broker
 			log.Println("RabbitMQ Instance Created")
+			defer broker.Close()
 		})
 		return rabbitMQInstance
 	case enum.KAFKA:
