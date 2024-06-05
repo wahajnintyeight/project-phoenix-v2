@@ -16,6 +16,7 @@ import (
 	"project-phoenix/v2/pkg/helper"
 	"project-phoenix/v2/pkg/service"
 
+	"github.com/go-micro/plugins/v4/broker/rabbitmq"
 	microBroker "go-micro.dev/v4/broker"
 
 	"go-micro.dev/v4"
@@ -60,7 +61,7 @@ func (ls *LocationService) InitServiceConfig() {
 func (ls *LocationService) SubscribeTopics() {
 	ls.InitServiceConfig()
 	for _, service := range ls.serviceConfig.SubscribedServices {
-		log.Println("Service",service)
+		log.Println("Service", service)
 		for _, topic := range service.SubscribedTopics {
 			log.Println("Preparing to subscribe to service: ", service.Name, " | Topic: ", topic.TopicName, " | Queue: ", service.Queue, " | Handler: ", topic.TopicHandler, " | MaxRetries: ", MaxRetries)
 			if err := ls.attemptSubscribe(service.Queue, topic); err != nil {
@@ -100,7 +101,7 @@ func (ls *LocationService) subscribeToTopic(queueName string, topic internal.Sub
 			return err
 		}
 		return nil
-	}, microBroker.Queue(queueName))
+	}, microBroker.Queue(queueName), rabbitmq.DurableQueue())
 
 	if err != nil {
 		log.Printf("Failed to subscribe to topic %s due to error: %v", topic.TopicName, err)
@@ -207,8 +208,8 @@ func ProcessUserTripLocation(locationData model.LocationData) error {
 			IsStarted:  true,
 			CreatedAt:  currentDate,
 			UpdatedAt:  currentDate,
-			LastLat:   lat,
-			LastLng: lng,
+			LastLat:    lat,
+			LastLng:    lng,
 		}
 		d, e := userLocationControllerInstance.Create(newLocation)
 		if e != nil {
@@ -220,16 +221,16 @@ func ProcessUserTripLocation(locationData model.LocationData) error {
 
 	} else {
 		updateLocationDataMap := map[string]interface{}{
-			"_id":locationDataModel.ID,
-			"tripId": locationData.TripId,
-			"userId": locationData.UserId,
+			"_id":        locationDataModel.ID,
+			"tripId":     locationData.TripId,
+			"userId":     locationData.UserId,
 			"currentLat": lat,
 			"currentLng": lng,
 		}
 
 		//merge a key value pair to query map interface
 		query["_id"] = locationDataModel.ID
-		d, e := userLocationControllerInstance.CreateOrUpdate(query,updateLocationDataMap)
+		d, e := userLocationControllerInstance.CreateOrUpdate(query, updateLocationDataMap)
 		if e != nil {
 			log.Println("Error creating or updating user location", e)
 			return e
