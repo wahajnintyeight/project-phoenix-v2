@@ -18,6 +18,7 @@ import (
 
 	"github.com/go-micro/plugins/v4/broker/rabbitmq"
 	microBroker "go-micro.dev/v4/broker"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"go-micro.dev/v4"
 )
@@ -221,15 +222,19 @@ func ProcessUserTripLocation(locationData model.LocationData) error {
 
 	} else {
 		updateLocationDataMap := map[string]interface{}{
-			"_id":        locationDataModel.ID,
 			"tripId":     locationData.TripId,
 			"userId":     locationData.UserId,
 			"currentLat": lat,
 			"currentLng": lng,
+			"updatedAt" : currentDate,
 		}
 
 		//merge a key value pair to query map interface
-		query["_id"] = locationDataModel.ID
+		locationDataID , ero := primitive.ObjectIDFromHex(locationDataModel.ID) 
+		if ero != nil {
+			panic(ero)
+		}
+		query["_id"] = locationDataID
 		d, e := userLocationControllerInstance.CreateOrUpdate(query, updateLocationDataMap)
 		if e != nil {
 			log.Println("Error creating or updating user location", e)
