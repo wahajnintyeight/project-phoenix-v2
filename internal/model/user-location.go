@@ -17,4 +17,5 @@ type UserLocation struct {
 	IsStarted  bool      `bson:"isStarted" json:"isStarted"`
 	CreatedAt  time.Time `bson:"createdAt" json:"createdAt"`
 	UpdatedAt  time.Time `bson:"updatedAt" json:"updatedAt"`
+	StartedAt  time.Time `bson:"startedAt" json:"startedAt"`
 }

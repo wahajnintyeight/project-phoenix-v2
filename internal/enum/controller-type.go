@@ -8,4 +8,5 @@ const (
 	UserTripController
 	UserController
 	UserLocationController
+	UserTripHistoryController
 )

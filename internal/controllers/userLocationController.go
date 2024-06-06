@@ -50,8 +50,8 @@ func (ul *UserLocationController) CreateOrUpdate(locationParamQuery map[string]i
 		return nil, utilsErr
 	}
 	res := ul.DB.UpdateOrCreate(userLocationQuery, locationData, ul.GetCollectionName())
-	log.Println("User Location Object: ", userLocationObj)
-	return res, nil
+	log.Println("UpdateOrCreate | Response", res)
+	return userLocationObj.ID, nil
 }
 
 func (ul *UserLocationController) FindLastDocument(query map[string]interface{}) (interface{}, error) {

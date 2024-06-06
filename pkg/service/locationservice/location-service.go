@@ -197,6 +197,8 @@ func ProcessUserTripLocation(locationData model.LocationData) error {
 	}
 	lat := strconv.FormatFloat(locationData.CurrentLat, 'f', -1, 64)
 	lng := strconv.FormatFloat(locationData.CurrentLng, 'f', -1, 64)
+	locationDataId := make(map[string]interface{})
+
 	if isNewDay {
 		log.Println("Attempting to insert a new location for the day")
 		newLocation := model.UserLocation{
@@ -211,6 +213,7 @@ func ProcessUserTripLocation(locationData model.LocationData) error {
 			UpdatedAt:  currentDate,
 			LastLat:    lat,
 			LastLng:    lng,
+			StartedAt: currentDate,
 		}
 		d, e := userLocationControllerInstance.Create(newLocation)
 		if e != nil {
@@ -218,6 +221,7 @@ func ProcessUserTripLocation(locationData model.LocationData) error {
 			return e
 		} else {
 			log.Println("Inserte a new location", d)
+			locationDataId["_id"] = d["_id"]
 		}
 
 	} else {
@@ -241,8 +245,37 @@ func ProcessUserTripLocation(locationData model.LocationData) error {
 			return e
 		} else {
 			log.Println("Update the location data. ", d)
+			locationDataId["_id"] = d
 		}
 	}
+	userTripControllerInstance := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB).(*controllers.UserTripController)
+	userTripQuery := map[string]interface{}{
+		"tripId": locationData.TripId,
+	}
+	userTripData := map[string]interface{}{
+		"isStarted": true,
+		"updatedAt": currentDate,
+		"currentLat": lat,
+		"currentLng": lng, 
+	}
+	userTripControllerInstance.DB.UpdateOrCreate(userTripQuery,userTripData,userTripControllerInstance.GetCollectionName())
+
+	userTripHistoryControllerInstance := controllers.GetControllerInstance(enum.UserTripHistoryController, enum.MONGODB).(*controllers.UserTripHistoryController)
+
+	userHistoryTripData := map[string]interface{}{
+		"tripId": locationData.TripId,
+		"userId": locationData.UserId,
+		"userLocationId":locationDataId["_id"],
+		"lat": lat,
+		"lng": lng,
+		"createdAt": currentDate,
+		"updatedAt": currentDate,
+		"startedAt": currentDate,
+		"isDeleted": false,
+	}
+	log.Println("User History Trip Data: ", userHistoryTripData)
+	userTripHistoryControllerInstance.DB.Create(userHistoryTripData, userTripHistoryControllerInstance.GetCollectionName())
+
 	return nil
 
 }

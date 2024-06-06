@@ -24,6 +24,7 @@ var (
 	userControllerInstance         *UserController
 	userTripControllerInstance     *UserTripController
 	userLocationControllerInstance *UserLocationController
+	userTripHistoryControllerInstance *UserTripHistoryController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
@@ -110,6 +111,24 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			}
 		}
 		return userLocationControllerInstance
+	case enum.UserTripHistoryController:
+		if userTripHistoryControllerInstance == nil {
+			log.Println("Initialize User Trip History Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+				return nil
+			}
+			userTripHistoryControllerInstance = &UserTripHistoryController{
+				DB: dbInstance,
+			}
+
+			e := userTripHistoryControllerInstance.PerformIndexing()
+			if e != nil {
+				log.Println("Error while indexing: ", e)
+			}
+		}
+		return userTripHistoryControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil
