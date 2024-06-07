@@ -23,6 +23,7 @@ require (
 require (
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/gomodule/redigo v1.8.4 // indirect
+	github.com/lib/pq v1.10.9 // indirect
 	github.com/streadway/amqp v1.0.0 // indirect
 )
 

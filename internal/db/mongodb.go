@@ -28,8 +28,10 @@ var (
 func init() {
 	mongoPool = make(chan *MongoDB, poolSize)
 }
-
-func GetInstance() (*MongoDB, error) {
+func (m *MongoDB) StartSession() (mongo.Session, error) {
+    return m.Client.StartSession(options.Session())
+}
+func (m *MongoDB) GetInstance() (*MongoDB, error) {
 	once.Do(func() {
 		// Load the .env file
 		log.Println("Initializing MongoDB Connection")
@@ -56,6 +58,7 @@ func GetInstance() (*MongoDB, error) {
 				Client: client,
 				db:     db,
 			}
+			m = dbInstance
 
 			for i := 0; i < poolSize; i++ {
 				mongoPool <- dbInstance
@@ -67,9 +70,6 @@ func GetInstance() (*MongoDB, error) {
 
 }
 
-func (m *MongoDB) GetClient() *mongo.Client {
-	return m.Client
-}
 
 func GetConnectionFromPool() *MongoDB {
 	return <-mongoPool

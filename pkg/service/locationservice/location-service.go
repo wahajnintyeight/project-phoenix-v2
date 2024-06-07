@@ -1,10 +1,12 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"project-phoenix/v2/internal/controllers"
+	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
@@ -19,6 +21,7 @@ import (
 	"github.com/go-micro/plugins/v4/broker/rabbitmq"
 	microBroker "go-micro.dev/v4/broker"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"go-micro.dev/v4"
 )
@@ -165,116 +168,142 @@ func ProcessUserTripLocation(locationData model.LocationData) error {
 	currentDate := time.Now()
 
 	// ctx := context.Background()
+	mongoInstance, er := db.GetDBInstance(enum.MONGODB)
+	if er != nil {
+		return er
+	}
+	mongoSession, sessionEr := mongoInstance.StartSession()
+	if sessionEr != nil {
+		log.Println("Error occurred while starting the session", sessionEr)
+		return sessionEr
+	}
+	defer mongoSession.EndSession(context.Background())
 
-	userLocationControllerInstance := controllers.GetControllerInstance(enum.UserLocationController, enum.MONGODB).(*controllers.UserLocationController)
-	// mdb, er := db.GetDBInstance(enum.MONGODB)
-	// if er != nil {
+	mongoSessionErr := mongo.WithSession(context.Background(), mongoSession, func(sc mongo.SessionContext) error {
 
-	// } else {
-	// 	// mdb.
-	// }
-	query := map[string]interface{}{
-		"userId": locationData.UserId,
-		"tripId": locationData.TripId,
-	}
-	result, e := userLocationControllerInstance.FindLastDocument(query)
-	if e != nil {
-		log.Println("Error occurred while fetching the last document", e)
-		return e
-	}
-	log.Println("Result: ", result)
-	isNewDay := false
-	locationDataModel := &model.UserLocation{}
-	jsonE := helper.InterfaceToStruct(result, &locationDataModel)
-	if jsonE != nil {
-		return jsonE
-	}
-	log.Println("Current Date | Location Date: ", currentDate.Day(), locationDataModel.CreatedAt.Day())
-	if locationDataModel.CreatedAt.Day() != currentDate.Day() {
-		isNewDay = true
-	} else {
-		isNewDay = false
-	}
-	lat := strconv.FormatFloat(locationData.CurrentLat, 'f', -1, 64)
-	lng := strconv.FormatFloat(locationData.CurrentLng, 'f', -1, 64)
-	locationDataId := make(map[string]interface{})
-
-	if isNewDay {
-		log.Println("Attempting to insert a new location for the day")
-		newLocation := model.UserLocation{
-			UserID:     locationData.UserId,
-			TripID:     locationData.TripId,
-			CurrentLat: lat,
-			CurrentLng: lng,
-			StartLat:   lat,
-			StartLng:   lng,
-			IsStarted:  true,
-			CreatedAt:  currentDate,
-			UpdatedAt:  currentDate,
-			LastLat:    lat,
-			LastLng:    lng,
-			StartedAt: currentDate,
+		if err := mongoSession.StartTransaction(); err != nil {
+			log.Println("Error starting transaction", err)
+			return err
 		}
-		d, e := userLocationControllerInstance.Create(newLocation)
+		userLocationControllerInstance := controllers.GetControllerInstance(enum.UserLocationController, enum.MONGODB).(*controllers.UserLocationController)
+
+		query := map[string]interface{}{
+			"userId": locationData.UserId,
+			"tripId": locationData.TripId,
+		}
+		result, e := userLocationControllerInstance.FindLastDocument(query)
 		if e != nil {
-			log.Println("Error inserting a new location", e)
+			log.Println("Error occurred while fetching the last document", e)
+			mongoSession.AbortTransaction(sc)
 			return e
-		} else {
-			log.Println("Inserte a new location", d)
-			locationDataId["_id"] = d["_id"]
 		}
+		log.Println("Result: ", result)
+		isNewDay := false
+		locationDataModel := &model.UserLocation{}
+		jsonE := helper.InterfaceToStruct(result, &locationDataModel)
+		if jsonE != nil {
+			log.Println("Error decoding the result", jsonE)
+			mongoSession.AbortTransaction(sc)
+			return jsonE
+		}
+		log.Println("Current Date | Location Date: ", currentDate.Day(), locationDataModel.CreatedAt.Day())
+		if locationDataModel.CreatedAt.Day() != currentDate.Day() {
+			isNewDay = true
+		} else {
+			isNewDay = false
+		}
+		lat := strconv.FormatFloat(locationData.CurrentLat, 'f', -1, 64)
+		lng := strconv.FormatFloat(locationData.CurrentLng, 'f', -1, 64)
+		locationDataId := make(map[string]interface{})
 
-	} else {
-		updateLocationDataMap := map[string]interface{}{
-			"tripId":     locationData.TripId,
-			"userId":     locationData.UserId,
+		if isNewDay {
+			log.Println("Attempting to insert a new location for the day")
+			newLocation := model.UserLocation{
+				UserID:     locationData.UserId,
+				TripID:     locationData.TripId,
+				CurrentLat: lat,
+				CurrentLng: lng,
+				StartLat:   lat,
+				StartLng:   lng,
+				IsStarted:  true,
+				CreatedAt:  currentDate,
+				UpdatedAt:  currentDate,
+				LastLat:    lat,
+				LastLng:    lng,
+				StartedAt:  currentDate,
+			}
+			d, e := userLocationControllerInstance.Create(newLocation)
+			if e != nil {
+				log.Println("Error inserting a new location", e)
+				mongoSession.AbortTransaction(sc)
+				return e
+			} else {
+				log.Println("Inserte a new location", d)
+				locationDataId["_id"] = d["_id"]
+			}
+
+		} else {
+			updateLocationDataMap := map[string]interface{}{
+				"tripId":     locationData.TripId,
+				"userId":     locationData.UserId,
+				"currentLat": lat,
+				"currentLng": lng,
+				"updatedAt":  currentDate,
+			}
+
+			//merge a key value pair to query map interface
+			locationDataID, ero := primitive.ObjectIDFromHex(locationDataModel.ID)
+			if ero != nil {
+				log.Println("Error converting the string to object id", ero)
+				mongoSession.AbortTransaction(sc)
+				panic(ero)
+			}
+			query["_id"] = locationDataID
+			d, e := userLocationControllerInstance.CreateOrUpdate(query, updateLocationDataMap)
+			if e != nil {
+				log.Println("Error creating or updating user location", e)
+				mongoSession.AbortTransaction(sc)
+				return e
+			} else {
+				log.Println("Update the location data. ", d)
+				locationDataId["_id"] = d
+			}
+		}
+		userTripControllerInstance := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB).(*controllers.UserTripController)
+		userTripQuery := map[string]interface{}{
+			"tripId": locationData.TripId,
+		}
+		userTripData := map[string]interface{}{
+			"isStarted":  true,
+			"updatedAt":  currentDate,
 			"currentLat": lat,
 			"currentLng": lng,
-			"updatedAt" : currentDate,
 		}
+		userTripControllerInstance.DB.UpdateOrCreate(userTripQuery, userTripData, userTripControllerInstance.GetCollectionName())
 
-		//merge a key value pair to query map interface
-		locationDataID , ero := primitive.ObjectIDFromHex(locationDataModel.ID) 
-		if ero != nil {
-			panic(ero)
+		userTripHistoryControllerInstance := controllers.GetControllerInstance(enum.UserTripHistoryController, enum.MONGODB).(*controllers.UserTripHistoryController)
+
+		userHistoryTripData := map[string]interface{}{
+			"tripId":         locationData.TripId,
+			"userId":         locationData.UserId,
+			"userLocationId": locationDataId["_id"],
+			"lat":            lat,
+			"lng":            lng,
+			"createdAt":      currentDate,
+			"updatedAt":      currentDate,
+			"startedAt":      currentDate,
+			"isDeleted":      false,
 		}
-		query["_id"] = locationDataID
-		d, e := userLocationControllerInstance.CreateOrUpdate(query, updateLocationDataMap)
-		if e != nil {
-			log.Println("Error creating or updating user location", e)
-			return e
-		} else {
-			log.Println("Update the location data. ", d)
-			locationDataId["_id"] = d
-		}
-	}
-	userTripControllerInstance := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB).(*controllers.UserTripController)
-	userTripQuery := map[string]interface{}{
-		"tripId": locationData.TripId,
-	}
-	userTripData := map[string]interface{}{
-		"isStarted": true,
-		"updatedAt": currentDate,
-		"currentLat": lat,
-		"currentLng": lng, 
-	}
-	userTripControllerInstance.DB.UpdateOrCreate(userTripQuery,userTripData,userTripControllerInstance.GetCollectionName())
+		log.Println("User History Trip Data: ", userHistoryTripData)
+		userTripHistoryControllerInstance.DB.Create(userHistoryTripData, userTripHistoryControllerInstance.GetCollectionName())
 
-	userTripHistoryControllerInstance := controllers.GetControllerInstance(enum.UserTripHistoryController, enum.MONGODB).(*controllers.UserTripHistoryController)
+		return nil
+	})
 
-	userHistoryTripData := map[string]interface{}{
-		"tripId": locationData.TripId,
-		"userId": locationData.UserId,
-		"userLocationId":locationDataId["_id"],
-		"lat": lat,
-		"lng": lng,
-		"createdAt": currentDate,
-		"updatedAt": currentDate,
-		"startedAt": currentDate,
-		"isDeleted": false,
+	if mongoSessionErr != nil {
+		log.Println("Transaction failed", mongoSessionErr)
+		return mongoSessionErr
 	}
-	log.Println("User History Trip Data: ", userHistoryTripData)
-	userTripHistoryControllerInstance.DB.Create(userHistoryTripData, userTripHistoryControllerInstance.GetCollectionName())
 
 	return nil
 

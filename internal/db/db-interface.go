@@ -7,10 +7,13 @@ import (
 	"sync"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 var (
-	once sync.Once
+	once            sync.Once
+	mongoInstance   *MongoDB
+	postgreInstance *PostgreDB
 )
 
 type DBInterface interface {
@@ -27,12 +30,22 @@ type DBInterface interface {
 	//Fetches the single most recent document from the collection based on the query.
 	FindRecentDocument(query interface{}, collectionName string) (interface{}, error)
 	FindAllWithPagination(interface{}, int, string) (int64, int, []bson.M, error)
+	StartSession() (mongo.Session, error)
 }
 
 func GetDBInstance(dbType enum.DBType) (DBInterface, error) {
 	switch dbType {
 	case enum.MONGODB:
-		instance, err := GetInstance()
+		instance, err := mongoInstance.GetInstance()
+		log.Println("DBInterface | GetDBInstance | DB Instance: ", instance, err)
+		if err != nil || (err == nil && instance == nil) {
+			log.Println("DBInterface | Error while getting DB Instance: ", err)
+			return nil, err
+		} else {
+			return instance, nil
+		}
+	case enum.POSTGRE:
+		instance, err := postgreInstance.GetInstance()
 		log.Println("DBInterface | GetDBInstance | DB Instance: ", instance, err)
 		if err != nil || (err == nil && instance == nil) {
 			log.Println("DBInterface | Error while getting DB Instance: ", err)
