@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"project-phoenix/v2/internal/broker"
 	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/enum"
@@ -119,7 +120,6 @@ func (ls *LocationService) subscribeToTopic(queueName string, topic internal.Sub
 func (ls *LocationService) ListenSubscribedTopics(broker microBroker.Event) error {
 	// ls.brokerObj.Subscribe()
 	// broker
-	log.Println("Broker Event: ", broker)
 	log.Println("Broker Event: ", broker.Message().Header)
 	return nil
 }
@@ -142,6 +142,18 @@ func (ls *LocationService) HandleStartTracking(p microBroker.Event) error {
 		log.Println("Error occurred while unmarshalling the data", err)
 	}
 	log.Println("Data Received: ", data)
+	locationData := model.LocationData{}
+	er := helper.InterfaceToStruct(data, &locationData)
+	if er != nil {
+		log.Println("Error decoding the data map", er)
+		return er
+	}
+	ProcessUserTripLocation(locationData)
+
+	message := map[string]interface{}{
+		"message":"Trip Started",
+	}
+	broker.CreateBroker(enum.RABBITMQ).PublishMessage(message,ls.serviceConfig.ServiceQueue,"trip-started")
 	return nil
 }
 
@@ -188,7 +200,7 @@ func ProcessUserTripLocation(locationData model.LocationData) error {
 		userLocationControllerInstance := controllers.GetControllerInstance(enum.UserLocationController, enum.MONGODB).(*controllers.UserLocationController)
 
 		query := map[string]interface{}{
-			"userId": locationData.UserId,
+			// "userId": locationData.UserId,
 			"tripId": locationData.TripId,
 		}
 		result, e := userLocationControllerInstance.FindLastDocument(query)

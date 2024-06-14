@@ -412,6 +412,20 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		response.SendResponse(w, code, data)
 
 		break
+	case apiRequestHandlerObj.Endpoint + "/getCurrentLocation":
+		controller := controllers.GetControllerInstance(enum.UserLocationController, enum.MONGODB)
+		userLocationController := controller.(*controllers.UserLocationController)
+
+		code, data, e := userLocationController.GetCurrentLocation(w, r)
+		if e != nil {
+			response.SendResponse(w, code, e)
+		} else {
+			response.SendResponse(w, code, data)
+		}
+		break
+	case apiRequestHandlerObj.Endpoint + "/getLocationHistory":
+		response.SendResponse(w, int(enum.DATA_FETCHED), map[string]interface{}{"code": 1022, "message": "Error", "result": nil})
+		break
 	default:
 		http.NotFound(w, r)
 	}

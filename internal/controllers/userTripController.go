@@ -51,8 +51,7 @@ func (sc *UserTripController) StartTracking(w http.ResponseWriter, r *http.Reque
 		return int(enum.ERROR), "Error converting struct to map", nil, er
 	}
 
-
-	userLocation, err := userLocationController.CreateOrUpdate(trackingModelInterface,nil)
+	userLocation, err := userLocationController.CreateOrUpdate(trackingModelInterface, nil)
 	if err != nil {
 		log.Println("Error creating or updating user location", err)
 		return int(enum.ERROR), "Error creating or updating user location", nil, err

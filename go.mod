@@ -11,6 +11,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
 	github.com/joho/godotenv v1.5.1
+	github.com/lib/pq v1.10.9
 	github.com/rabbitmq/amqp091-go v1.9.0
 	github.com/redis/go-redis/v9 v9.4.0
 	github.com/urfave/cli/v2 v2.27.1
@@ -23,7 +24,6 @@ require (
 require (
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/gomodule/redigo v1.8.4 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/streadway/amqp v1.0.0 // indirect
 )
 

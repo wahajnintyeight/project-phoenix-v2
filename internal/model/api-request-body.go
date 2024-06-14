@@ -49,3 +49,7 @@ type CreateTripModel struct {
 type DeleteTripModel struct {
 	TripId string `json:"tripId"`
 }
+
+type GetCurrentLocationModel struct {
+	TripID string `json:"tripId"`
+}

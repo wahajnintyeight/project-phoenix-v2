@@ -3,6 +3,8 @@ package service
 import (
 	// "context"
 
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"project-phoenix/v2/internal/broker"
@@ -11,8 +13,11 @@ import (
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/helper"
 	"project-phoenix/v2/pkg/service"
+	"reflect"
 	"sync"
+	"time"
 
+	"github.com/go-micro/plugins/v4/broker/rabbitmq"
 	socketio "github.com/googollee/go-socket.io"
 	"github.com/googollee/go-socket.io/engineio"
 	"github.com/googollee/go-socket.io/engineio/transport"
@@ -42,13 +47,25 @@ type Room struct {
 	mu      sync.Mutex
 }
 
+const (
+	MaxRetries  = 6
+	RetryDelay  = 2 * time.Second
+	serviceName = "location-service"
+)
+
 var rooms = make(map[string]*Room)
 var upgrader = websocket.Upgrader{}
 
 var socketOnce sync.Once
 
 func (ss *SocketService) GetSubscribedTopics() []internal.SubscribedServices {
-	return nil
+	serviceConfig, e := internal.ReturnServiceConfig(serviceName)
+	if e != nil {
+		log.Println("Unable to read service config", e)
+		return nil
+	}
+	ss.subscribedServices = serviceConfig.(*internal.ServiceConfig).SubscribedServices
+	return ss.subscribedServices
 }
 
 func (ss *SocketService) InitializeService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
@@ -68,8 +85,61 @@ func (ss *SocketService) InitializeService(serviceObj micro.Service, serviceName
 	return ss
 }
 
-func (ss *SocketService) ListenSubscribedTopics(broker microBroker.Event) error {
+// attemptSubscribe tries to subscribe to a topic with retries until successful or max retries reached.
+func (ss *SocketService) attemptSubscribe(queueName string, topic internal.SubscribedTopicsMap) error {
+	log.Println("Max Retries:", MaxRetries)
+	for i := 0; i <= MaxRetries; i++ {
+		log.Println("Attempting to subscribe to", topic, " for Queue", queueName)
+		if err := ss.subscribeToTopic(queueName, topic); err != nil {
+			if err.Error() == "not connected" && i < MaxRetries {
+				log.Printf("Broker not connected, retrying %d/%d for topic %s", i+1, MaxRetries, topic.TopicName)
+				time.Sleep(RetryDelay)
+				continue
+			}
+			return err
+		}
+		break
+	}
+	return nil
+}
 
+func (ss *SocketService) subscribeToTopic(queueName string, topic internal.SubscribedTopicsMap) error {
+	handler, ok := reflect.TypeOf(ss).MethodByName(topic.TopicHandler)
+	if !ok {
+		return fmt.Errorf("Handler method %s not found for topic %s", topic.TopicHandler, topic.TopicName)
+	}
+
+	_, err := ss.brokerObj.Subscribe(topic.TopicName, func(p microBroker.Event) error {
+		returnValues := handler.Func.Call([]reflect.Value{reflect.ValueOf(ss), reflect.ValueOf(p)})
+		if err, ok := returnValues[0].Interface().(error); ok && err != nil {
+			return err
+		}
+		return nil
+	}, microBroker.Queue(queueName), rabbitmq.DurableQueue())
+
+	if err != nil {
+		log.Printf("Failed to subscribe to topic %s due to error: %v", topic.TopicName, err)
+		return err
+	}
+
+	log.Printf("Successfully subscribed to topic %s | Handler: %s", topic.TopicName, topic.TopicHandler)
+	return nil
+}
+
+func (ss *SocketService) ListenSubscribedTopics(broker microBroker.Event) error {
+	log.Println("Broker Event: ", broker.Message().Header)
+
+	return nil
+}
+
+func (ss *SocketService) HandleTripStart(p microBroker.Event) error {
+	log.Println("Handle Trip Start Function | Data: ", p.Message().Header, " | Body: ", p.Message().Body)
+	data := make(map[string]interface{})
+	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
+		log.Println("Error occurred while unmarshalling the data", err)
+	}
+	log.Println("Data Received: ", data)
+	ss.Broadcast(getSocketRoom(data["userId"].(string), data["tripId"].(string)), map[string]interface{}{"action": "trip-started", "data": "Trip Started"}, ss.socketObj)
 	return nil
 }
 
@@ -95,6 +165,7 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 		if action, ok := msg["action"]; ok {
 			switch action {
 			case "identifyUser":
+				log.Println("Identify User Event")
 				ss.handleIdentifyUser(conn, msg)
 			case "connect":
 				log.Println("Connected to the server | connect")
@@ -107,6 +178,8 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 			case "locationUpdate":
 				log.Println("Location Update Event Received")
 				ss.handleLocationUpdate(conn, msg)
+			default:
+				log.Println("No Action Found", action)
 			}
 		}
 	}
@@ -125,8 +198,15 @@ func (ss *SocketService) handleIdentifyUser(conn *websocket.Conn, msg map[string
 		if er != nil {
 			log.Println(er)
 		}
-		log.Println("User ", identifyUser.UserId, " joined the room - ", getSocketRoom(identifyUser.UserId, identifyUser.TripId))
-		ss.JoinRoom(getSocketRoom(identifyUser.UserId, identifyUser.TripId), conn)
+		if identifyUser.UserId == "" {
+			//kick the user out
+			log.Println("User not identified")
+			defer conn.Close()
+			return
+		} else {
+			log.Println("User ", identifyUser.UserId, " joined the room - ", getSocketRoom(identifyUser.UserId, identifyUser.TripId))
+			ss.JoinRoom(getSocketRoom(identifyUser.UserId, identifyUser.TripId), conn)
+		}
 		// ss.Broadcast(getSocketRoom(dat), msg)
 	}
 }
@@ -226,6 +306,15 @@ func (ss *SocketService) InitServer() {
 
 func (ss *SocketService) SubscribeTopics() {
 	ss.InitServiceConfig()
+	for _, service := range ss.serviceConfig.SubscribedServices {
+		log.Println("Service", service)
+		for _, topic := range service.SubscribedTopics {
+			log.Println("Preparing to subscribe to service: ", service.Name, " | Topic: ", topic.TopicName, " | Queue: ", service.Queue, " | Handler: ", topic.TopicHandler, " | MaxRetries: ", MaxRetries)
+			if err := ss.attemptSubscribe(service.Queue, topic); err != nil {
+				log.Printf("Subscription failed for topic %s: %v", topic.TopicName, err)
+			}
+		}
+	}
 
 }
 

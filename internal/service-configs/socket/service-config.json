@@ -2,5 +2,22 @@
     "port": "8884",
     "servicePort":"8884",
     "serviceExchange": "socket-service-exchange",
-    "serviceQueue": "socket-service-queue"
+    "serviceQueue": "socket-service-queue",
+    "subscribedServices": [
+        {
+            "name": "location-service",
+            "exchange": "location-service-exchange",
+            "queue": "location-service-queue",
+            "subscribedTopics": [
+                {
+                    "topicName": "trip-started",
+                    "topicHandler": "HandleTripStart"
+                },
+                {
+                    "topicName": "trip-started",
+                    "topicHandler": "HandleTripStop"
+                }
+            ]
+        }
+    ]
 }
