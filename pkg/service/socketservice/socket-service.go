@@ -143,6 +143,17 @@ func (ss *SocketService) HandleTripStart(p microBroker.Event) error {
 	return nil
 }
 
+func (ss *SocketService) HandleTripEnded(p microBroker.Event) error {
+	log.Println("Handle Trip Start Function | Data: ", p.Message().Header, " | Body: ", p.Message().Body)
+	data := make(map[string]interface{})
+	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
+		log.Println("Error occurred while unmarshalling the data", err)
+	}
+	log.Println("Data Received: ", data)
+	ss.Broadcast(getSocketRoom(data["userId"].(string), data["tripId"].(string)), map[string]interface{}{"action": "trip-ended", "data": "Trip Stopped"}, ss.socketObj)
+	return nil
+}
+
 func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {

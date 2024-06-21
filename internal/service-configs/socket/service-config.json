@@ -14,8 +14,8 @@
                     "topicHandler": "HandleTripStart"
                 },
                 {
-                    "topicName": "trip-started",
-                    "topicHandler": "HandleTripStop"
+                    "topicName": "trip-ended",
+                    "topicHandler": "HandleTripEnded"
                 }
             ]
         }

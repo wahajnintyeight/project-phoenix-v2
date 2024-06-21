@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/joho/godotenv"
@@ -166,8 +167,18 @@ func (m *MongoDB) FindAllWithPagination(query interface{}, page int, collectionN
 
 }
 
-func (m *MongoDB) Update(data interface{}, update interface{}, collectionName string) (string, error) {
-	return "MongoDB update", nil
+func (m *MongoDB) Update(query interface{}, update interface{}, collectionName string) (string, error) {
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+	collection := conn.db.Collection(collectionName)
+	updateData := bson.M{"$set":update}
+
+	res, e := collection.UpdateOne(context.Background(),query, updateData)
+	if e != nil {
+		return "", e
+	}
+	log.Println("MongoDB | Update | Query: ",query, " | Collection: ", collectionName, " | Data: ", updateData)
+	return strconv.Itoa(int(res.ModifiedCount)), nil
 }
 
 func (m *MongoDB) UpdateOrCreate(query interface{}, update interface{}, collectionName string) interface{} {

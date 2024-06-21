@@ -154,3 +154,16 @@ func StringToInt(s string) int {
 	}
 	return i
 }
+
+func StringToObjectId(s string) primitive.ObjectID {
+	oid, e := primitive.ObjectIDFromHex(s)
+	if e != nil {
+		log.Println("Failed to convert string to object id: ", e)
+		return primitive.NilObjectID
+	}
+	return oid
+}
+
+func FloatToString(f float64) string {
+	return strconv.FormatFloat(f, 'f', -1, 64)
+}

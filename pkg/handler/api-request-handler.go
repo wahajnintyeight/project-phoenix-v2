@@ -159,6 +159,17 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, code, data)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/stopTracking":
+		controller := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB)
+		userTripController := controller.(*controllers.UserTripController)
+		code, res, data, ok := userTripController.StopTracking(w, r)
+		if ok != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, data)
+			return
+		}
 	case apiRequestHandlerObj.Endpoint + "/createTrip":
 		controller := controllers.GetControllerInstance(enum.UserTripController, enum.MONGODB)
 		userTripController := controller.(*controllers.UserTripController)

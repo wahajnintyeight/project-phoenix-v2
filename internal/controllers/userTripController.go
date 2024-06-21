@@ -24,6 +24,67 @@ func (sc *UserTripController) GetCollectionName() string {
 	return "usertrips"
 }
 
+func (sc *UserTripController) StopTracking(w http.ResponseWriter, r *http.Request) (int, string, interface{}, error) {
+	log.Println("Stop Tracking Func Called")
+	stopTrackingModel := model.StopTrackingModel{}
+	decodeErr := json.NewDecoder(r.Body).Decode(&stopTrackingModel)
+	if decodeErr != nil {
+		log.Println("Error decoding request body", decodeErr)
+		return int(enum.ERROR), "Error decoding request body", nil, decodeErr
+	}
+
+	query := map[string]interface{}{
+		"tripId": stopTrackingModel.TripID,
+		"userId": helper.GetCurrentUser(r),
+	}
+	// controller := controllers.GetControllerInstance(enum.UserLocationController, enum.MONGODB)
+	// userLocationControllerInstance := controller.(*controllers.UserLocationController)
+	controller := GetControllerInstance(enum.UserLocationController, enum.MONGODB)
+	userLocationControllerInstance := controller.(*UserLocationController)
+	existingLocation, e := sc.DB.FindRecentDocument(query, userLocationControllerInstance.GetCollectionName())
+	if e != nil {
+		log.Println("Error getting recent location", e)
+		return int(enum.LOCATION_TRACKING_NOT_STOPPED), "Error getting recent location", nil, e
+	}
+	userLocationModel := &model.UserLocation{}
+	helper.InterfaceToStruct(existingLocation, &userLocationModel)
+	currentLat := helper.FloatToString(stopTrackingModel.CurrentLat)
+	currentLng := helper.FloatToString(stopTrackingModel.CurrentLng)
+	userLocationModel.CurrentLat = currentLat
+	userLocationModel.CurrentLng = currentLng
+	userLocationModel.UpdatedAt = helper.GetCurrentTime()
+	userLocationModel.IsStarted = false
+	userLocationModel.UserID = helper.GetCurrentUser(r)
+	endTracking := sc.DB.UpdateOrCreate(map[string]interface{}{"_id": helper.StringToObjectId(userLocationModel.ID)}, map[string]interface{}{
+		"isStarted":   false,
+		"lastStarted": helper.GetCurrentTime(),
+		"currentLat":  currentLat,
+		"currentLng":  currentLng,
+		"lastLat":     currentLat,
+		"lastLng":     currentLng,
+		"endedAt": helper.GetCurrentTime(),
+	}, userLocationControllerInstance.GetCollectionName())
+
+	_, e = sc.DB.Update(map[string]interface{}{"tripId": stopTrackingModel.TripID, "userId": userLocationModel.UserID}, map[string]interface{}{
+		"isStarted":   false,
+		"lastStarted": helper.GetCurrentTime(),
+		"currentLat":  currentLat,
+		"currentLng":  currentLng,
+	}, sc.GetCollectionName())
+	if e != nil {
+		log.Println("Error updating trip", e)
+		return int(enum.ERROR), "Error updating trip", nil, e
+	}
+	log.Println("End Tracking: ", endTracking)
+	stopTrackingInterface, e := helper.StructToMap(stopTrackingModel)
+	if e != nil {
+		log.Println("Error converting struct to map", e)
+		return int(enum.ERROR), "Error converting struct to map", nil, e
+	}
+	broker.CreateBroker(enum.RABBITMQ).PublishMessage(stopTrackingInterface, sc.APIGatewayServiceConfig.ServiceQueue, "stop-tracking")
+	return int(enum.LOCATION_TRACKING_STOPPED), "Tracking Stopped", nil, nil
+}
+
 func (sc *UserTripController) StartTracking(w http.ResponseWriter, r *http.Request) (int, string, interface{}, error) {
 
 	log.Println("Start Tracking Func Called")
@@ -51,7 +112,9 @@ func (sc *UserTripController) StartTracking(w http.ResponseWriter, r *http.Reque
 		return int(enum.ERROR), "Error converting struct to map", nil, er
 	}
 
-	userLocation, err := userLocationController.CreateOrUpdate(trackingModelInterface, nil)
+	locationData := make(map[string]interface{})
+	locationData["userId"] = helper.GetCurrentUser(r)
+	userLocation, err := userLocationController.CreateOrUpdate(trackingModelInterface, locationData)
 	if err != nil {
 		log.Println("Error creating or updating user location", err)
 		return int(enum.ERROR), "Error creating or updating user location", nil, err

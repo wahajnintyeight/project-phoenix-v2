@@ -41,6 +41,12 @@ type StartTrackingModel struct {
 	CurrentLng float64 `json:"currentLng"`
 }
 
+type StopTrackingModel struct {
+	TripID     string  `json:"tripId"`
+	CurrentLat float64 `json:"currentLat"`
+	CurrentLng float64 `json:"currentLng"`
+}
+
 type CreateTripModel struct {
 	TripName           string `json:"name"`
 	EnableNotification bool   `json:"enableNotification"`
