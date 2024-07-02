@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -70,7 +71,6 @@ func (m *MongoDB) GetInstance() (*MongoDB, error) {
 	return dbInstance, nil
 
 }
-
 
 func GetConnectionFromPool() *MongoDB {
 	return <-mongoPool
@@ -296,33 +296,60 @@ func (m *MongoDB) ValidateIndexing(collectionName string, indexKeys interface{})
 	return nil
 }
 
-func (m *MongoDB) ValidateIndexingTTL(collectionName string, indexKeys interface{}, ttlMinutes int) error {
+func (m *MongoDB) ValidateIndexingTTL(collectionName string, indexKeys bson.D, ttlMinutes int) error {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
 	collection := conn.db.Collection(collectionName)
-	indexView, e := collection.Indexes().List(context.Background())
-	//first check if the index exist
-	if e != nil {
-		log.Println("Error while fetching indexes: ", e)
-		//if there is no index, create them
-		indexModel := mongo.IndexModel{
-			Keys:    indexKeys,
-			Options: options.Index().SetExpireAfterSeconds(int32(ttlMinutes) * 60),
-		}
-		_, err := collection.Indexes().CreateOne(context.Background(), indexModel)
-		if err != nil {
-			log.Println("Error while creating index: ", err)
-			return err
-		}
-		return nil
+	indexView, err := collection.Indexes().List(context.Background())
+	if err != nil {
+		log.Println("Error while fetching indexes: ", err)
+		return err
 	}
+	indexName := getIndexName(indexKeys)
+	ttlSeconds := int32(ttlMinutes) * 60
+	indexModel := mongo.IndexModel{
+		Keys:    indexKeys,
+		Options: options.Index().SetExpireAfterSeconds(ttlSeconds).SetName(indexName),
+	}
+
 	for indexView.Next(context.Background()) {
 		var index bson.M
-		indexView.Decode(&index)
-		if index["key"] == indexKeys {
-			log.Println("Index already exists")
-			return nil
+		if err := indexView.Decode(&index); err != nil {
+			log.Println("Error while decoding index: ", err)
+			return err
+		}
+
+		if index["name"] == indexName {
+			if index["expireAfterSeconds"] == ttlSeconds {
+				return nil
+			} else {
+				log.Println("Existing index has a different TTL, dropping it and creating a new one.")
+				_, dropErr := collection.Indexes().DropOne(context.Background(), indexName)
+				if dropErr != nil {
+					log.Println("Error while dropping existing index: ", dropErr)
+					return dropErr
+				}
+				break
+			}
 		}
 	}
+
+	_, createErr := collection.Indexes().CreateOne(context.Background(), indexModel)
+	if createErr != nil {
+		log.Println("Error while creating index: ", createErr)
+		return createErr
+	}
+
 	return nil
+}
+
+func getIndexName(indexKeys bson.D) string {
+	var name string
+	for _, key := range indexKeys {
+		if name != "" {
+			name += "_"
+		}
+		name += key.Key + "_" + fmt.Sprint(key.Value)
+	}
+	return name
 }

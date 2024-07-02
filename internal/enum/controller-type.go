@@ -9,4 +9,5 @@ const (
 	UserController
 	UserLocationController
 	UserTripHistoryController
+	LoginActivityController
 )

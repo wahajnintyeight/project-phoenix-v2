@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"project-phoenix/v2/internal/cache"
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
@@ -243,8 +244,18 @@ func (u *UserController) HandleLoginActivity(userModel model.User, loginModel mo
 	}
 
 	// Call UpdateOrCreate with the constructed query and update data
-	res := u.DB.UpdateOrCreate(query, update, "loginactivities")
+	// res := u.DB.UpdateOrCreate(query, update, "loginactivities")
+	controller := GetControllerInstance(enum.LoginActivityController, enum.MONGODB)
+	loginActivityController := controller.(*LoginActivityController)
+	res := loginActivityController.DB.UpdateOrCreate(query, update, loginActivityController.GetCollectionName())
 	log.Println("Login Activity", res)
+
+	redisLoginActivityKey := "login-activity:" + sessionId + ":" + userModel.Email
+	hours := 2
+	_, e := cache.GetInstance().SetWithExpiry(redisLoginActivityKey, update, hours)
+	if e != nil {
+		log.Println("Error while setting login activity in redis", e)
+	}
 }
 
 func GenerateJWT(issuer string) (string, error) {
