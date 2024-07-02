@@ -6,6 +6,7 @@ import (
 	"os"
 	"project-phoenix/v2/pkg/helper"
 	"sync"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -63,6 +64,24 @@ func (r *Redis) Set(key string, value map[string]interface{}) (bool, error) {
 		return false, marshalEr
 	} else {
 		err := r.client.Set(ctx, key, valueByte, 0).Err()
+		if err != nil {
+			log.Println("Error setting in Redis", err)
+			return false, err
+		} else {
+			return true, nil
+		}
+	}
+}
+
+func (r *Redis) SetWithExpiry(key string, value map[string]interface{}, ttlHours int) (bool, error) {
+	ctx := context.Background()
+	valueByte, marshalEr := helper.MarshalBinary(value)
+	if marshalEr != nil {
+		log.Println("Error marshalling data", marshalEr)
+		return false, marshalEr
+	} else {
+		ttlPeriod := time.Hour * time.Duration(ttlHours) 
+		err := r.client.Set(ctx, key, valueByte, ttlPeriod ).Err()
 		if err != nil {
 			log.Println("Error setting in Redis", err)
 			return false, err

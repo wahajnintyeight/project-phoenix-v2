@@ -24,9 +24,11 @@ type DBInterface interface {
 	// FindAll(interface{}, string) (string, error)
 	Update(interface{}, interface{}, string) (string, error)
 	Delete(interface{}, string) (bool, error)
+	CreateWithTTL(interface{}, string, int) (bson.M, error)
 	//FindOneAndUpdate finds a single document and updates it, returning either the original or the updated document.
 	UpdateOrCreate(interface{}, interface{}, string) interface{}
 	ValidateIndexing(string, interface{}) error
+	ValidateIndexingTTL(string,interface{},int) error
 	//Fetches the single most recent document from the collection based on the query.
 	FindRecentDocument(query interface{}, collectionName string) (interface{}, error)
 	FindAllWithPagination(interface{}, int, string) (int64, int, []bson.M, error)

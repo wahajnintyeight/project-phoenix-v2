@@ -30,7 +30,7 @@ func init() {
 	mongoPool = make(chan *MongoDB, poolSize)
 }
 func (m *MongoDB) StartSession() (mongo.Session, error) {
-    return m.Client.StartSession(options.Session())
+	return m.Client.StartSession(options.Session())
 }
 func (m *MongoDB) GetInstance() (*MongoDB, error) {
 	once.Do(func() {
@@ -111,6 +111,33 @@ func (m *MongoDB) Create(data interface{}, collectionName string) (bson.M, error
 	}
 }
 
+func (m *MongoDB) CreateWithTTL(data interface{}, collectionName string, ttlMinutes int) (bson.M, error) {
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+
+	log.Println("MongoDB | Create With TTL | Data: ", data, " | Collection: ", collectionName)
+	collection := conn.db.Collection(collectionName)
+	index := mongo.IndexModel{
+		Keys:    bson.D{{Key: "createdAt", Value: 1}},
+		Options: options.Index().SetExpireAfterSeconds(int32(ttlMinutes) * 60),
+	}
+	_, createErr := collection.Indexes().CreateOne(context.Background(), index)
+	if createErr != nil {
+		log.Println("Error while creating index: ", createErr)
+		return nil, createErr
+	}
+	result, err := collection.InsertOne(context.Background(), data)
+
+	log.Println("Inserted Result", result)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	} else {
+		insertedID := result.InsertedID
+		return bson.M{"_id": insertedID}, nil
+	}
+}
+
 func (m *MongoDB) FindOne(data interface{}, collectionName string) (bson.M, error) {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
@@ -171,13 +198,13 @@ func (m *MongoDB) Update(query interface{}, update interface{}, collectionName s
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
 	collection := conn.db.Collection(collectionName)
-	updateData := bson.M{"$set":update}
+	updateData := bson.M{"$set": update}
 
-	res, e := collection.UpdateOne(context.Background(),query, updateData)
+	res, e := collection.UpdateOne(context.Background(), query, updateData)
 	if e != nil {
 		return "", e
 	}
-	log.Println("MongoDB | Update | Query: ",query, " | Collection: ", collectionName, " | Data: ", updateData)
+	log.Println("MongoDB | Update | Query: ", query, " | Collection: ", collectionName, " | Data: ", updateData)
 	return strconv.Itoa(int(res.ModifiedCount)), nil
 }
 
@@ -250,6 +277,37 @@ func (m *MongoDB) ValidateIndexing(collectionName string, indexKeys interface{})
 		//if there is no index, create them
 		indexModel := mongo.IndexModel{
 			Keys: indexKeys,
+		}
+		_, err := collection.Indexes().CreateOne(context.Background(), indexModel)
+		if err != nil {
+			log.Println("Error while creating index: ", err)
+			return err
+		}
+		return nil
+	}
+	for indexView.Next(context.Background()) {
+		var index bson.M
+		indexView.Decode(&index)
+		if index["key"] == indexKeys {
+			log.Println("Index already exists")
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *MongoDB) ValidateIndexingTTL(collectionName string, indexKeys interface{}, ttlMinutes int) error {
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+	collection := conn.db.Collection(collectionName)
+	indexView, e := collection.Indexes().List(context.Background())
+	//first check if the index exist
+	if e != nil {
+		log.Println("Error while fetching indexes: ", e)
+		//if there is no index, create them
+		indexModel := mongo.IndexModel{
+			Keys:    indexKeys,
+			Options: options.Index().SetExpireAfterSeconds(int32(ttlMinutes) * 60),
 		}
 		_, err := collection.Indexes().CreateOne(context.Background(), indexModel)
 		if err != nil {

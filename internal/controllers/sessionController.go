@@ -19,6 +19,19 @@ func (sc *SessionController) GetCollectionName() string {
 	return "sessions"
 }
 
+func (sc *SessionController) PerformIndexing() error {
+	indexes := []interface{}{"sessionId", "createdAt"}
+	var validateErr error
+	minutes := 120 //2 hours
+	for _, index := range indexes {
+		validateErr = sc.DB.ValidateIndexingTTL(sc.GetCollectionName(), index, minutes)
+		if validateErr != nil {
+			return validateErr
+		}
+	}
+	return nil
+
+}
 func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Request) (string, error) {
 
 	sessionID, err := sc.generateSessionID(15)
@@ -36,8 +49,10 @@ func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Reques
 			log.Println("Unable to store session in DB", err)
 			return "", err
 		} else {
-			//help me out here
-			isAddedToRedis, err := cache.GetInstance().Set(sessionID, map[string]interface{}{"sessionID": sessionData["sessionID"]})
+			hours := 2
+			sessionKey := "session:" + sessionID
+			isAddedToRedis, err := cache.GetInstance().SetWithExpiry(sessionKey
+				, map[string]interface{}{"sessionID": sessionData["sessionID"]}, hours)
 			if err != nil {
 				log.Println("Unable to store session in Redis", err)
 				return "", err
@@ -53,10 +68,11 @@ func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Reques
 }
 
 func (sc *SessionController) DoesSessionIDExist(sessionID string) (interface{}, error) {
-	sessionQuery := map[string]interface{}{
-		"sessionID": sessionID,
-	}
-	sessionData, err := sc.DB.FindOne(sessionQuery, sc.GetCollectionName())
+	// sessionQuery := map[string]interface{}{
+	// 	"sessionID": sessionID,
+	// }
+	sessionKey := "session:" + sessionID
+	sessionData, err := cache.GetInstance().Get(sessionKey) //sc.DB.FindOne(sessionQuery, sc.GetCollectionName())
 	log.Println("Session Data", sessionData, err)
 	if err != nil {
 		log.Println("Error fetching session from DB", err)

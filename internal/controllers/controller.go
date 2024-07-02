@@ -65,6 +65,11 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			sessionControllerInstance = &SessionController{
 				DB: dbInstance,
 			}
+
+			e := sessionControllerInstance.PerformIndexing()
+			if e != nil {
+				log.Println("Error while indexing: ", e)
+			}
 		})
 		return sessionControllerInstance
 	case enum.UserController:
