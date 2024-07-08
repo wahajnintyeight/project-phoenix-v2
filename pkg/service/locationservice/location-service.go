@@ -328,6 +328,10 @@ func (ls *LocationService) HandleStopTracking(p microBroker.Event) error {
 		log.Println("Error occurred while unmarshalling the data", err)
 	}
 	log.Println("Data Received: ", data)
+	message := map[string]interface{}{
+		"message":"Trip Stopped",
+	}
+	broker.CreateBroker(enum.RABBITMQ).PublishMessage(message,ls.serviceConfig.ServiceQueue,"trip-ended")
 	return nil
 }
 

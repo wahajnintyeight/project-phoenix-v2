@@ -2,6 +2,7 @@ package helper
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"reflect"
@@ -127,6 +128,22 @@ func InterfaceToStruct(data interface{}, target interface{}) error {
 	err = UnmarshalBinary(dataByte, &target)
 	if err != nil {
 		log.Println("Failed to unmarshal data: ", err)
+		return err
+	}
+	return nil
+}
+
+func JSONStringToStruct(data interface{}, target interface{}) error {
+	// Convert data to JSON string
+	jsonData, ok := data.(string)
+	if !ok {
+		return fmt.Errorf("data is not a JSON string")
+	}
+
+	// Unmarshal JSON string into target struct
+	err := json.Unmarshal([]byte(jsonData), target)
+	if err != nil {
+		log.Println("Failed to unmarshal JSON: ", err)
 		return err
 	}
 	return nil

@@ -3,6 +3,7 @@ package model
 import "time"
 
 type LoginActivity struct {
+	ID          string    `bson:"_id,omitempty" json:"_id,omitempty"`
 	UserID      string    `bson:"userId" json:"userId"`
 	UserAgent   string    `bson:"userAgent" json:"userAgent"`
 	IPAddress   string    `bson:"ipAddress" json:"ipAddress"`

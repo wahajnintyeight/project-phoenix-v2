@@ -64,10 +64,9 @@ func (a *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		// existingActivity, existingUserActivityError := dbInstance.FindOne(loginActivityQuery, "loginactivities")
-		log.Println("Existing Activity: ", existingActivity, "Error: ", existingUserActivityError)
 		//store the user id in the request context
 		loginActivity := &model.LoginActivity{}
-		e := helper.InterfaceToStruct(existingActivity, &loginActivity)
+		e := helper.JSONStringToStruct(existingActivity, &loginActivity)
 		if e != nil {
 			log.Println("Error while converting interface to struct: ", e)
 			response.SendResponse(w, int(enum.LOGIN_SESSION_EXPIRED), nil)
