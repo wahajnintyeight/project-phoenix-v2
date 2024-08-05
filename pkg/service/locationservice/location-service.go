@@ -153,7 +153,7 @@ func (ls *LocationService) HandleStartTracking(p microBroker.Event) error {
 	message := map[string]interface{}{
 		"message":"Trip Started",
 	}
-	broker.CreateBroker(enum.RABBITMQ).PublishMessage(message,ls.serviceConfig.ServiceQueue,"trip-started")
+	broker.CreateBroker(enum.RABBITMQ).PublishMessage(message,"location-service-queue","trip-started")
 	return nil
 }
 
@@ -331,7 +331,8 @@ func (ls *LocationService) HandleStopTracking(p microBroker.Event) error {
 	message := map[string]interface{}{
 		"message":"Trip Stopped",
 	}
-	broker.CreateBroker(enum.RABBITMQ).PublishMessage(message,ls.serviceConfig.ServiceQueue,"trip-ended")
+	log.Println("HandleStopTracking | Service Queue: ", ls.serviceConfig.ServiceQueue)
+	broker.CreateBroker(enum.RABBITMQ).PublishMessage(message,"location-service-queue","trip-ended")
 	return nil
 }
 

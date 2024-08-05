@@ -202,7 +202,7 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendErrorResponse(w, int(enum.ERROR), "Error decoding request body")
 			return
 		} else {
-			log.Println("Request Body: ", request["steps"])
+			log.Println("Request Body: ", request)
 		}
 		// response.SendErrorResponse(w, int(enum.ERROR), "Error decoding request body")
 

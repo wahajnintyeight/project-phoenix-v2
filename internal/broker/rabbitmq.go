@@ -83,8 +83,10 @@ func ReturnRabbitMQConnString() string {
 	rHost := os.Getenv("RABBITMQ_HOST")
 	rUser := os.Getenv("RABBITMQ_USERNAME")
 	rPass := os.Getenv("RABBITMQ_PASSWORD")
-	rPort := os.Getenv("RABBITMQ_PORT")
-	connString := "amqp://" + rUser + ":" + rPass + "@" + rHost + ":" + rPort + "/"
+	// rPort := os.Getenv("RABBITMQ_PORT")
+	log.Println("RABBITMQ_HOST: ", rHost, " RABBITMQ_USERNAME: ", rUser, " Password: ", rPass)
+	// connString := "amqps://" + rUser + ":" + rPass + "@" + rHost + ":" + rPort + "/"
+	connString := "amqps://" + rUser + ":" + rPass + "@" + rHost + "/" + rUser  
 	return connString
 }
 
