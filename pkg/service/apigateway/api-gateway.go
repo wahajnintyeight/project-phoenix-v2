@@ -3,8 +3,10 @@ package service
 import (
 	// "context"
 
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
@@ -19,6 +21,9 @@ import (
 	"github.com/joho/godotenv"
 	"go-micro.dev/v4"
 	microBroker "go-micro.dev/v4/broker"
+
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	// "log"
 )
 
@@ -133,9 +138,29 @@ func (s *APIGatewayService) registerRoutes() {
 		})
 	}
 
+	s.router.Use(s.ConfigureSentry().Handle)
 	s.router.Use(customMiddlewareWrapper)
 	s.router.Use(customMiddlewareWrapperWithSession)
 	s.router.PathPrefix(s.serviceConfig.EndpointPrefix).Handler(apiRequestHandler)
+}
+
+func (s *APIGatewayService) ConfigureSentry() *sentryhttp.Handler {
+
+	sentryDsn := os.Getenv("SENTRY_DSN")
+	if err := sentry.Init(sentry.ClientOptions{
+		Dsn: sentryDsn,
+		TracesSampleRate: 1.0,
+		EnableTracing:    true,
+		Debug:            true,
+	}); err != nil {
+		fmt.Printf("Sentry initialization failed: %v\n", err)
+	}
+
+	sentryHandler := sentryhttp.New(sentryhttp.Options{
+		Repanic:         true,
+		WaitForDelivery: true,
+	})
+	return sentryHandler
 }
 
 func (s *APIGatewayService) Start(port string) error {

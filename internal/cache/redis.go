@@ -20,6 +20,10 @@ type Redis struct {
 var redisObj = &Redis{}
 
 func GetInstance() *Redis {
+	isRedisDisabled := os.Getenv("DISABLE_REDIS")
+	if isRedisDisabled == "true" {
+		return nil
+	}
 	redisObj.once.Do(func() {
 		log.Println("Initializing Redis")
 		godotenv.Load()
@@ -37,6 +41,7 @@ func GetInstance() *Redis {
 		pingRes, err := client.Ping(context.Background()).Result()
 		if err != nil {
 			log.Println("Unable to connect to Redis: ", err)
+			return
 		} else {
 			log.Println("Initialized Redis Connection | Ping Response: ", pingRes)
 		}
@@ -45,6 +50,9 @@ func GetInstance() *Redis {
 }
 
 func (r *Redis) Get(key string) (interface{}, error) {
+	if r == nil {
+		return true, nil
+	}
 	ctx := context.Background()
 	data, err := r.client.Get(ctx, key).Result()
 
@@ -57,6 +65,9 @@ func (r *Redis) Get(key string) (interface{}, error) {
 }
 
 func (r *Redis) Set(key string, value map[string]interface{}) (bool, error) {
+	if r == nil {
+		return true, nil
+	}
 	ctx := context.Background()
 	valueByte, marshalEr := helper.MarshalBinary(value)
 	if marshalEr != nil {
@@ -74,6 +85,9 @@ func (r *Redis) Set(key string, value map[string]interface{}) (bool, error) {
 }
 
 func (r *Redis) SetWithExpiry(key string, value map[string]interface{}, ttlHours int) (bool, error) {
+	if r == nil {
+		return true, nil
+	}
 	ctx := context.Background()
 	valueByte, marshalEr := helper.MarshalBinary(value)
 	if marshalEr != nil {
