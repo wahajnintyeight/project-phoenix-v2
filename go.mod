@@ -4,7 +4,7 @@ go 1.21.6
 
 require (
 	firebase.google.com/go v3.13.0+incompatible
-	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/getsentry/sentry-go v0.28.1
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/googollee/go-socket.io v1.7.0
 	github.com/gorilla/handlers v1.5.2
@@ -19,10 +19,10 @@ require (
 	go.mongodb.org/mongo-driver v1.13.1
 	golang.org/x/crypto v0.19.0
 	google.golang.org/api v0.164.0
+	github.com/joho/godotenv v1.5.1
 )
 
 require (
-	github.com/getsentry/sentry-go v0.28.1 // indirect
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/gomodule/redigo v1.8.4 // indirect
 	github.com/streadway/amqp v1.0.0 // indirect

@@ -77,6 +77,8 @@ var responseMessage = map[int]string{
 	1067: "Registration Failed",
 	1068: "Session Header Not Found. Put 'sessionId' in the header.",
 	1069: "Login Session Expired",
+	1070: "Capture Screen Event Sent",
+	1071: "Capture Screen Event Failed",
 }
 
 type MessageResponse struct {

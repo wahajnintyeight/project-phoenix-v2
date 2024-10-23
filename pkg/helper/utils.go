@@ -149,6 +149,20 @@ func JSONStringToStruct(data interface{}, target interface{}) error {
 	return nil
 }
 
+func StringToInterface(data string) (interface{}, error) {
+	var result interface{}
+	
+	// Try to unmarshal the string as JSON
+	err := json.Unmarshal([]byte(data), &result)
+	if err != nil {
+		// If it's not valid JSON, return the string as interface{}
+		fmt.Println("Warning: Input is not valid JSON, returning as string in interface{}")
+		return interface{}(data), nil
+	}
+	
+	return result, nil
+}
+
 func GetCurrentTime() time.Time {
 	return time.Now()
 }

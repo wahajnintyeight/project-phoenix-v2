@@ -10,4 +10,5 @@ const (
 	UserLocationController
 	UserTripHistoryController
 	LoginActivityController
+	CaptureScreenController
 )

@@ -121,6 +121,7 @@ func (s *APIGatewayService) registerRoutes() {
 	openRoutesWithSession := []string{
 		s.serviceConfig.EndpointPrefix + "/login",
 		s.serviceConfig.EndpointPrefix + "/googleLogin",
+		s.serviceConfig.EndpointPrefix + "/capture-screen",
 	}
 	customMiddlewareWrapperWithSession := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

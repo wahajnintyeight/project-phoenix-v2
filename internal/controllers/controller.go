@@ -26,6 +26,7 @@ var (
 	userLocationControllerInstance    *UserLocationController
 	userTripHistoryControllerInstance *UserTripHistoryController
 	loginActivityControllerInstance   *LoginActivityController
+	captureScreenControllerInstance   *CaptureScreenController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
@@ -153,6 +154,12 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			}
 		}
 		return loginActivityControllerInstance
+	case enum.CaptureScreenController:
+		if captureScreenControllerInstance == nil {
+			log.Println("Initialize Capture Screen Controller")
+			captureScreenControllerInstance = &CaptureScreenController{}
+		}
+		return captureScreenControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil

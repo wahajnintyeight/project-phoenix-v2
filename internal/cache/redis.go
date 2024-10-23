@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"project-phoenix/v2/pkg/helper"
@@ -49,6 +50,31 @@ func GetInstance() *Redis {
 	return redisObj
 }
 
+func (r *Redis) PublishMessage(data interface{}, channelName string) (bool, error) {
+	if r == nil {
+		errorMessage := errors.New("Redis uninitialized")
+		return false, errorMessage
+	}
+	res := r.client.Publish(context.Background(), channelName, data)
+	log.Println("Response after publishing message to channel: ", channelName, res)
+	return true, nil
+}
+
+func (r *Redis) SubscribeMessage(channelName string) (bool, error) {
+	if r == nil {
+		errorMessage := errors.New("Redis uninitialized")
+		return false, errorMessage
+	}
+	res := r.client.Subscribe(context.Background(), channelName)
+	receiveRes, e := res.ReceiveMessage(context.Background())
+	if e != nil {
+		log.Println("Error while subscribing", e)
+		return false, e
+	}
+	log.Println("Response after subscribing message to channel: ", channelName, receiveRes)
+	return true, nil
+}
+
 func (r *Redis) Get(key string) (interface{}, error) {
 	if r == nil {
 		return true, nil
@@ -94,8 +120,8 @@ func (r *Redis) SetWithExpiry(key string, value map[string]interface{}, ttlHours
 		log.Println("Error marshalling data", marshalEr)
 		return false, marshalEr
 	} else {
-		ttlPeriod := time.Hour * time.Duration(ttlHours) 
-		err := r.client.Set(ctx, key, valueByte, ttlPeriod ).Err()
+		ttlPeriod := time.Hour * time.Duration(ttlHours)
+		err := r.client.Set(ctx, key, valueByte, ttlPeriod).Err()
 		if err != nil {
 			log.Println("Error setting in Redis", err)
 			return false, err

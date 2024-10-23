@@ -202,6 +202,18 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 
 		response.SendResponse(w, int(enum.DATA_FETCHED), "Webhook Received")
 		return
+	case apiRequestHandlerObj.Endpoint + "/capture-screen":
+		log.Println("Capture Screen")
+		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
+		captureScreenController := controller.(*controllers.CaptureScreenController)
+		res, e := captureScreenController.CaptureScreen(w, r)
+		if e != nil {
+			response.SendResponse(w, int(enum.CAPTURE_SCREEN_EVENT_FAILED), e)
+			return
+		} else {
+			response.SendResponse(w, int(enum.CAPTURE_SCREEN_EVENT_SENT), res)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}
