@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package screencapture;
+
+message CaptureData {
+    // Define your capture data fields here
+    bytes image_data = 1;
+    string format = 2;
+    // ... other fields
+}
+
+message CaptureAck {
+    // Define your acknowledgment fields here
+    bool success = 1;
+    string message = 2;
+    // ... other fields
+}
+
+service ScreenCaptureService {
+    rpc ReceiveCapture(CaptureData) returns (CaptureAck);
+} 

@@ -8,6 +8,7 @@ const (
 	Location
 	DataCommunicator
 	SocketService
+	APIGatewayGRPC
 )
 
 // String provides the string representation of the ServiceType for easier debugging and logging

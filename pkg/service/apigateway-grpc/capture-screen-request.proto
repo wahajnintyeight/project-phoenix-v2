@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package screencapture;
+option go_package = "project-phoenix/v2/pkg/service/apigateway-grpc/captureScreenRequest";
+
+service ScreenCaptureService {
+  rpc ReceiveCapture (CaptureData) returns (CaptureAck);
+}
+
+message CaptureData {
+  string device_name = 1;
+  string timestamp = 2;
+  string os_name = 3;
+  bytes image_data = 4;
+  float cpu_usage = 5;
+  string memory_usage = 6;
+}
+
+message CaptureAck {
+  string status = 1;
+  string message = 2;
+}

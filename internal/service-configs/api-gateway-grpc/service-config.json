@@ -1,0 +1,8 @@
+{
+  "serviceName": "api-gateway-grpc",
+  "port": "8880",
+  "serviceExchange": "api-gateway-grpc-exchange",
+  "serviceQueue": "api-gateway-grpc-queue",
+  "endpointPrefix": "/v2/api",
+  "sessionIdMiddleware": "sessionId"
+}

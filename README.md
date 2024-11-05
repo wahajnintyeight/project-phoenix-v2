@@ -19,7 +19,6 @@
   <h2>Getting Started</h2>
   <p>These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.</p>
 
-  
 <div class="container">
     <h1>Project Phoenix V2 Documentation</h1>
     <p>This document provides an overview of the LocationService component within Project Phoenix V2, including setup instructions, service architecture, and usage.</p>
@@ -107,10 +106,40 @@
       </ol>
   </section>
 
-  
   <section id="service-usage">
       <h2>Service Usage</h2>
       <p>The LocationService subscribes to 'start-tracking' and 'stop-tracking' topics. It processes incoming messages to manage tracking operations for users or devices.</p>
+  </section>
+
+  <section id="grpc-setup">
+      <h2>Generating gRPC Code</h2>
+      <p>To generate the protocol buffer code for gRPC services, follow these steps:</p>
+
+      <h3>Prerequisites</h3>
+      <ul>
+          <li>Protocol Buffer Compiler (<code>protoc</code>)</li>
+          <li>Go protocol buffers plugin (<code>protoc-gen-go</code>)</li>
+          <li>Go gRPC plugin (<code>protoc-gen-go-grpc</code>)</li>
+      </ul>
+
+      <h3>Installation</h3>
+      <pre><code>go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest</code></pre>
+
+      <h3>Generating Protocol Buffer Code</h3>
+      <p>Navigate to your proto file directory and run:</p>
+      <pre><code>protoc --go_out=./src/go/ \
+    --go_opt=paths=source_relative \
+    --go-grpc_out=./src/go/ \
+    --go-grpc_opt=paths=source_relative \
+    your-proto-file.proto</code></pre>
+
+      <p>For example, to generate code for the capture-screen-request.proto:</p>
+      <pre><code>protoc --go_out=./src/go/ \
+    --go_opt=paths=source_relative \
+    --go-grpc_out=./src/go/ \
+    --go-grpc_opt=paths=source_relative \
+    capture-screen-request.proto</code></pre>
   </section>
 
 </div>
