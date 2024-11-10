@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"log"
 	"net"
 	"sync"
@@ -79,16 +80,29 @@ func (s *APIGatewayGRPCService) Start(port string) error {
 
 	log.Println("Starting GRPC API Gateway Service on Port:", port)
 
-	lis, err := net.Listen("tcp", ":"+port)
+	lis, err := net.Listen("tcp", ":8880")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	if err := s.grpcServer.Serve(lis); err != nil {
+	grpcServer := grpc.NewServer()
+	pb.RegisterScreenCaptureServiceServer(grpcServer, s)
+	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 
 	return nil
+}
+
+func (s *APIGatewayGRPCService) SendCapture(ctx context.Context, req *pb.ScreenCaptureRequest) (*pb.ScreenCaptureResponse, error) {
+	log.Printf("Received screen capture request from client",req)
+	
+	// Add your screen capture handling logic here
+	// For example:
+	return &pb.ScreenCaptureResponse{
+		Success: true,
+		Message: "Screen capture processed successfully",
+	}, nil
 }
 
 func (s *APIGatewayGRPCService) Stop() error {

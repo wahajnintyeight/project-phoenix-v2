@@ -4,7 +4,7 @@
 // - protoc             v5.29.0--rc2
 // source: capture-screen-request.proto
 
-package captureScreenRequest
+package _go
 
 import (
 	context "context"
@@ -19,14 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ScreenCaptureService_ReceiveCapture_FullMethodName = "/screencapture.ScreenCaptureService/ReceiveCapture"
+	ScreenCaptureService_SendCapture_FullMethodName = "/screencapture.ScreenCaptureService/SendCapture"
 )
 
 // ScreenCaptureServiceClient is the client API for ScreenCaptureService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ScreenCaptureServiceClient interface {
-	ReceiveCapture(ctx context.Context, in *CaptureData, opts ...grpc.CallOption) (*CaptureAck, error)
+	SendCapture(ctx context.Context, in *ScreenCaptureRequest, opts ...grpc.CallOption) (*ScreenCaptureResponse, error)
 }
 
 type screenCaptureServiceClient struct {
@@ -37,10 +37,10 @@ func NewScreenCaptureServiceClient(cc grpc.ClientConnInterface) ScreenCaptureSer
 	return &screenCaptureServiceClient{cc}
 }
 
-func (c *screenCaptureServiceClient) ReceiveCapture(ctx context.Context, in *CaptureData, opts ...grpc.CallOption) (*CaptureAck, error) {
+func (c *screenCaptureServiceClient) SendCapture(ctx context.Context, in *ScreenCaptureRequest, opts ...grpc.CallOption) (*ScreenCaptureResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CaptureAck)
-	err := c.cc.Invoke(ctx, ScreenCaptureService_ReceiveCapture_FullMethodName, in, out, cOpts...)
+	out := new(ScreenCaptureResponse)
+	err := c.cc.Invoke(ctx, ScreenCaptureService_SendCapture_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (c *screenCaptureServiceClient) ReceiveCapture(ctx context.Context, in *Cap
 // All implementations must embed UnimplementedScreenCaptureServiceServer
 // for forward compatibility.
 type ScreenCaptureServiceServer interface {
-	ReceiveCapture(context.Context, *CaptureData) (*CaptureAck, error)
+	SendCapture(context.Context, *ScreenCaptureRequest) (*ScreenCaptureResponse, error)
 	mustEmbedUnimplementedScreenCaptureServiceServer()
 }
 
@@ -62,8 +62,8 @@ type ScreenCaptureServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedScreenCaptureServiceServer struct{}
 
-func (UnimplementedScreenCaptureServiceServer) ReceiveCapture(context.Context, *CaptureData) (*CaptureAck, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReceiveCapture not implemented")
+func (UnimplementedScreenCaptureServiceServer) SendCapture(context.Context, *ScreenCaptureRequest) (*ScreenCaptureResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendCapture not implemented")
 }
 func (UnimplementedScreenCaptureServiceServer) mustEmbedUnimplementedScreenCaptureServiceServer() {}
 func (UnimplementedScreenCaptureServiceServer) testEmbeddedByValue()                              {}
@@ -86,20 +86,20 @@ func RegisterScreenCaptureServiceServer(s grpc.ServiceRegistrar, srv ScreenCaptu
 	s.RegisterService(&ScreenCaptureService_ServiceDesc, srv)
 }
 
-func _ScreenCaptureService_ReceiveCapture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CaptureData)
+func _ScreenCaptureService_SendCapture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScreenCaptureRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ScreenCaptureServiceServer).ReceiveCapture(ctx, in)
+		return srv.(ScreenCaptureServiceServer).SendCapture(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ScreenCaptureService_ReceiveCapture_FullMethodName,
+		FullMethod: ScreenCaptureService_SendCapture_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ScreenCaptureServiceServer).ReceiveCapture(ctx, req.(*CaptureData))
+		return srv.(ScreenCaptureServiceServer).SendCapture(ctx, req.(*ScreenCaptureRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -112,8 +112,8 @@ var ScreenCaptureService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ScreenCaptureServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "ReceiveCapture",
-			Handler:    _ScreenCaptureService_ReceiveCapture_Handler,
+			MethodName: "SendCapture",
+			Handler:    _ScreenCaptureService_SendCapture_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
