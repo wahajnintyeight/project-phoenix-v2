@@ -4,11 +4,12 @@ import (
 	"context"
 	"log"
 	"net"
-	"sync"
-
+	"os"
 	internal "project-phoenix/v2/internal/service-configs"
+	"project-phoenix/v2/pkg/helper"
 	"project-phoenix/v2/pkg/service"
 	pb "project-phoenix/v2/pkg/service/apigateway-grpc/src/go"
+	"sync"
 
 	"github.com/joho/godotenv"
 	"go-micro.dev/v4"
@@ -18,10 +19,10 @@ import (
 
 type APIGatewayGRPCService struct {
 	service            micro.Service
-	grpcServer        *grpc.Server
-	serviceConfig     internal.ServiceConfig
+	grpcServer         *grpc.Server
+	serviceConfig      internal.ServiceConfig
 	subscribedServices []internal.SubscribedServices
-	brokerObj         microBroker.Broker
+	brokerObj          microBroker.Broker
 	pb.UnimplementedScreenCaptureServiceServer
 }
 
@@ -95,8 +96,27 @@ func (s *APIGatewayGRPCService) Start(port string) error {
 }
 
 func (s *APIGatewayGRPCService) SendCapture(ctx context.Context, req *pb.ScreenCaptureRequest) (*pb.ScreenCaptureResponse, error) {
-	log.Printf("Received screen capture request from client",req)
-	
+	imageBlob := helper.BytesToString(req.GetImageData())
+	log.Printf("Received screen capture request from client", req.GetOsName(),req.GetDeviceName())
+
+	file, e := os.Create("/output/images/data.txt")
+	if e != nil {
+		log.Println("Error creating new file", e)
+		return &pb.ScreenCaptureResponse{
+			Success: false,
+			Message: "Error!" + e.Error(),
+		}, nil
+	}
+	defer file.Close()
+
+	_, err := file.WriteString(imageBlob)
+	if err != nil {
+		log.Println("Error writingfile", err)
+		return &pb.ScreenCaptureResponse{
+			Success: false,
+			Message: "Error!" + e.Error(),
+		}, nil
+	}
 	// Add your screen capture handling logic here
 	// For example:
 	return &pb.ScreenCaptureResponse{

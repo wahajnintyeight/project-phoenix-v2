@@ -163,6 +163,10 @@ func StringToInterface(data string) (interface{}, error) {
 	return result, nil
 }
 
+func BytesToString(data []byte) string {
+	return string(data[:])
+}
+
 func GetCurrentTime() time.Time {
 	return time.Now()
 }
