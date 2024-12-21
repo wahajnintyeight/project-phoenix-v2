@@ -157,7 +157,18 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 	case enum.CaptureScreenController:
 		if captureScreenControllerInstance == nil {
 			log.Println("Initialize Capture Screen Controller")
-			captureScreenControllerInstance = &CaptureScreenController{}
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance ", err)
+				return nil
+			}
+			captureScreenControllerInstance = &CaptureScreenController{
+				DB: dbInstance,
+			}
+			e := captureScreenControllerInstance.PerformIndexing()
+			if e != nil {
+				log.Println("error while indexing: ", e)
+			}
 		}
 		return captureScreenControllerInstance
 	default:

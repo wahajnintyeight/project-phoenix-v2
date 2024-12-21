@@ -101,6 +101,7 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/signJWT",
 		s.serviceConfig.EndpointPrefix + "/returnJWK",
 		s.serviceConfig.EndpointPrefix + "/handle-webhook",
+		s.serviceConfig.EndpointPrefix + "/return-device-name",
 	}
 	customMiddlewareWrapper := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -122,6 +123,9 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/login",
 		s.serviceConfig.EndpointPrefix + "/googleLogin",
 		s.serviceConfig.EndpointPrefix + "/capture-screen",
+		s.serviceConfig.EndpointPrefix + "/scan-devices",
+		s.serviceConfig.EndpointPrefix + "/devices",
+		s.serviceConfig.EndpointPrefix + "/device", //deleting a device
 	}
 	customMiddlewareWrapperWithSession := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

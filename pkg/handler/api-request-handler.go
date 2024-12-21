@@ -68,6 +68,17 @@ func (apiHandler APIRequestHandler) DELETERoutes(w http.ResponseWriter, r *http.
 			response.SendResponse(w, code, message)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/device":
+		log.Println("Delete Device")
+		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
+		captureScreenController := controller.(*controllers.CaptureScreenController)
+		code, err := captureScreenController.DeleteDevice(w,r)
+		if err != nil {
+			response.SendErrorResponse(w,code,err)
+			return
+		}
+		response.SendResponse(w,code,nil)
+		return
 	default:
 		http.NotFound(w, r)
 	}
@@ -214,6 +225,30 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, int(enum.CAPTURE_SCREEN_EVENT_SENT), res)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/scan-devices":
+		log.Println("Scan Devices")
+		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
+		captureScreenController := controller.(*controllers.CaptureScreenController)
+		res, e := captureScreenController.ScanDevices(w, r)
+		if e != nil {
+			response.SendResponse(w, int(enum.SCAN_DEVICE_EVENT_FAILED), e)
+			return
+		} else {
+			response.SendResponse(w, int(enum.SCAN_DEVICE_EVENT_SENT), res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/return-device-name":
+		log.Println("Return Device Name")
+		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
+		captureScreenController := controller.(*controllers.CaptureScreenController)
+		res, e := captureScreenController.ReturnDeviceName(w, r)
+		if e != nil {
+			response.SendResponse(w, int(enum.DEVICE_NAME_FAILED), e)
+			return
+		} else {
+			response.SendResponse(w, int(enum.DEVICE_NAME_FETCHED), res)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}
@@ -271,6 +306,34 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		break
 	case apiRequestHandlerObj.Endpoint + "/getLocationHistory":
 		response.SendResponse(w, int(enum.DATA_FETCHED), map[string]interface{}{"code": 1022, "message": "Error", "result": nil})
+		break
+	case apiRequestHandlerObj.Endpoint + "/devices":
+		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
+		screenCaptureController := controller.(*controllers.CaptureScreenController)
+
+		code, d, e := screenCaptureController.ListDevices(1)
+		if e != nil {
+			response.SendErrorResponse(w, code, e)
+		} else {
+			response.SendResponse(w,code,d)
+		}
+		break
+	case apiRequestHandlerObj.Endpoint + "/device":
+		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
+		log.Println("Get A Device")
+		screenCaptureController := controller.(*controllers.CaptureScreenController)
+		deviceId := r.URL.Query().Get("deviceId")
+
+		if deviceId == "" {
+			response.SendErrorResponse(w,int(enum.DEVICE_ID_NOT_SET), nil)
+			break
+		}
+		code, d, e := screenCaptureController.ShowDeviceInfo(deviceId)
+		if e != nil {
+			response.SendErrorResponse(w, code, e)
+		} else {
+			response.SendResponse(w,code, d)
+		}
 		break
 	default:
 		http.NotFound(w, r)

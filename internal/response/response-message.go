@@ -79,6 +79,14 @@ var responseMessage = map[int]string{
 	1069: "Login Session Expired",
 	1070: "Capture Screen Event Sent",
 	1071: "Capture Screen Event Failed",
+	1072: "Scan Device Event Sent",
+	1073: "Scan Device Event Failed",
+	1074: "Device Name Fetched",
+	1075: "Device Name Failed",
+	1076: "Device Not Created",
+	1077: "Device Deleted",
+	1078: "Device failed to delete",
+	1079: "Device Id is not set",
 }
 
 type MessageResponse struct {
