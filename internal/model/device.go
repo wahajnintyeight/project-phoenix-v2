@@ -9,4 +9,5 @@ type Device struct {
 	UpdatedAt  time.Time `json:"updatedAt"`
 	IsOnline   bool      `json:"isOnline"`
 	LastOnline time.Time `json:"lastOnline"`
+	LastImage  string    `json:"lastImage`
 }

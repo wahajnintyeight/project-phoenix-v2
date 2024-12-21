@@ -1,0 +1,19 @@
+{
+  "serviceName": "sse-service",
+  "port": "8884",
+  "serviceExchange": "sse-exchange",
+  "serviceQueue": "sse-queue",
+  "subscribedServices": [
+    {
+      "name": "api-gateway-grpc",
+      "exchange": "api-gateway-grpc-exchange",
+      "queue": "api-gateway-grpc-queue",
+      "subscribedTopics": [
+        {
+          "topicName": "capture-device-data",
+          "topicHandler": "HandleCaptureDeviceData"
+        }
+      ]
+    }
+  ]
+}

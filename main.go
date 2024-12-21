@@ -75,6 +75,8 @@ func main() {
 				serviceType = enum.SocketService
 			case "api-gateway-grpc":
 				serviceType = enum.APIGatewayGRPC
+			case "sse-service":
+				serviceType = enum.SSEService
 			default:
 				fmt.Println("Error occurred: Invalid service type",serviceTypeFlag)
 				os.Exit(1)
