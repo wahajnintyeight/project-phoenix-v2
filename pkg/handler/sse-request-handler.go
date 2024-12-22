@@ -101,4 +101,5 @@ func (handler *SSERequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 func (handler *SSERequestHandler) Broadcast(message string) {
 	handler.broadcast <- message
+	log.Println("Broadcast message:", message)
 }

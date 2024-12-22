@@ -22,7 +22,6 @@ import (
 	"github.com/go-micro/plugins/v4/broker/rabbitmq"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
-	"github.com/redis/go-redis/v9/internal/util"
 	"go-micro.dev/v4"
 	microBroker "go-micro.dev/v4/broker"
 	// "log"
