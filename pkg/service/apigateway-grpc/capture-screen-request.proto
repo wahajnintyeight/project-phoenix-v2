@@ -9,12 +9,12 @@ service ScreenCaptureService {
 }
 
 message ScreenCaptureRequest {
-  string device_name = 1;
-  string timestamp = 2;
-  string os_name = 3;
-  bytes image_data = 4;
-  float cpu_usage = 5;
-  string memory_usage = 6;
+  string deviceName = 1;
+  string timesTamp = 2;
+  string osName = 3;
+  string memoryUsage = 5;
+  string diskUsage = 6;
+  string lastImage = 7;
 }
 
 message ScreenCaptureResponse {

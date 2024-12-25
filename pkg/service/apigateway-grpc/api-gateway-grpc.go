@@ -2,13 +2,15 @@ package service
 
 import (
 	"context"
+
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"project-phoenix/v2/internal/broker"
 	"project-phoenix/v2/internal/enum"
 	internal "project-phoenix/v2/internal/service-configs"
-	"project-phoenix/v2/pkg/helper"
+ 
 	"project-phoenix/v2/pkg/service"
 	pb "project-phoenix/v2/pkg/service/apigateway-grpc/src/go"
 	"sync"
@@ -98,43 +100,32 @@ func (s *APIGatewayGRPCService) Start(port string) error {
 }
 
 func (s *APIGatewayGRPCService) SendCapture(ctx context.Context, req *pb.ScreenCaptureRequest) (*pb.ScreenCaptureResponse, error) {
-	// Receive the Device Data sent by Windows Go Client
-	imageBlob := helper.BytesToString(req.GetImageData())
-	log.Printf("Received screen capture request from client", req.GetOsName(),req.GetDeviceName())
+	log.Printf("Received screen capture request from client")
 
-	// Check if directory exists, create if not
-	err := os.MkdirAll("output/images", 0755)
-	if err != nil {
-		log.Println("Error creating directory", err)
-		return &pb.ScreenCaptureResponse{
-			Success: false,
-			Message: "Error creating directory: " + err.Error(),
-		}, nil
-	}
+	// publicID := req.GetDeviceName() + "_" + req.GetTimesTamp()
+	// imageBlob := helper.BytesToString(req.GetImageBlob())
+	// SaveImageToFile(imageBlob, req.GetDeviceName())
+	// secureURL, err := UploadImageToCloudinary(ctx, req.GetImageBlob(), publicID, "screen_captures")
+	// if err != nil {
+	// 	log.Println("Error during Cloudinary upload:", err)
+	// 	return &pb.ScreenCaptureResponse{
+	// 		Success: false,
+	// 		Message: err.Error(),
+	// 	}, nil
+	// }
 
-	// Create file with .txt extension
-	file, e := os.Create("output/images/" + req.GetDeviceName() + ".txt") 
-	if e != nil {
-		log.Println("Error creating new file", e)
-		return &pb.ScreenCaptureResponse{
-			Success: false,
-			Message: "Error creating file: " + e.Error(),
-		}, nil
-	}
-	defer file.Close()
 
-	_, err = file.WriteString(imageBlob)
-	if err != nil {
-		log.Println("Error writingfile", err)
-		return &pb.ScreenCaptureResponse{
-			Success: false,
-			Message: "Error!" + e.Error(),
-		}, nil
-	}
-	// Add your screen capture handling logic here
-	// For example:
+	// log.Println("Upload Result: ", secureURL)
+
 	message := map[string]interface{}{
-		"data": req,
+		"data": map[string]interface{}{
+			"lastImage":    req.GetLastImage(),
+		 	"deviceName":   req.GetDeviceName(),
+			"timesTamp":    req.GetTimesTamp(),
+			"osName":       req.GetOsName(),
+			"memoryUsage":  req.GetMemoryUsage(),
+			"diskUsage":    req.GetDiskUsage(),
+		},
 	}
 
 	broker.CreateBroker(enum.RABBITMQ).PublishMessage(message,"api-gateway-grpc-queue","capture-device-data")
@@ -144,6 +135,33 @@ func (s *APIGatewayGRPCService) SendCapture(ctx context.Context, req *pb.ScreenC
 		Message: "Screen capture processed successfully",
 	}, nil
 }
+
+func SaveImageToFile(imageBlob string, deviceName string) error {
+	// Create output directory if it doesn't exist
+	err := os.MkdirAll("output/images", 0755)
+	if err != nil {
+		log.Println("Error creating directory", err)
+		return fmt.Errorf("error creating directory: %v", err)
+	}
+
+	// Create file with .txt extension
+	file, err := os.Create("output/images/" + deviceName + ".txt")
+	if err != nil {
+		log.Println("Error creating new file", err) 
+		return fmt.Errorf("error creating file: %v", err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(imageBlob)
+	if err != nil {
+		log.Println("Error writing file", err)
+		return fmt.Errorf("error writing file: %v", err)
+	}
+
+	log.Printf("Successfully saved image blob to output/images/%s.txt", deviceName)
+	return nil
+}
+
 
 func (s *APIGatewayGRPCService) Stop() error {
 	log.Println("Stopping GRPC API Gateway")

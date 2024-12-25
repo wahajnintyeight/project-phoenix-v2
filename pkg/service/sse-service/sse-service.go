@@ -34,12 +34,7 @@ type SSEService struct {
 	serviceConfig      internal.ServiceConfig
 	subscribedServices []internal.SubscribedServices
 	brokerObj          microBroker.Broker
-	EventChannel chan string
-	IsDisconnected chan bool
-	clients    map[chan string]bool
-	addClient  chan chan string
-	removeClient chan chan string
-	broadcast  chan map[string]interface{}
+	sseHandler         *handler.SSERequestHandler
 }
 
 var once sync.Once
@@ -62,7 +57,6 @@ func (sse *SSEService) GetSubscribedTopics() []internal.SubscribedServices {
 }
 
 func (sse *SSEService) InitializeService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
-
 	once.Do(func() {
 		service := serviceObj
 		sse.service = service
@@ -72,13 +66,10 @@ func (sse *SSEService) InitializeService(serviceObj micro.Service, serviceName s
 		servicePath := "sse-service"
 		serviceConfig, _ := internal.ReturnServiceConfig(servicePath)
 		sse.serviceConfig = serviceConfig.(internal.ServiceConfig)
-		log.Println("sse Service Config", sse.serviceConfig)
-		log.Println("sse Gateway Service Broker Instance: ", sse.brokerObj)
-
-		sse.clients = make(map[chan string]bool)
-		sse.addClient = make(chan chan string)
-		sse.removeClient = make(chan chan string)
-		sse.broadcast = make(chan map[string]interface{})
+		
+		// Initialize the SSE handler
+		sse.sseHandler = handler.NewSSERequestHandler()
+		go sse.sseHandler.Run()
 	})
 
 	return sse
@@ -148,29 +139,36 @@ func (sse *SSEService) subscribeToTopic(queueName string, topic internal.Subscri
 }
 
 func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
-	log.Println("Process Capture Device Data Func Called | Data: ")
+	 
+		log.Println("Process Capture Device Data Func Called")
 
-	data := make(map[string]interface{})
-	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
-		log.Println("Error occurred while unmarshalling the data", err)
-		return err
-	}
-	deviceData := model.Device{}
-	er := helper.InterfaceToStruct(data["data"], &deviceData)
-	if er != nil {
-		log.Println("Error decoding the data map", er)
-		return er
-	}
-	log.Println("Data Received: ", deviceData)
+		data := make(map[string]interface{})
+		if err := json.Unmarshal(p.Message().Body, &data); err != nil {
+			return fmt.Errorf("error unmarshalling data: %v", err)
+		}
 
-	deviceDataMap, err := helper.StructToMap(deviceData)
-	if err != nil {
-		log.Println("Error occurred while converting the device data to map", err)
-		return err
-	}
-	sse.broadcast <- deviceDataMap
-	return nil
+		deviceData := model.Device{}
+		if err := helper.InterfaceToStruct(data["data"], &deviceData); err != nil {
+			return fmt.Errorf("error decoding data map: %v", err)
+		}
+
+		deviceDataMap, err := helper.StructToMap(deviceData)
+		if err != nil {
+			return fmt.Errorf("error converting device data to map: %v", err)
+		}
+
+		// log.Println("Device Data Map: ", deviceDataMap)
+		// Use the SSE handler to broadcast
+		sse.sseHandler.Broadcast(map[string]interface{}{
+			"message": deviceDataMap,
+			"type":    "device_data",
+		})
+		
+		return nil
+	 
 }
+
+ 
 
 func (ls *SSEService) InitServiceConfig() {
 	serviceConfig, er := internal.ReturnServiceConfig("sse-service")
@@ -190,30 +188,28 @@ func (s *SSEService) registerRoutes() {
 	
 }
  
-
 func (sse *SSEService) Start(port string) error {
-	godotenv.Load()
+	 
+		godotenv.Load()
+		log.Println("Starting SSE Service on Port:", port)
 
-	log.Println("Starting sse Gateway Service on Port:", port)
+		sse.SubscribeTopics()
 
-	sse.SubscribeTopics()
-	
-	ssrHandler := handler.NewSSERequestHandler()
-	go ssrHandler.Run()
-	
+		// Create a new router and register the SSE handler
+		sse.router = mux.NewRouter()
+		sse.router.HandleFunc("/events", sse.sseHandler.ServeHTTP)
 
-	http.Handle("/events", ssrHandler)
+		sse.server = &http.Server{
+			Addr:    ":" + port,
+			Handler: sse.router,
+		}
 
-	sse.server = &http.Server{
-		Addr:    ":" + port,
-		Handler: sse.router,
-	}
+		if err := sse.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("HTTP server error: %v", err)
+		}
 
-	if err := sse.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("HTTP server ListenAndServe error: %v", err)
-	}
-
-	return nil
+		return nil
+	 
 }
 
 func (sse *SSEService) Stop() error {

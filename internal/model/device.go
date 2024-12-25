@@ -9,5 +9,8 @@ type Device struct {
 	UpdatedAt  time.Time `json:"updatedAt"`
 	IsOnline   bool      `json:"isOnline"`
 	LastOnline time.Time `json:"lastOnline"`
-	LastImage  string    `json:"lastImage`
+	LastImage  string    `json:"lastImage"`
+	MemoryUsage string `json:"memoryUsage"`
+	DiskUsage string `json:"diskUsage"`
+	OSName string `json:"osName"`
 }
