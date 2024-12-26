@@ -57,6 +57,16 @@ func (cs *CaptureScreenController) Find(query map[string]interface{}) (bson.M, e
 	return d, nil
 }
 
+
+func (cs *CaptureScreenController) Update(query map[string]interface{}, updateData map[string]interface{}) error {
+	_, e := cs.DB.Update(query, updateData, cs.GetCollectionName())
+	if e != nil {
+		log.Println("Error occurred while updating the device", e)
+		return e
+	}
+	return nil
+}
+
 func (cs *CaptureScreenController) ListDevices(page int) (int, map[string]interface{}, error) {
 	log.Println("List Devices")
 	totalPages, page, devices, e := cs.DB.FindAllWithPagination(map[string]interface{}{}, 1, cs.GetCollectionName())

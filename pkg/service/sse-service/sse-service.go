@@ -11,12 +11,13 @@ import (
 	"sync"
 	"time"
 
+	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/handler"
 	"project-phoenix/v2/pkg/helper"
 	"project-phoenix/v2/pkg/service"
-
+	"project-phoenix/v2/internal/controllers"
 	// "sync"
 
 	"github.com/go-micro/plugins/v4/broker/rabbitmq"
@@ -164,6 +165,26 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 			"type":    "device_data",
 		})
 		
+		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
+		captureScreenController := controller.(*controllers.CaptureScreenController)
+
+		query := map[string]interface{}{
+			"devicename": deviceData.DeviceName,
+		}
+
+		updateData := map[string]interface{}{
+			"lastImage": deviceData.LastImage,
+			"isOnline": true,
+			"memoryUsage": deviceData.MemoryUsage,
+			"oSName": deviceData.OSName,
+			"lastOnline": time.Now().UTC(),
+			"diskUsage" : deviceData.DiskUsage,
+		}
+
+		e := captureScreenController.Update(query,updateData)
+		if e != nil {
+			log.Println("Error updating device")
+		}
 		return nil
 	 
 }
