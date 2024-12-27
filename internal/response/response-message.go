@@ -87,6 +87,9 @@ var responseMessage = map[int]string{
 	1077: "Device Deleted",
 	1078: "Device failed to delete",
 	1079: "Device Id is not set",
+	1080: "Ping Event Sent",
+	1081: "Ping Event Failed",
+	1082: "Devices Fetched",
 }
 
 type MessageResponse struct {

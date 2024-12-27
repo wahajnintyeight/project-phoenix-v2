@@ -102,21 +102,6 @@ func (s *APIGatewayGRPCService) Start(port string) error {
 func (s *APIGatewayGRPCService) SendCapture(ctx context.Context, req *pb.ScreenCaptureRequest) (*pb.ScreenCaptureResponse, error) {
 	log.Printf("Received screen capture request from client")
 
-	// publicID := req.GetDeviceName() + "_" + req.GetTimesTamp()
-	// imageBlob := helper.BytesToString(req.GetImageBlob())
-	// SaveImageToFile(imageBlob, req.GetDeviceName())
-	// secureURL, err := UploadImageToCloudinary(ctx, req.GetImageBlob(), publicID, "screen_captures")
-	// if err != nil {
-	// 	log.Println("Error during Cloudinary upload:", err)
-	// 	return &pb.ScreenCaptureResponse{
-	// 		Success: false,
-	// 		Message: err.Error(),
-	// 	}, nil
-	// }
-
-
-	// log.Println("Upload Result: ", secureURL)
-
 	message := map[string]interface{}{
 		"data": map[string]interface{}{
 			"lastImage":    req.GetLastImage(),
@@ -126,6 +111,7 @@ func (s *APIGatewayGRPCService) SendCapture(ctx context.Context, req *pb.ScreenC
 			"memoryUsage":  req.GetMemoryUsage(),
 			"diskUsage":    req.GetDiskUsage(),
 		},
+		"messageType" : req.GetMessageType(),
 	}
 
 	broker.CreateBroker(enum.RABBITMQ).PublishMessage(message,"api-gateway-grpc-queue","capture-device-data")

@@ -15,6 +15,7 @@ message ScreenCaptureRequest {
   string memoryUsage = 5;
   string diskUsage = 6;
   string lastImage = 7;
+  int32 messageType = 8;
 }
 
 message ScreenCaptureResponse {

@@ -249,6 +249,18 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, int(enum.DEVICE_NAME_FETCHED), res)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/ping":
+		log.Println("Capture Screen")
+		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
+		captureScreenController := controller.(*controllers.CaptureScreenController)
+		res, e := captureScreenController.PingDevice(w, r)
+		if e != nil {
+			response.SendResponse(w, int(enum.PING_DEVICE_EVENT_FAILED), e)
+			return
+		} else {
+			response.SendResponse(w, int(enum.PING_DEVICE_EVENT_SENT), res)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}

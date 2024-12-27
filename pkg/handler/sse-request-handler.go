@@ -31,7 +31,6 @@ func NewSSERequestHandler() *SSERequestHandler {
 	return handler
 }
 
-
 func (handler *SSERequestHandler) Run() {
 	for {
 		select {
@@ -54,7 +53,7 @@ func (handler *SSERequestHandler) Run() {
 			handler.mutex.Lock()
 			log.Println("Clients:", handler.clients)
 			for client := range handler.clients {
-				log.Println("Client found",client)
+				log.Println("Client found", client)
 				select {
 				case client <- msg:
 					log.Println("Message sent to client:", msg)
@@ -70,7 +69,6 @@ func (handler *SSERequestHandler) Run() {
 		}
 	}
 }
-
 
 func (handler *SSERequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Set headers for SSE
@@ -91,28 +89,28 @@ func (handler *SSERequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		handler.removeClient <- clientChan
 	}()
 
-	 
 	for {
 		select {
-        case msg := <-clientChan:
-          
-            // Serialize the message to JSON
-            jsonData, err := json.Marshal(msg)
-            if err != nil {
-                log.Printf("Error marshalling message to JSON: %v", err)
-                return
-            }
-            // Send the JSON data as a string
-            _, err = fmt.Fprintf(w, "data: %s\n\n", jsonData)
-            if err != nil {
-                log.Printf("Error sending message to client: %v", err)
-                return
-            }
+		case msg := <-clientChan:
+
+			// Serialize the message to JSON
+			jsonData, err := json.Marshal(msg)
+			log.Println("Serialize JSON Data:", jsonData)
+			if err != nil {
+				log.Printf("Error marshalling message to JSON: %v", err)
+				return
+			}
+			// Send the JSON data as a string
+			_, err = fmt.Fprintf(w, "data: %s\n\n", jsonData)
+			if err != nil {
+				log.Printf("Error sending message to client: %v", err)
+				return
+			}
 			log.Println("Message sent to client:", w)
-            w.(http.Flusher).Flush()
-        case <-r.Context().Done():
-            return
-        }
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		}
 	}
 }
 

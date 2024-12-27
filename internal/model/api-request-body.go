@@ -59,3 +59,7 @@ type DeleteTripModel struct {
 type GetCurrentLocationModel struct {
 	TripID string `json:"tripId"`
 }
+
+type CaptureScreenDeviceQueryModel struct {
+	DeviceName string `json:"deviceName"`
+}

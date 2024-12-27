@@ -77,7 +77,7 @@ func (cs *CaptureScreenController) ListDevices(page int) (int, map[string]interf
 	if devices == nil {
 		devices = []primitive.M{}
 	}
-	return int(enum.TRIP_FOUND), map[string]interface{}{
+	return int(enum.DEVICES_FOUND), map[string]interface{}{
 		"totalPages": totalPages,
 		"page":       page,
 		"devices":    devices,
@@ -136,7 +136,7 @@ func (cs *CaptureScreenController) ReturnDeviceName(w http.ResponseWriter, r *ht
 	} else {
 		log.Println("Device Name: ", deviceModel.DeviceName)
 		deviceQuery := map[string]interface{}{
-			"devicename": deviceModel.DeviceName,
+			"deviceName": deviceModel.DeviceName,
 		}
 		data, e := cs.Find(deviceQuery)
 		if e != nil {
@@ -210,3 +210,32 @@ func (cs *CaptureScreenController) ShowDeviceInfo(deviceId string) (int, interfa
 	}
 	return int(enum.DEVICE_FOUND), device, nil
 }
+
+
+func (cs *CaptureScreenController) PingDevice(w http.ResponseWriter, r *http.Request) (int, error) {
+	
+	deviceModel := model.CaptureScreenDeviceQueryModel{}
+	log.Println("Params:", r.Body)
+	decodeErr := json.NewDecoder(r.Body).Decode(&deviceModel)
+	if decodeErr != nil {
+		log.Println("Error while decoding device model", decodeErr)
+		return int(enum.ERROR),  decodeErr
+	}
+
+	eventType := "ping-device-"
+	channelName := eventType + slug.Make(deviceModel.DeviceName)
+	log.Println("Channel Name: ", channelName)
+	data := eventType + slug.Make(deviceModel.DeviceName)
+	dataInterface, e := helper.StringToInterface(data)
+	if e != nil {
+		return int(enum.CAPTURE_SCREEN_EVENT_FAILED),  e
+	}
+	isPub, e := cache.GetInstance().PublishMessage(dataInterface, channelName)
+	if e != nil {
+		return int(enum.CAPTURE_SCREEN_EVENT_FAILED),  e
+	}
+	if isPub == true {
+		return int(enum.CAPTURE_SCREEN_EVENT_SENT),  nil
+	}
+	return -1, nil
+} 

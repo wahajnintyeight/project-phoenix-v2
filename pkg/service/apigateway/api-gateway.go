@@ -124,6 +124,7 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/googleLogin",
 		s.serviceConfig.EndpointPrefix + "/capture-screen",
 		s.serviceConfig.EndpointPrefix + "/scan-devices",
+		s.serviceConfig.EndpointPrefix + "/ping",
 		s.serviceConfig.EndpointPrefix + "/devices",
 		s.serviceConfig.EndpointPrefix + "/device", //deleting a device
 	}

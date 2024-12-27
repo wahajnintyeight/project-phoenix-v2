@@ -11,13 +11,14 @@ import (
 	"sync"
 	"time"
 
+	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/handler"
 	"project-phoenix/v2/pkg/helper"
 	"project-phoenix/v2/pkg/service"
-	"project-phoenix/v2/internal/controllers"
+
 	// "sync"
 
 	"github.com/go-micro/plugins/v4/broker/rabbitmq"
@@ -67,7 +68,7 @@ func (sse *SSEService) InitializeService(serviceObj micro.Service, serviceName s
 		servicePath := "sse-service"
 		serviceConfig, _ := internal.ReturnServiceConfig(servicePath)
 		sse.serviceConfig = serviceConfig.(internal.ServiceConfig)
-		
+
 		// Initialize the SSE handler
 		sse.sseHandler = handler.NewSSERequestHandler()
 		go sse.sseHandler.Run()
@@ -115,7 +116,6 @@ func (sse *SSEService) attemptSubscribe(queueName string, topic internal.Subscri
 	return nil
 }
 
-
 func (sse *SSEService) subscribeToTopic(queueName string, topic internal.SubscribedTopicsMap) error {
 	handler, ok := reflect.TypeOf(sse).MethodByName(topic.TopicHandler)
 	if !ok {
@@ -140,56 +140,87 @@ func (sse *SSEService) subscribeToTopic(queueName string, topic internal.Subscri
 }
 
 func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
-	 
-		log.Println("Process Capture Device Data Func Called")
 
-		data := make(map[string]interface{})
-		if err := json.Unmarshal(p.Message().Body, &data); err != nil {
-			return fmt.Errorf("error unmarshalling data: %v", err)
-		}
+	log.Println("Process Capture Device Data Func Called")
 
-		deviceData := model.Device{}
-		if err := helper.InterfaceToStruct(data["data"], &deviceData); err != nil {
-			return fmt.Errorf("error decoding data map: %v", err)
-		}
+	data := make(map[string]interface{})
+	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
+		return fmt.Errorf("error unmarshalling data: %v", err)
+	}
 
-		deviceDataMap, err := helper.StructToMap(deviceData)
-		if err != nil {
-			return fmt.Errorf("error converting device data to map: %v", err)
-		}
+	deviceData := model.Device{}
+	messageType := int32(data["messageType"].(float64))
+	log.Println("Message Type is", messageType)
+	if err := helper.InterfaceToStruct(data["data"], &deviceData); err != nil {
+		return fmt.Errorf("error decoding data map: %v", err)
+	}
 
-		// log.Println("Device Data Map: ", deviceDataMap)
-		// Use the SSE handler to broadcast
+	deviceDataMap, err := helper.StructToMap(deviceData)
+	if err != nil {
+		return fmt.Errorf("error converting device data to map: %v", err)
+	}
+
+	controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
+	captureScreenController := controller.(*controllers.CaptureScreenController)
+
+	query := map[string]interface{}{
+		"deviceName": deviceData.DeviceName,
+	}
+
+	updateData := map[string]interface{}{}
+
+	switch messageType {
+
+	case int32(enum.PING_DEVICE):
+
+		log.Println("Attempting to broadcast PING_DEVICE", messageType)
+		log.Println("Message Data:", deviceDataMap)
 		sse.sseHandler.Broadcast(map[string]interface{}{
 			"message": deviceDataMap,
-			"type":    "device_data",
+			"type":    "ping_device",
 		})
-		
-		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
-		captureScreenController := controller.(*controllers.CaptureScreenController)
 
-		query := map[string]interface{}{
-			"devicename": deviceData.DeviceName,
-		}
-
-		updateData := map[string]interface{}{
-			"lastImage": deviceData.LastImage,
-			"isOnline": true,
+		updateData = map[string]interface{}{
+			"isOnline":    true,
 			"memoryUsage": deviceData.MemoryUsage,
-			"oSName": deviceData.OSName,
-			"lastOnline": time.Now().UTC(),
-			"diskUsage" : deviceData.DiskUsage,
+			"osName":      deviceData.OSName,
+			"lastOnline":  time.Now().UTC(),
+			"diskUsage":   deviceData.DiskUsage,
 		}
 
-		e := captureScreenController.Update(query,updateData)
-		if e != nil {
-			log.Println("Error updating device")
+		break
+
+	case int32(enum.CAPTURE_SCREEN):
+
+		// Use the SSE handler to broadcast
+		log.Println("Attempting to broadcast CAPTURE_SCREEN", messageType)
+		log.Println("Message Data:", deviceDataMap)
+		sse.sseHandler.Broadcast(map[string]interface{}{
+			"message": deviceDataMap,
+			"type":    "capture_screen",
+		})
+
+		updateData = map[string]interface{}{
+			"lastImage":   deviceData.LastImage,
+			"isOnline":    true,
+			"memoryUsage": deviceData.MemoryUsage,
+			"osName":      deviceData.OSName,
+			"lastOnline":  time.Now().UTC(),
+			"diskUsage":   deviceData.DiskUsage,
 		}
-		return nil
-	 
+
+		break
+	default:
+		log.Println("No case found for", messageType)
+	}
+
+	e := captureScreenController.Update(query, updateData)
+	if e != nil {
+		log.Println("Error updating device")
+	}
+	return nil
+
 }
-
- 
 
 func (ls *SSEService) InitServiceConfig() {
 	serviceConfig, er := internal.ReturnServiceConfig("sse-service")
@@ -206,31 +237,31 @@ func NewSSEService(serviceObj micro.Service, serviceName string) service.Service
 }
 
 func (s *SSEService) registerRoutes() {
-	
+
 }
- 
+
 func (sse *SSEService) Start(port string) error {
-	 
-		godotenv.Load()
-		log.Println("Starting SSE Service on Port:", port)
 
-		sse.SubscribeTopics()
+	godotenv.Load()
+	log.Println("Starting SSE Service on Port:", port)
 
-		// Create a new router and register the SSE handler
-		sse.router = mux.NewRouter()
-		sse.router.HandleFunc("/events", sse.sseHandler.ServeHTTP)
+	sse.SubscribeTopics()
 
-		sse.server = &http.Server{
-			Addr:    ":" + port,
-			Handler: sse.router,
-		}
+	// Create a new router and register the SSE handler
+	sse.router = mux.NewRouter()
+	sse.router.HandleFunc("/events", sse.sseHandler.ServeHTTP)
 
-		if err := sse.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			return fmt.Errorf("HTTP server error: %v", err)
-		}
+	sse.server = &http.Server{
+		Addr:    ":" + port,
+		Handler: sse.router,
+	}
 
-		return nil
-	 
+	if err := sse.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("HTTP server error: %v", err)
+	}
+
+	return nil
+
 }
 
 func (sse *SSEService) Stop() error {
