@@ -18,3 +18,15 @@ services:
       context: .
     ports:
       - "8884:8884"
+  sse-service:
+    build:
+      dockerfile: pkg/service/sse-service/Dockerfile
+      context: .
+    ports:
+      - "8885:8885"
+  api-gateway-grpc:
+    build:
+      dockerfile: pkg/service/apigateway-grpc/Dockerfile
+      context: .
+    ports:
+      - "8886:8886"
