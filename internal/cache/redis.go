@@ -57,6 +57,10 @@ func (r *Redis) PublishMessage(data interface{}, channelName string) (bool, erro
 	}
 	res := r.client.Publish(context.Background(), channelName, data)
 	log.Println("Response after publishing message to channel: ", channelName, res)
+	rs, _ := res.Result()
+	if rs == 0 {
+		return false, errors.New("Device is offline")
+	}
 	return true, nil
 }
 

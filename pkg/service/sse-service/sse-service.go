@@ -167,6 +167,9 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 		"deviceName": deviceData.DeviceName,
 	}
 
+	deviceDataMap["isOnline"] = true
+	deviceDataMap["lastOnline"] = time.Now().UTC()
+	
 	updateData := map[string]interface{}{}
 
 	switch messageType {

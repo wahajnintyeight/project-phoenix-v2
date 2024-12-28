@@ -95,7 +95,6 @@ func (handler *SSERequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 			// Serialize the message to JSON
 			jsonData, err := json.Marshal(msg)
-			log.Println("Serialize JSON Data:", jsonData)
 			if err != nil {
 				log.Printf("Error marshalling message to JSON: %v", err)
 				return

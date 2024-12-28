@@ -101,6 +101,10 @@ func (cs *CaptureScreenController) CaptureScreen(w http.ResponseWriter, r *http.
 	log.Println("Channel Name: ", channelName)
 	isPub, e := cache.GetInstance().PublishMessage(dataInterface, channelName)
 	if e != nil {
+		er := cs.TurnDeviceOffline(map[string]interface{}{"deviceName":deviceModel.DeviceName})
+		if er != nil {
+			return int(enum.CAPTURE_SCREEN_EVENT_FAILED),  er
+		}
 		return int(enum.CAPTURE_SCREEN_EVENT_FAILED), e
 	}
 	if isPub == true {
@@ -232,6 +236,10 @@ func (cs *CaptureScreenController) PingDevice(w http.ResponseWriter, r *http.Req
 	}
 	isPub, e := cache.GetInstance().PublishMessage(dataInterface, channelName)
 	if e != nil {
+		er := cs.TurnDeviceOffline(map[string]interface{}{"deviceName":deviceModel.DeviceName})
+		if er != nil {
+			return int(enum.CAPTURE_SCREEN_EVENT_FAILED),  er
+		}
 		return int(enum.CAPTURE_SCREEN_EVENT_FAILED),  e
 	}
 	if isPub == true {
@@ -239,3 +247,16 @@ func (cs *CaptureScreenController) PingDevice(w http.ResponseWriter, r *http.Req
 	}
 	return -1, nil
 } 
+
+func (cs *CaptureScreenController) TurnDeviceOffline (query map[string]interface{}) (error){
+	updateData := map[string]interface{}{
+		"isOnline": false,
+		"updatedAt": time.Now().UTC(),
+	}
+	_, e := cs.DB.Update(query, updateData, cs.GetCollectionName())
+	if e != nil {
+		log.Println("Error occurred while updating the device", e)
+		return e
+	}
+	return nil
+}
