@@ -85,7 +85,7 @@ func (s *APIGatewayGRPCService) Start(port string) error {
 
 	log.Println("Starting GRPC API Gateway Service on Port:", port)
 
-	lis, err := net.Listen("tcp", ":8880")
+	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
