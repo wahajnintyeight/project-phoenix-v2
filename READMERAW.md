@@ -14,8 +14,8 @@ docker run -p 8881:8881 ppv2-apigateway -d --name ppv2-apigateway --restart alwa
 
 # API Gateway GRPC Service
 
-docker build -t ppv2-apigateway-grpc -f pkg/service/apigateway-grpc/Dockerfile .
-docker run -p 8886:8886 ppv2-apigateway-grpc -d --name ppv2-apigateway-grpc --restart always
+docker build -t ppv2-api-gateway-grpc -f pkg/service/apigateway-grpc/Dockerfile .
+docker run -p 8886:8886 ppv2-api-gateway-grpc -d --name ppv2-apigateway-grpc --restart always
 
 
 
