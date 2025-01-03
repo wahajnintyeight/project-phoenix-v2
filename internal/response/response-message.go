@@ -90,6 +90,11 @@ var responseMessage = map[int]string{
 	1080: "Ping Event Sent",
 	1081: "Ping Event Failed",
 	1082: "Devices Fetched",
+	1083: "Room Not Created",
+	1084: "Room Found",
+	1085: "Room Not Found",
+	1086: "Room Deleted",
+	1087: "Room Not Deleted",
 }
 
 type MessageResponse struct {

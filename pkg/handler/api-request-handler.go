@@ -261,6 +261,18 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, int(enum.PING_DEVICE_EVENT_SENT), res)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/room/create":
+		// log.Println("Create Room")
+		// controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
+		// clipboardRoomController := controller.(*controllers.ClipboardRoomController)
+		// res, e := clipboardRoomController.CreateRoom(w, r)
+		// if e != nil {
+		// 	response.SendResponse(w, int(enum.ROOM_NOT_CREATED), e)
+		// 	return
+		// } else {
+		// 	response.SendResponse(w, int(enum.ROOM_CREATED), res)
+		// 	return
+		// }
 	default:
 		http.NotFound(w, r)
 	}

@@ -17,6 +17,7 @@ import (
 
 	// "sync"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"go-micro.dev/v4"
@@ -144,11 +145,24 @@ func (s *APIGatewayService) registerRoutes() {
 		})
 	}
 
+	allowedOrigins := []string{"http://localhost:5173", "electron://altair"}
+
+    // Set up CORS middleware
+    corsMiddleware := handlers.CORS(
+        handlers.AllowedOrigins(allowedOrigins),
+        handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"}), // Adjust methods as needed
+        handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}), // Adjust headers as needed
+    )
+
+    // Apply CORS middleware to the router
+    s.router.Use(corsMiddleware)
+
 	s.router.Use(s.ConfigureSentry().Handle)
 	s.router.Use(customMiddlewareWrapper)
 	s.router.Use(customMiddlewareWrapperWithSession)
 	s.router.PathPrefix(s.serviceConfig.EndpointPrefix).Handler(apiRequestHandler)
 }
+
 
 func (s *APIGatewayService) ConfigureSentry() *sentryhttp.Handler {
 
