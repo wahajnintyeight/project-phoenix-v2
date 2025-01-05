@@ -27,6 +27,7 @@ var (
 	userTripHistoryControllerInstance *UserTripHistoryController
 	loginActivityControllerInstance   *LoginActivityController
 	captureScreenControllerInstance   *CaptureScreenController
+	clipboardRoomControllerInstance   *ClipboardRoomController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
@@ -171,6 +172,19 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			}
 		}
 		return captureScreenControllerInstance
+	case enum.ClipboardRoomController:
+		if clipboardRoomControllerInstance == nil {
+			log.Println("Initialize Clipboard Room Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+				return nil
+			}
+			clipboardRoomControllerInstance = &ClipboardRoomController{
+				DB: dbInstance,
+			}
+		}
+		return clipboardRoomControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil

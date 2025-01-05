@@ -98,6 +98,18 @@ func (apiHandler APIRequestHandler) PUTRoutes(w http.ResponseWriter, r *http.Req
 			return
 		}
 		break
+	case apiRequestHandlerObj.Endpoint + "/room/update":
+		controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
+		clipBoardController := controller.(*controllers.ClipboardRoomController)
+		ok := clipBoardController.Update(w, r)
+		if ok != nil {
+			response.SendResponse(w, int(enum.ROOM_NOT_UPDATED), nil)
+		} else {
+			fmt.Println("Session created successfully")
+			response.SendResponse(w, int(enum.ROOM_UPDATED), nil)
+			return
+		}
+		break
 	default:
 		http.NotFound(w, r)
 	}
@@ -262,17 +274,29 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case apiRequestHandlerObj.Endpoint + "/room/create":
-		// log.Println("Create Room")
-		// controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
-		// clipboardRoomController := controller.(*controllers.ClipboardRoomController)
-		// res, e := clipboardRoomController.CreateRoom(w, r)
-		// if e != nil {
-		// 	response.SendResponse(w, int(enum.ROOM_NOT_CREATED), e)
-		// 	return
-		// } else {
-		// 	response.SendResponse(w, int(enum.ROOM_CREATED), res)
-		// 	return
-		// }
+		log.Println("Create Room")
+		controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
+		clipboardRoomController := controller.(*controllers.ClipboardRoomController)
+		code, roomData, e := clipboardRoomController.CreateRoom(w, r)
+		if e != nil {
+			response.SendResponse(w, code, e)
+			return
+		} else {
+			response.SendResponse(w, code, roomData)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/room/join":
+		log.Println("Join Room")
+		controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
+		clipboardRoomController := controller.(*controllers.ClipboardRoomController)
+		_, roomData, e := clipboardRoomController.JoinRoom(w,r)
+		if e != nil {
+			response.SendResponse(w, int(enum.ROOM_NOT_FOUND), e)
+			return
+		} else {
+			response.SendResponse(w, int(enum.ROOM_JOINED), roomData)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}

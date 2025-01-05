@@ -2,13 +2,17 @@ package controllers
 
 import (
 	"encoding/json"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
+	"project-phoenix/v2/pkg/helper"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ClipboardRoomController struct {
@@ -54,8 +58,16 @@ func (cs *ClipboardRoomController) Find(query map[string]interface{}) (bson.M, e
 }
 
 
-func (cs *ClipboardRoomController) Update(query map[string]interface{}, updateData map[string]interface{}) error {
-	_, e := cs.DB.Update(query, updateData, cs.GetCollectionName())
+func (cs *ClipboardRoomController) Update(w http.ResponseWriter, r *http.Request) error {
+	roomRequestBody := model.ClipboardUpdateNameRequestModel{}
+	decodeErr := json.NewDecoder(r.Body).Decode(&roomRequestBody)
+	if decodeErr != nil {
+		return decodeErr
+	}
+	updateData := map[string]interface{}{
+		"roomName": roomRequestBody.RoomName,
+	}
+	_, e := cs.DB.Update(map[string]interface{}{"code":roomRequestBody.Code}, updateData, cs.GetCollectionName())
 	if e != nil {
 		log.Println("Error occurred while updating the device", e)
 		return e
@@ -79,7 +91,123 @@ func (cs *ClipboardRoomController) ListRooms(page int) (int, map[string]interfac
 		"rooms":    rooms,
 	}, nil
 }
-  
+
+func (cs *ClipboardRoomController) CreateRoom(w http.ResponseWriter, r *http.Request) (int,interface{}, error) {
+
+	randomCode := generateCode()
+
+	// Get IP and User-Agent from request
+	ip := r.RemoteAddr
+	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		ip = forwardedFor
+	}
+	userAgent := r.Header.Get("User-Agent")
+
+
+	roomModelObj := model.ClipboardRoom{
+		Code: randomCode,
+		CreatedAt: time.Now(),
+		RoomName: "Untitled " + time.Now().String(),
+		Members: []model.ClipboardRoomMember{
+			{
+				IP: ip,
+				UserAgent: userAgent,
+				JoinedAt: time.Now(),
+			},
+		},
+	}
+
+	_,e := cs.Create(roomModelObj)
+
+	if e != nil {
+		return int(enum.ROOM_NOT_CREATED), nil, e
+	}
+
+	i, e := cs.DB.FindOne(map[string]interface{}{"code":randomCode},cs.GetCollectionName())
+	if e != nil {
+		return int(enum.ROOM_NOT_CREATED), nil, nil
+	}
+	
+	return int(enum.ROOM_CREATED), i, nil
+
+}
+
+
+func (cs *ClipboardRoomController) JoinRoom(w http.ResponseWriter, r *http.Request) (int, interface{}, error) {
+	roomRequestBody := model.ClipboardRequestModel{}
+	decodeErr := json.NewDecoder(r.Body).Decode(&roomRequestBody)
+	if decodeErr != nil {
+		return int(enum.ROOM_NOT_FOUND), nil, decodeErr
+	}
+
+	// Get IP and User-Agent from request
+	ip := r.RemoteAddr
+	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		ip = forwardedFor
+	}
+	userAgent := r.Header.Get("User-Agent")
+
+	// First check if user is already a member
+	existingRoom, e := cs.DB.FindOne(map[string]interface{}{
+		"code": roomRequestBody.Code,
+		"members": map[string]interface{}{
+			"$elemMatch": map[string]interface{}{
+				"ip": ip,
+				"userAgent": userAgent,
+			},
+		},
+	}, cs.GetCollectionName())
+
+	if existingRoom != nil {
+		roomModel := model.ClipboardRoom{}
+		if err := helper.MapToStruct(existingRoom, &roomModel); err != nil {
+			return int(enum.ERROR), nil, err
+		}
+		return int(enum.ROOM_FOUND), roomModel, nil
+	}
+
+	// If not found as member, get room info
+	roomInfo, e := cs.DB.FindOne(map[string]interface{}{"code": roomRequestBody.Code}, cs.GetCollectionName())
+	if e != nil {
+		return int(enum.ROOM_NOT_FOUND), nil, e
+	}
+
+	roomModel := model.ClipboardRoom{}
+	er := helper.MapToStruct(roomInfo, &roomModel)
+	if er != nil {
+		return int(enum.ERROR), nil, er
+	}
+
+	// Create new member
+	newMember := model.ClipboardRoomMember{
+		IP:        ip,
+		UserAgent: userAgent,
+		JoinedAt:  time.Now(),
+	}
+
+	roomModel.Members = append(roomModel.Members, newMember)
+	_, err := cs.DB.Update(map[string]interface{}{"code": roomRequestBody.Code},
+		map[string]interface{}{"members": roomModel.Members},
+		cs.GetCollectionName())
+	if err != nil {
+		return int(enum.ERROR), nil, err
+	}
+
+	return int(enum.ROOM_FOUND), roomModel, nil
+
+}
+
+
+func generateCode() string {
+	charset := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	code := make([]byte, 6)
+	
+	for i := range code {
+		code[i] = charset[rand.IntN(len(charset))]
+	}
+	
+	return string(code)
+}
 
 func (cs *ClipboardRoomController) DeleteRoom(w http.ResponseWriter, r *http.Request) (int, error) {
 

@@ -128,6 +128,9 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/ping",
 		s.serviceConfig.EndpointPrefix + "/devices",
 		s.serviceConfig.EndpointPrefix + "/device", //deleting a device
+		s.serviceConfig.EndpointPrefix + "/room/create",
+		s.serviceConfig.EndpointPrefix + "/room/join",
+		s.serviceConfig.EndpointPrefix + "/room/update",
 	}
 	customMiddlewareWrapperWithSession := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

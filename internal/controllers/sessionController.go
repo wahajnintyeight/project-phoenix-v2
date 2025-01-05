@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"project-phoenix/v2/internal/cache"
 	"project-phoenix/v2/internal/db"
+	"project-phoenix/v2/pkg/helper"
+	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,6 +17,7 @@ import (
 type SessionController struct {
 	CollectionName string
 	DB             db.DBInterface
+	SessionMutex   sync.Mutex
 }
 
 func (sc *SessionController) GetCollectionName() string {
@@ -39,37 +42,61 @@ func (sc *SessionController) PerformIndexing() error {
 
 }
 func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Request) (string, error) {
+	// Add mutex lock to prevent concurrent session creation
+	sc.SessionMutex.Lock()
+	defer sc.SessionMutex.Unlock()
+ 
+	filter := bson.M{
+		"createdAt": bson.M{
+			"$gte": time.Now().Add(-20 * time.Second),
+		},
+	}
+	lastSession, err := sc.DB.FindOne(filter, sc.GetCollectionName())
+	if err == nil && lastSession != nil {
+		sessionData := map[string]interface{}{}
+		e := helper.MapToStruct(lastSession, &sessionData)
+		if e != nil {
+			log.Println("Error while converting map to struct", e)
+			return "", e
+		}
+		return sessionData["sessionID"].(string), nil
+	}
 
+	// Create new session if no recent one found
 	sessionID, err := sc.generateSessionID(15)
 	if err != nil {
 		log.Println("Unable to generate session ID", err)
 		return "", err
-	} else {
-		sessionData := map[string]interface{}{
-			"sessionID": sessionID,
-			"createdAt": time.Now(),
-		}
-		log.Println("Session Data", sessionData)
-		_, err := sc.DB.Create(sessionData, sc.GetCollectionName())
-		if err != nil {
-			log.Println("Unable to store session in DB", err)
-			return "", err
-		} else {
-			hours := 2
-			sessionKey := "session:" + sessionID
-			isAddedToRedis, err := cache.GetInstance().SetWithExpiry(sessionKey, map[string]interface{}{"sessionID": sessionData["sessionID"]}, hours)
-			if err != nil {
-				log.Println("Unable to store session in Redis", err)
-				return "", err
-			} else if isAddedToRedis == true {
-				w.Header().Set("sessionId", sessionID)
-				return sessionID, nil
-			} else {
-				log.Println("Unable to store session in Redis")
-				return "", nil
-			}
-		}
 	}
+
+	sessionData := map[string]interface{}{
+		"sessionID": sessionID,
+		"createdAt": time.Now(),
+	}
+	log.Println("Session Data", sessionData)
+
+	_, err = sc.DB.Create(sessionData, sc.GetCollectionName())
+	if err != nil {
+		log.Println("Unable to store session in DB", err)
+		return "", err
+	}
+
+	hours := 2
+	sessionKey := "session:" + sessionID
+	isAddedToRedis, err := cache.GetInstance().SetWithExpiry(sessionKey, map[string]interface{}{"sessionID": sessionData["sessionID"]}, hours)
+	if err != nil {
+		log.Println("Unable to store session in Redis", err)
+		return "", err
+	}
+
+	if isAddedToRedis {
+		w.Header().Set("sessionId", sessionID)
+		return sessionID, nil
+	}
+
+	log.Println("Unable to store session in Redis")
+	return "", nil
+
 }
 
 func (sc *SessionController) DoesSessionIDExist(sessionID string) (interface{}, error) {

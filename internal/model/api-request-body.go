@@ -63,3 +63,12 @@ type GetCurrentLocationModel struct {
 type CaptureScreenDeviceQueryModel struct {
 	DeviceName string `json:"deviceName"`
 }
+
+type ClipboardRequestModel struct {
+	Code string `json:"code" bson:"code"`
+}
+
+type ClipboardUpdateNameRequestModel struct {
+	Code string `json:"code" bson:"code"`
+	RoomName string `json:"roomName" bson:"roomName"`
+}

@@ -11,4 +11,5 @@ const (
 	UserTripHistoryController
 	LoginActivityController
 	CaptureScreenController
+	ClipboardRoomController
 )

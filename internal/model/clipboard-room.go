@@ -7,9 +7,11 @@ type ClipboardRoom struct {
 	RoomName      string                 `json:"roomName" bson:"roomName"`
 	CreatedAt     time.Time              `json:"createdAt" bson:"createdAt"`
 	UpdatedAt     time.Time              `json:"updatedAt" bson:"updatedAt"`
-	TotalMessages int32                  `json:"totalMessages" bson:"totalMessages"`
+	TotalMessages int32                  `json:"totalMessages" bson:"totalMessages" default:"0"`
 	LastMessage   time.Time              `json:"lastMessage" bson:"lastMessage"`
-	Messages      []ClipboardRoomMessage `json:"messages" bson:"messages"`
+	Code          string          		 `json:"code" bson:"code"`
+	Messages      []ClipboardRoomMessage `json:"messages" bson:"messages" default:"[]"`
+	Members       []ClipboardRoomMember  `json:"members" bson:"members"`
 }
 
 type ClipboardRoomMessage struct {
@@ -20,4 +22,11 @@ type ClipboardRoomMessage struct {
 	IsAttachment   bool      `json:"isAttachment" bson:"isAttachment"`
 	AttachmentType string    `json:"attachmentType" bson:"attachmentType"`
 	AttachmentURL  string    `json:"attachmentURL" bson:"attachmentURL"`
+}
+
+type ClipboardRoomMember struct {
+	ID             string    `bson:"_id,omitempty" json:"_id,omitempty"`
+	IP             string    `bson:"ip" json:"ip"`
+	UserAgent      string    `bson:"userAgent" json:"userAgent"`
+	JoinedAt       time.Time `bson:"joinedAt" json:"joinedAt"`
 }
