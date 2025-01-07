@@ -1,6 +1,6 @@
 {
-    "port": "8884",
-    "servicePort":"8884",
+    "port": "8887",
+    "servicePort":"8887",
     "serviceExchange": "socket-service-exchange",
     "serviceQueue": "socket-service-queue",
     "subscribedServices": [

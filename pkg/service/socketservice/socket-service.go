@@ -54,7 +54,7 @@ const (
 )
 
 var rooms = make(map[string]*Room)
-var upgrader = websocket.Upgrader{}
+var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {return true}}
 
 var socketOnce sync.Once
 
@@ -189,6 +189,9 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 			case "locationUpdate":
 				log.Println("Location Update Event Received")
 				ss.handleLocationUpdate(conn, msg)
+			case "joinClipRoom":
+				log.Println("Join Clipboard Room Event Received")
+				ss.handleClipRoomJoined(conn, msg)
 			default:
 				log.Println("No Action Found", action)
 			}
@@ -222,6 +225,34 @@ func (ss *SocketService) handleIdentifyUser(conn *websocket.Conn, msg map[string
 	}
 }
 
+
+func (ss *SocketService) handleClipRoomJoined(conn *websocket.Conn, msg map[string]interface{}) {
+	dat, e := helper.StructToMap(msg)
+	clipBoardRoom := &model.ClipBoardRoomJoined{}
+	log.Println("Data:", dat)
+
+	if e != nil {
+		log.Println(e)
+		return
+	} else {
+		er := helper.InterfaceToStruct(dat["data"], &clipBoardRoom)
+		if er != nil {
+			log.Println(er)
+		}
+		if clipBoardRoom.Code == "" {
+			//kick the user out
+			log.Println("Code not found")
+			defer conn.Close()
+			return
+		} else {
+			log.Println("User ", clipBoardRoom.Code, " joined the room - ", getClipBoardRoom(clipBoardRoom.Code))
+			ss.JoinRoom(getClipBoardRoom(clipBoardRoom.Code), conn)
+		}
+		// ss.Broadcast(getSocketRoom(dat), msg)
+	}
+}
+
+
 func (ss *SocketService) handleLocationUpdate(conn *websocket.Conn, msg map[string]interface{}) {
 	dat, e := helper.StructToMap(msg)
 	locationData := &model.LocationData{}
@@ -238,6 +269,10 @@ func (ss *SocketService) handleLocationUpdate(conn *websocket.Conn, msg map[stri
 		//Publish the message back to location service to store it.
 		broker.CreateBroker(enum.RABBITMQ).PublishMessage(dat, ss.serviceConfig.ServiceQueue, "process-location")
 	}
+}
+
+func getClipBoardRoom(code string) string {
+	return "room-"+code
 }
 
 func getSocketRoom(userId string, tripId string) string {
@@ -385,11 +420,11 @@ func (s *SocketService) Start(port string) error {
 	if isIO {
 		s.InitServerIO()
 	} else {
-		s.InitServer()
 		s.server = &http.Server{
 			Addr:    "0.0.0.0:" + s.serviceConfig.Port,
 			Handler: handlers.CORS(handlers.AllowedOrigins([]string{"*"}))(s.router), // Allow all origins
 		}
+		s.InitServer()
 		log.Println("Running on port: ", s.server.Addr, s.serviceConfig.Port)
 		log.Fatal(http.ListenAndServe("0.0.0.0:"+s.serviceConfig.Port, nil))
 

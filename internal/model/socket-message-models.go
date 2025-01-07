@@ -11,3 +11,7 @@ type LocationData struct {
 	CurrentLat float64 `json:"currentLat"`
 	CurrentLng float64 `json:"currentLng"`
 }
+
+type ClipBoardRoomJoined struct {
+	Code string `json:"code"`
+}
