@@ -16,7 +16,7 @@ type ClipboardRoom struct {
 
 type ClipboardRoomMessage struct {
 	ID             string    `bson:"_id,omitempty" json:"_id,omitempty"`
-	Text           string    `json:"text" bson:"text"`
+	Message        string    `json:"message" bson:"message"`
 	CreatedAt      time.Time `json:"createdAt" bson:"createdAt"`
 	Sender         string    `json:"sender" bson:"sender"`
 	IsAttachment   bool      `json:"isAttachment" bson:"isAttachment"`

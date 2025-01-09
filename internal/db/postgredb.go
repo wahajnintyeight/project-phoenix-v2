@@ -170,6 +170,10 @@ func (m *PostgreDB) Update(data interface{}, update interface{}, collectionName 
 	return "MongoDB update", nil
 }
 
+func (m *PostgreDB) UpdateAndIncrement(data interface{}, update bson.M, incMap interface{}, setData bson.M, collectionName string) (string, error) {
+	return "MongoDB update", nil
+}
+
 func (m *PostgreDB) UpdateOrCreate(query interface{}, update interface{}, collectionName string) interface{} {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)

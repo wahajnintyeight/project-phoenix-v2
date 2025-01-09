@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"project-phoenix/v2/internal/broker"
+	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
@@ -192,6 +193,9 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 			case "joinClipRoom":
 				log.Println("Join Clipboard Room Event Received")
 				ss.handleClipRoomJoined(conn, msg)
+			case "sendRoomMessage":
+				log.Println("Send Room Message Event Fetched")
+				ss.handleSendRoomMessage(conn,msg)
 			default:
 				log.Println("No Action Found", action)
 			}
@@ -222,6 +226,30 @@ func (ss *SocketService) handleIdentifyUser(conn *websocket.Conn, msg map[string
 			ss.JoinRoom(getSocketRoom(identifyUser.UserId, identifyUser.TripId), conn)
 		}
 		// ss.Broadcast(getSocketRoom(dat), msg)
+	}
+}
+
+
+func (ss *SocketService) handleSendRoomMessage(conn *websocket.Conn, msg map[string]interface{}) {
+	dat, e := helper.StructToMap(msg)
+	clipBoardRoom := &model.ClipBoardSendRoomMessage{}
+	log.Println("Data:", dat)
+
+	if e != nil {
+		log.Println(e)
+		return
+	} else {
+		er := helper.InterfaceToStruct(dat["data"], &clipBoardRoom)
+		if er != nil {
+			log.Println(er)
+		}
+		
+		// log.Println("", clipBoardRoom.Code, " joined the room - ", getClipBoardRoom(clipBoardRoom.Code))
+		ss.Broadcast(getClipBoardRoom(clipBoardRoom.Code),msg,conn)
+
+		controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
+		clipboardRoomController := controller.(*controllers.ClipboardRoomController)
+		clipboardRoomController.ProcessRoomMessage(clipBoardRoom.Code,msg)
 	}
 }
 

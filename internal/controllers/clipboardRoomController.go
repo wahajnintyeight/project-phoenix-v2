@@ -115,6 +115,7 @@ func (cs *ClipboardRoomController) CreateRoom(w http.ResponseWriter, r *http.Req
 				JoinedAt: time.Now(),
 			},
 		},
+		Messages: []model.ClipboardRoomMessage{},
 	}
 
 	_,e := cs.Create(roomModelObj)
@@ -252,3 +253,40 @@ func (cs *ClipboardRoomController) ShowRoomInfo(roomId string) (int, interface{}
 	return int(enum.ROOM_FOUND), room, nil
 }
 
+func (cs *ClipboardRoomController) ProcessRoomMessage(roomCode string, data map[string]interface{}) (int, interface{}, error) {
+	log.Println("Processing room message:", data)
+
+	// // Extract message data
+	messageData := model.ClipBoardSendRoomMessage{}
+	err := helper.InterfaceToStruct(data["data"], &messageData)
+	if err != nil {
+		log.Println("Error parsing message data:", err)
+		return int(enum.ERROR), nil, err
+	}
+
+	// Create message object
+	message := map[string]interface{}{
+		"roomId":             messageData.RoomID,
+		"message":        messageData.Message,
+		"createdAt":      messageData.TimeStamp,
+		"sender":         messageData.Sender,
+		"isAttachment":   messageData.IsAttachment,
+		"attachmentType": messageData.AttachmentType,
+		"attachmentURL":  messageData.AttachmentURL,
+	}
+
+	log.Println("Message:", message)
+	// Update room with new message
+	updateData := bson.M{"messages": message}
+	setData := bson.M{"lastMessage": messageData.TimeStamp}
+	incMap := map[string]interface{}{"totalMessages": 1}
+
+	_, err = cs.DB.UpdateAndIncrement(map[string]interface{}{ "code": roomCode}, updateData, incMap, setData, cs.GetCollectionName())
+
+	if err != nil {
+		log.Println("Error saving message:", err)
+		return int(enum.ERROR), nil, err
+	}
+
+	return int(enum.ROOM_UPDATED), message, nil
+}

@@ -23,6 +23,7 @@ type DBInterface interface {
 	FindOne(interface{}, string) (bson.M, error)
 	// FindAll(interface{}, string) (string, error)
 	Update(interface{}, interface{}, string) (string, error)
+	UpdateAndIncrement(interface{}, bson.M, interface{}, bson.M, string) (string, error)
 	Delete(interface{}, string) (bool, error)
 	CreateWithTTL(interface{}, string, int) (bson.M, error)
 	//FindOneAndUpdate finds a single document and updates it, returning either the original or the updated document.

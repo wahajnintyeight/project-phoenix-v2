@@ -208,6 +208,20 @@ func (m *MongoDB) Update(query interface{}, update interface{}, collectionName s
 	return strconv.Itoa(int(res.ModifiedCount)), nil
 }
 
+func (m *MongoDB) UpdateAndIncrement(query interface{}, update bson.M, incMap interface{}, setData bson.M, collectionName string) (string, error) {
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+	collection := conn.db.Collection(collectionName)
+	updateData := bson.M{"$push": update, "$inc": incMap, "$set": setData}
+
+	log.Println("MongoDB | Update | Query: ", query, " | Collection: ", collectionName, " | Data: ", updateData)
+	res, e := collection.UpdateOne(context.Background(), query, updateData)
+	if e != nil {
+		return "", e
+	}
+	return strconv.Itoa(int(res.ModifiedCount)), nil
+}
+
 func (m *MongoDB) UpdateOrCreate(query interface{}, update interface{}, collectionName string) interface{} {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
