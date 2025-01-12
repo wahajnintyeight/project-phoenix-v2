@@ -3,7 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"log"
-	"math/rand/v2"
+	"math/rand"
 	"net/http"
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/enum"
@@ -57,7 +57,6 @@ func (cs *ClipboardRoomController) Find(query map[string]interface{}) (bson.M, e
 	return d, nil
 }
 
-
 func (cs *ClipboardRoomController) Update(w http.ResponseWriter, r *http.Request) error {
 	roomRequestBody := model.ClipboardUpdateNameRequestModel{}
 	decodeErr := json.NewDecoder(r.Body).Decode(&roomRequestBody)
@@ -67,7 +66,7 @@ func (cs *ClipboardRoomController) Update(w http.ResponseWriter, r *http.Request
 	updateData := map[string]interface{}{
 		"roomName": roomRequestBody.RoomName,
 	}
-	_, e := cs.DB.Update(map[string]interface{}{"code":roomRequestBody.Code}, updateData, cs.GetCollectionName())
+	_, e := cs.DB.Update(map[string]interface{}{"code": roomRequestBody.Code}, updateData, cs.GetCollectionName())
 	if e != nil {
 		log.Println("Error occurred while updating the device", e)
 		return e
@@ -88,11 +87,11 @@ func (cs *ClipboardRoomController) ListRooms(page int) (int, map[string]interfac
 	return int(enum.DEVICES_FOUND), map[string]interface{}{
 		"totalPages": totalPages,
 		"page":       page,
-		"rooms":    rooms,
+		"rooms":      rooms,
 	}, nil
 }
 
-func (cs *ClipboardRoomController) CreateRoom(w http.ResponseWriter, r *http.Request) (int,interface{}, error) {
+func (cs *ClipboardRoomController) CreateRoom(w http.ResponseWriter, r *http.Request) (int, interface{}, error) {
 
 	randomCode := generateCode()
 
@@ -109,35 +108,34 @@ func (cs *ClipboardRoomController) CreateRoom(w http.ResponseWriter, r *http.Req
 		return int(enum.ERROR), nil, decodeErr
 	}
 	roomModelObj := model.ClipboardRoom{
-		Code: randomCode,
+		Code:      randomCode,
 		CreatedAt: time.Now(),
-		RoomName: "Untitled " + time.Now().String(),
+		RoomName:  "Untitled " + time.Now().String(),
 		Members: []model.ClipboardRoomMember{
 			{
-				IP: ip,
-				UserAgent: userAgent,
-				JoinedAt: time.Now(), 
+				IP:         ip,
+				UserAgent:  userAgent,
+				JoinedAt:   time.Now(),
 				DeviceInfo: roomRequestBody.DeviceInfo,
 			},
 		},
 		Messages: []model.ClipboardRoomMessage{},
 	}
 
-	_,e := cs.Create(roomModelObj)
+	_, e := cs.Create(roomModelObj)
 
 	if e != nil {
 		return int(enum.ROOM_NOT_CREATED), nil, e
 	}
 
-	i, e := cs.DB.FindOne(map[string]interface{}{"code":randomCode},cs.GetCollectionName())
+	i, e := cs.DB.FindOne(map[string]interface{}{"code": randomCode}, cs.GetCollectionName())
 	if e != nil {
 		return int(enum.ROOM_NOT_CREATED), nil, nil
 	}
-	
+
 	return int(enum.ROOM_CREATED), i, nil
 
 }
-
 
 func (cs *ClipboardRoomController) JoinRoom(w http.ResponseWriter, r *http.Request) (int, interface{}, error) {
 	roomRequestBody := model.ClipboardRequestModel{}
@@ -202,15 +200,14 @@ func (cs *ClipboardRoomController) JoinRoom(w http.ResponseWriter, r *http.Reque
 
 }
 
-
 func generateCode() string {
 	charset := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	code := make([]byte, 6)
-	
+
 	for i := range code {
-		code[i] = charset[rand.IntN(len(charset))]
+		code[i] = charset[rand.Intn(len(charset))]
 	}
-	
+
 	return string(code)
 }
 
@@ -270,7 +267,7 @@ func (cs *ClipboardRoomController) ProcessRoomMessage(roomCode string, data map[
 
 	// Create message object
 	message := map[string]interface{}{
-		"roomId":             messageData.RoomID,
+		"roomId":         messageData.RoomID,
 		"message":        messageData.Message,
 		"createdAt":      messageData.TimeStamp,
 		"sender":         messageData.Sender,
@@ -286,7 +283,7 @@ func (cs *ClipboardRoomController) ProcessRoomMessage(roomCode string, data map[
 	setData := bson.M{"lastMessage": messageData.TimeStamp}
 	incMap := map[string]interface{}{"totalMessages": 1}
 
-	_, err = cs.DB.UpdateAndIncrement(map[string]interface{}{ "code": roomCode}, updateData, incMap, setData, cs.GetCollectionName())
+	_, err = cs.DB.UpdateAndIncrement(map[string]interface{}{"code": roomCode}, updateData, incMap, setData, cs.GetCollectionName())
 
 	if err != nil {
 		log.Println("Error saving message:", err)
