@@ -55,7 +55,7 @@ const (
 )
 
 var rooms = make(map[string]*Room)
-var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {return true}}
+var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
 
 var socketOnce sync.Once
 
@@ -159,21 +159,38 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Fatal("Upgrade:", err)
-	} else {
-		log.Println(conn.LocalAddr(), conn.RemoteAddr(), conn.LocalAddr().String())
-		ss.socketObj = conn
+		return
 	}
-	defer conn.Close()
+
+	log.Println(conn.LocalAddr(), conn.RemoteAddr(), conn.LocalAddr().String())
+	ss.socketObj = conn
+
+	defer func() {
+		// Clean up connection
+		for roomID, room := range rooms {
+			room.mu.Lock()
+			if _, exists := room.clients[conn]; exists {
+				ss.RemoveClient(roomID, conn)
+				log.Printf("Cleaned up client from room %s on connection close", roomID)
+			}
+			room.mu.Unlock()
+		}
+		conn.Close()
+	}()
 
 	for {
 		var msg map[string]interface{}
 		err := conn.ReadJSON(&msg)
 		if err != nil {
-			log.Println("Read error:", err)
-			// ss.RemoveClient(roomID, conn)
+			if websocket.IsUnexpectedCloseError(err) {
+				log.Printf("Connection closed unexpectedly: %v", err)
+			} else {
+				log.Printf("Read error: %v", err)
+			}
 			break
 		}
-		log.Println("JSON READ:", msg)
+
+		// log.Println("JSON READ:", msg)
 		if action, ok := msg["action"]; ok {
 			switch action {
 			case "identifyUser":
@@ -185,6 +202,7 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 				log.Println("Connected to the server | connected")
 			case "disconnect":
 				log.Println("Disconnected from the server", msg)
+				ss.handleDisconnect(conn, msg)
 			case "notice":
 				log.Println("Notice Event", msg)
 			case "locationUpdate":
@@ -195,9 +213,61 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 				ss.handleClipRoomJoined(conn, msg)
 			case "sendRoomMessage":
 				log.Println("Send Room Message Event Fetched")
-				ss.handleSendRoomMessage(conn,msg)
+				ss.handleSendRoomMessage(conn, msg)
 			default:
 				log.Println("No Action Found", action)
+			}
+		}
+	}
+}
+
+func (ss *SocketService) handleDisconnect(conn *websocket.Conn, msg map[string]interface{}) {
+	dat, err := helper.StructToMap(msg)
+	if err != nil {
+		log.Println("Error parsing disconnect message:", err)
+		return
+	}
+
+	if data, ok := dat["data"].(map[string]interface{}); ok {
+		if roomID, exists := data["roomId"].(string); exists {
+			log.Printf("Client disconnecting from room %s", roomID)
+
+			// Send close message first
+			deadline := time.Now().Add(time.Second)
+			err := conn.WriteControl(
+				websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+				deadline,
+			)
+			if err != nil {
+				log.Printf("Error sending close message: %v", err)
+			}
+
+			// Remove from room
+			ss.RemoveClient(roomID, conn)
+
+			// Set read deadline for clean shutdown
+			conn.SetReadDeadline(time.Now().Add(time.Second))
+
+			// Wait for close message or timeout
+			for {
+				_, _, err := conn.NextReader()
+				if err != nil {
+					break
+				}
+			}
+
+			// Finally close the connection
+			conn.Close()
+
+			// Cleanup empty room
+			if room, exists := rooms[roomID]; exists {
+				room.mu.Lock()
+				if len(room.clients) == 0 {
+					delete(rooms, roomID)
+					log.Printf("Room %s removed as it has no clients", roomID)
+				}
+				room.mu.Unlock()
 			}
 		}
 	}
@@ -229,7 +299,6 @@ func (ss *SocketService) handleIdentifyUser(conn *websocket.Conn, msg map[string
 	}
 }
 
-
 func (ss *SocketService) handleSendRoomMessage(conn *websocket.Conn, msg map[string]interface{}) {
 	dat, e := helper.StructToMap(msg)
 	clipBoardRoom := &model.ClipBoardSendRoomMessage{}
@@ -243,19 +312,20 @@ func (ss *SocketService) handleSendRoomMessage(conn *websocket.Conn, msg map[str
 		if er != nil {
 			log.Println(er)
 		}
-		
+
 		// log.Println("", clipBoardRoom.Code, " joined the room - ", getClipBoardRoom(clipBoardRoom.Code))
 		if clipBoardRoom.IsAnonymous == false {
-			ss.Broadcast(getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.Sender),msg,conn)
+			log.Println("Broadcasting to user clipboard room", clipBoardRoom.Sender)
+			ss.Broadcast(getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.Sender), msg, conn)
 		} else {
-			ss.Broadcast(getAnonymousClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.DeviceInfo.SlugifiedDeviceName),msg,conn)
+			log.Println("Broadcasting to anonymous clipboard room")
+			ss.Broadcast(getAnonymousClipBoardRoom(clipBoardRoom.Code), msg, conn)
 		}
 		controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
 		clipboardRoomController := controller.(*controllers.ClipboardRoomController)
-		clipboardRoomController.ProcessRoomMessage(clipBoardRoom.Code,msg)
+		clipboardRoomController.ProcessRoomMessage(clipBoardRoom.Code, msg)
 	}
 }
-
 
 func (ss *SocketService) handleClipRoomJoined(conn *websocket.Conn, msg map[string]interface{}) {
 	dat, e := helper.StructToMap(msg)
@@ -277,9 +347,9 @@ func (ss *SocketService) handleClipRoomJoined(conn *websocket.Conn, msg map[stri
 			return
 		} else {
 			if clipBoardRoom.IsAnonymous {
-				log.Println("Anonymous User has joined the room - ", getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.DeviceInfo.SlugifiedDeviceName))
-				getAnonymousClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.DeviceInfo.SlugifiedDeviceName)
-				ss.JoinRoom(getAnonymousClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.DeviceInfo.SlugifiedDeviceName), conn)
+				log.Println("Anonymous User has joined the room - ", getAnonymousClipBoardRoom(clipBoardRoom.Code))
+				getAnonymousClipBoardRoom(clipBoardRoom.Code)
+				ss.JoinRoom(getAnonymousClipBoardRoom(clipBoardRoom.Code), conn)
 			} else {
 				log.Println("User ", clipBoardRoom.UserId, " joined the room - ", getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.UserId))
 				getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.UserId)
@@ -289,7 +359,6 @@ func (ss *SocketService) handleClipRoomJoined(conn *websocket.Conn, msg map[stri
 		// ss.Broadcast(getSocketRoom(dat), msg)
 	}
 }
-
 
 func (ss *SocketService) handleLocationUpdate(conn *websocket.Conn, msg map[string]interface{}) {
 	dat, e := helper.StructToMap(msg)
@@ -309,12 +378,12 @@ func (ss *SocketService) handleLocationUpdate(conn *websocket.Conn, msg map[stri
 	}
 }
 
-func getAnonymousClipBoardRoom(code string, deviceInfo string) string {
-	return "room-"+code+"-"+deviceInfo
+func getAnonymousClipBoardRoom(code string) string {
+	return "room-" + code
 }
 
 func getClipBoardRoom(code string, userId string) string {
-	return "room-"+code+"-"+userId
+	return "room-" + code + "-" + userId
 }
 
 func getSocketRoom(userId string, tripId string) string {
@@ -405,25 +474,34 @@ func (ss *SocketService) SubscribeTopics() {
 	}
 
 }
-
 func (ss *SocketService) JoinRoom(roomID string, conn *websocket.Conn) {
+	log.Printf("Attempting to join room %s for connection %v", roomID, conn.RemoteAddr())
+
 	room, exists := rooms[roomID]
 	if !exists {
 		room = &Room{clients: make(map[*websocket.Conn]bool)}
 		rooms[roomID] = room
+		log.Printf("Created new room %s", roomID)
 	}
 
 	room.mu.Lock()
 	room.clients[conn] = true
+	clientCount := len(room.clients)
 	room.mu.Unlock()
-	log.Println("Room", rooms)
+
+	log.Printf("Successfully joined room %s. Total users in room: %d", roomID, clientCount)
 }
 
 func (ss *SocketService) RemoveClient(roomID string, conn *websocket.Conn) {
 	if room, exists := rooms[roomID]; exists {
 		room.mu.Lock()
 		delete(room.clients, conn)
+		clientCount := len(room.clients)
 		room.mu.Unlock()
+
+		log.Printf("Client removed from room %s. Remaining clients: %d", roomID, clientCount)
+	} else {
+		log.Printf("Room %s not found for client removal", roomID)
 	}
 }
 
@@ -431,17 +509,22 @@ func (ss *SocketService) Broadcast(roomID string, msg map[string]interface{}, se
 	if room, exists := rooms[roomID]; exists {
 		room.mu.Lock()
 		defer room.mu.Unlock()
+		broadcastCount := 0
 		for client := range room.clients {
 			if client != sender {
 				log.Println("Broadcasting to User", client.LocalAddr(), client.RemoteAddr())
 				err := client.WriteJSON(msg)
 				if err != nil {
 					log.Println("Write error:", err)
+					ss.RemoveClient(roomID, sender)
 					client.Close()
-					delete(room.clients, client)
+					// delete(room.clients, client)
+					log.Printf("Client disconnected. Remaining clients in room %s: %d", roomID, len(room.clients))
 				}
+				broadcastCount++
 			}
 		}
+		log.Printf("Broadcasted message to %d clients in room %s", broadcastCount, roomID)
 	}
 	return
 }
