@@ -186,6 +186,7 @@ func (cs *ClipboardRoomController) JoinRoom(w http.ResponseWriter, r *http.Reque
 		IP:        ip,
 		UserAgent: userAgent,
 		JoinedAt:  time.Now(),
+		DeviceInfo: roomRequestBody.DeviceInfo,
 	}
 
 	roomModel.Members = append(roomModel.Members, newMember)
