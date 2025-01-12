@@ -66,6 +66,7 @@ type CaptureScreenDeviceQueryModel struct {
 
 type ClipboardRequestModel struct {
 	Code string `json:"code" bson:"code"`
+	DeviceInfo   string  `json:"deviceInfo" bson:"deviceInfo"`
 }
 
 type ClipboardUpdateNameRequestModel struct {

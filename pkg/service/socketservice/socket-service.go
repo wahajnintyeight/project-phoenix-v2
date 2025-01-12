@@ -245,8 +245,11 @@ func (ss *SocketService) handleSendRoomMessage(conn *websocket.Conn, msg map[str
 		}
 		
 		// log.Println("", clipBoardRoom.Code, " joined the room - ", getClipBoardRoom(clipBoardRoom.Code))
-		ss.Broadcast(getClipBoardRoom(clipBoardRoom.Code),msg,conn)
-
+		if clipBoardRoom.IsAnonymous == false {
+			ss.Broadcast(getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.Sender),msg,conn)
+		} else {
+			ss.Broadcast(getAnonymousClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.DeviceInfo.SlugifiedDeviceName),msg,conn)
+		}
 		controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
 		clipboardRoomController := controller.(*controllers.ClipboardRoomController)
 		clipboardRoomController.ProcessRoomMessage(clipBoardRoom.Code,msg)
@@ -273,8 +276,15 @@ func (ss *SocketService) handleClipRoomJoined(conn *websocket.Conn, msg map[stri
 			defer conn.Close()
 			return
 		} else {
-			log.Println("User ", clipBoardRoom.Code, " joined the room - ", getClipBoardRoom(clipBoardRoom.Code))
-			ss.JoinRoom(getClipBoardRoom(clipBoardRoom.Code), conn)
+			if clipBoardRoom.IsAnonymous {
+				log.Println("Anonymous User has joined the room - ", getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.DeviceInfo.SlugifiedDeviceName))
+				getAnonymousClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.DeviceInfo.SlugifiedDeviceName)
+				ss.JoinRoom(getAnonymousClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.DeviceInfo.SlugifiedDeviceName), conn)
+			} else {
+				log.Println("User ", clipBoardRoom.UserId, " joined the room - ", getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.UserId))
+				getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.UserId)
+				ss.JoinRoom(getClipBoardRoom(clipBoardRoom.Code, clipBoardRoom.UserId), conn)
+			}
 		}
 		// ss.Broadcast(getSocketRoom(dat), msg)
 	}
@@ -299,8 +309,12 @@ func (ss *SocketService) handleLocationUpdate(conn *websocket.Conn, msg map[stri
 	}
 }
 
-func getClipBoardRoom(code string) string {
-	return "room-"+code
+func getAnonymousClipBoardRoom(code string, deviceInfo string) string {
+	return "room-"+code+"-"+deviceInfo
+}
+
+func getClipBoardRoom(code string, userId string) string {
+	return "room-"+code+"-"+userId
 }
 
 func getSocketRoom(userId string, tripId string) string {

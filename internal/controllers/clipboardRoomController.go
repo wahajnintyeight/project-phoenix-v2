@@ -103,7 +103,11 @@ func (cs *ClipboardRoomController) CreateRoom(w http.ResponseWriter, r *http.Req
 	}
 	userAgent := r.Header.Get("User-Agent")
 
-
+	roomRequestBody := model.ClipboardRequestModel{}
+	decodeErr := json.NewDecoder(r.Body).Decode(&roomRequestBody)
+	if decodeErr != nil {
+		return int(enum.ERROR), nil, decodeErr
+	}
 	roomModelObj := model.ClipboardRoom{
 		Code: randomCode,
 		CreatedAt: time.Now(),
@@ -112,7 +116,8 @@ func (cs *ClipboardRoomController) CreateRoom(w http.ResponseWriter, r *http.Req
 			{
 				IP: ip,
 				UserAgent: userAgent,
-				JoinedAt: time.Now(),
+				JoinedAt: time.Now(), 
+				DeviceInfo: roomRequestBody.DeviceInfo,
 			},
 		},
 		Messages: []model.ClipboardRoomMessage{},
@@ -153,8 +158,7 @@ func (cs *ClipboardRoomController) JoinRoom(w http.ResponseWriter, r *http.Reque
 		"code": roomRequestBody.Code,
 		"members": map[string]interface{}{
 			"$elemMatch": map[string]interface{}{
-				"ip": ip,
-				"userAgent": userAgent,
+				"deviceInfo": roomRequestBody.DeviceInfo,
 			},
 		},
 	}, cs.GetCollectionName())
@@ -273,6 +277,7 @@ func (cs *ClipboardRoomController) ProcessRoomMessage(roomCode string, data map[
 		"isAttachment":   messageData.IsAttachment,
 		"attachmentType": messageData.AttachmentType,
 		"attachmentURL":  messageData.AttachmentURL,
+		"deviceInfo":     messageData.DeviceInfo.SlugifiedDeviceName,
 	}
 
 	log.Println("Message:", message)

@@ -29,4 +29,5 @@ type ClipboardRoomMember struct {
 	IP             string    `bson:"ip" json:"ip"`
 	UserAgent      string    `bson:"userAgent" json:"userAgent"`
 	JoinedAt       time.Time `bson:"joinedAt" json:"joinedAt"`
+	DeviceInfo     string    `bson:"deviceInfo" json:"deviceInfo"`
 }
