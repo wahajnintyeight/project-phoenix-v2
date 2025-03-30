@@ -18,5 +18,7 @@ docker build -t ppv2-api-gateway-grpc -f pkg/service/apigateway-grpc/Dockerfile 
 docker run --name ppv2-api-gateway-grpc --restart always -p 8886:8886 ppv2-api-gateway-grpc
 
 
+# Quick Build and Deploy
 
+docker stop ppv2-api-gateway && docker rm ppv2-api-gateway && docker rmi ppv2-apigateway && cd  /var/www/project-phoenix-v2 &&  docker build -t ppv2-apigateway -f pkg/service/apigateway/Dockerfile .
 
