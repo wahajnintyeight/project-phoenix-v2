@@ -108,7 +108,20 @@ func (sc *SessionController) DoesSessionIDExist(sessionID string) (interface{}, 
 	// log.Println("Session Data", sessionData, err)
 	if err != nil {
 		log.Println("Error fetching session from DB", err)
-		return false, err
+		sessionData, err = sc.DB.FindOne(map[string]interface{}{"sessionID": sessionID}, sc.GetCollectionName())
+		if err != nil {
+			log.Println("Error fetching session from DB", err)
+			return false, err
+		} else {
+			hours := 2
+			_, err := cache.GetInstance().SetWithExpiry(sessionKey, map[string]interface{}{"sessionID": sessionID}, hours)
+			if err != nil {
+				log.Println("Error adding session to Redis", err)
+				return false, err
+			} else {
+				return sessionData, nil
+			}
+		}
 	} else {
 		if sessionData != nil {
 			return sessionData, nil
