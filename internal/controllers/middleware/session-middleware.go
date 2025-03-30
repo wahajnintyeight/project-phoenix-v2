@@ -73,6 +73,7 @@ func (sm *SessionMiddleware) Middleware(next http.Handler) http.Handler {
 }
 
 func (sm *SessionMiddleware) extractToken(r *http.Request) (string, error) {
+	log.Println("All Headers", r.Header)
 	sessionID := r.Header.Get("sessionId")
 	log.Println("Extract Token - Session ID", sessionID)
 	if sessionID == "" {

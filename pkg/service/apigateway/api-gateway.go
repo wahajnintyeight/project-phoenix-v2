@@ -148,13 +148,14 @@ func (s *APIGatewayService) registerRoutes() {
 		})
 	}
 
-	allowedOrigins := []string{"http://localhost:5173", "electron://altair"}
+	allowedOrigins := []string{"http://localhost:5173","http://localhost:5173/", "electron://altair"}
 
     // Set up CORS middleware
     corsMiddleware := handlers.CORS(
         handlers.AllowedOrigins(allowedOrigins),
         handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"}), // Adjust methods as needed
         handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}), // Adjust headers as needed
+		handlers.AllowCredentials(),
     )
 
     // Apply CORS middleware to the router
