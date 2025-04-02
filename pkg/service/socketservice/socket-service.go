@@ -191,6 +191,7 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 		}
 
 		// log.Println("JSON READ:", msg)
+		log.Println("[DEBUG] Message Received from client: ", msg)
 		if action, ok := msg["action"]; ok {
 			switch action {
 			case "identifyUser":
