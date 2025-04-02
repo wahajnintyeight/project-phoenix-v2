@@ -487,10 +487,10 @@ func (ss *SocketService) JoinRoom(roomID string, conn *websocket.Conn) {
 
 	room.mu.Lock()
 	room.clients[conn] = true
-	clientCount := len(room.clients)
+	// clientCount := len(room.clients)
 	room.mu.Unlock()
 
-	log.Printf("Successfully joined room %s. Total users in room: %d", roomID, clientCount)
+	log.Printf("Successfully joined room %s.", roomID)
 }
 
 func (ss *SocketService) RemoveClient(roomID string, conn *websocket.Conn) {
