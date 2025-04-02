@@ -232,6 +232,20 @@ func (ss *SocketService) handleDisconnect(conn *websocket.Conn, msg map[string]i
 	if data, ok := dat["data"].(map[string]interface{}); ok {
 		if roomID, exists := data["roomId"].(string); exists {
 			log.Printf("Client disconnecting from room %s", roomID)
+			
+			// Check if this is a clipboard room - we need to translate the roomId
+			if code, hasCode := data["code"].(string); hasCode {
+				// Check if it's anonymous or not
+				isAnonymous, _ := data["isAnonymous"].(bool)
+				userId, _ := data["userId"].(string)
+				
+				if isAnonymous {
+					roomID = getAnonymousClipBoardRoom(code)
+				} else {
+					roomID = getClipBoardRoom(code, userId)
+				}
+				log.Printf("Translated roomId to %s", roomID)
+			}
 
 			// Send close message first
 			deadline := time.Now().Add(time.Second)
@@ -485,10 +499,18 @@ func (ss *SocketService) JoinRoom(roomID string, conn *websocket.Conn) {
 		log.Printf("Created new room %s", roomID)
 	}
 
+	// Use defer to ensure the mutex is always unlocked
 	room.mu.Lock()
-	room.clients[conn] = true
-	// clientCount := len(room.clients)
-	room.mu.Unlock()
+	defer room.mu.Unlock()
+	
+	// Check if connection is already in room
+	if _, already := room.clients[conn]; already {
+		log.Printf("Connection %v is already in room %s", conn.RemoteAddr(), roomID)
+	} else {
+		room.clients[conn] = true
+		clientCount := len(room.clients)
+		log.Printf("Added to room %s. Current clients: %d", roomID, clientCount)
+	}
 
 	log.Printf("Successfully joined room %s.", roomID)
 }
@@ -496,11 +518,21 @@ func (ss *SocketService) JoinRoom(roomID string, conn *websocket.Conn) {
 func (ss *SocketService) RemoveClient(roomID string, conn *websocket.Conn) {
 	if room, exists := rooms[roomID]; exists {
 		room.mu.Lock()
-		delete(room.clients, conn)
-		clientCount := len(room.clients)
-		room.mu.Unlock()
-
-		log.Printf("Client removed from room %s. Remaining clients: %d", roomID, clientCount)
+		defer room.mu.Unlock()
+		
+		if _, found := room.clients[conn]; found {
+			delete(room.clients, conn)
+			clientCount := len(room.clients)
+			log.Printf("Client removed from room %s. Remaining clients: %d", roomID, clientCount)
+		} else {
+			log.Printf("Client not found in room %s", roomID)
+		}
+		
+		// Cleanup empty room
+		if len(room.clients) == 0 {
+			delete(rooms, roomID)
+			log.Printf("Room %s removed as it has no clients", roomID)
+		}
 	} else {
 		log.Printf("Room %s not found for client removal", roomID)
 	}
