@@ -504,6 +504,7 @@ func (ss *SocketService) JoinRoom(roomID string, conn *websocket.Conn) {
 		log.Printf("Created new room %s", roomID)
 	}
 
+	ss.RemoveClient(roomID, conn)
 	// Use defer to ensure the mutex is always unlocked
 	room.mu.Lock()
 	defer room.mu.Unlock()
