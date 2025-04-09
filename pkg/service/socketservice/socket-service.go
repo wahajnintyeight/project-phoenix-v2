@@ -182,11 +182,13 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 		var msg map[string]interface{}
 		err := conn.ReadJSON(&msg)
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err) {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
 				log.Printf("Connection closed unexpectedly: %v", err)
-				// Remove from room
-				log.Println("Message Received: ", msg)
-				log.Println("Connection: ", conn)
+				// Handle code 1006 (abnormal closure) specifically
+				if websocket.IsCloseError(err, websocket.CloseAbnormalClosure) {
+					log.Printf("Abnormal closure (1006) detected. Client may have disconnected without proper close frame.")
+				}
+				// Don't immediately remove the client - let the defer function handle cleanup
 			} else {
 				log.Printf("Read error: %v", err)
 			}
@@ -552,12 +554,18 @@ func (ss *SocketService) Broadcast(roomID string, msg map[string]interface{}, se
 				err := client.WriteJSON(msg)
 				if err != nil {
 					log.Println("Write error:", err)
-					ss.RemoveClient(roomID, sender)
-					client.Close()
-					// delete(room.clients, client)
-					log.Printf("Client disconnected. Remaining clients in room %s: %d", roomID, len(room.clients))
+					// Don't remove client immediately on write error - it might be temporary
+					// Instead, check if it's a fatal error
+					if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+						log.Printf("Client connection appears to be closed, removing from room %s", roomID)
+						delete(room.clients, client)
+						client.Close()
+					} else {
+						log.Printf("Non-fatal write error to client: %v", err)
+					}
+				} else {
+					broadcastCount++
 				}
-				broadcastCount++
 			}
 		}
 		log.Printf("Broadcasted message to %d clients in room %s", broadcastCount, roomID)
