@@ -184,6 +184,8 @@ func (ss *SocketService) HandleConnections(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err) {
 				log.Printf("Connection closed unexpectedly: %v", err)
+				// Remove from room
+				log.Println("Message Received: ", msg)
 			} else {
 				log.Printf("Read error: %v", err)
 			}
