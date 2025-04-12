@@ -22,6 +22,7 @@ type ClipboardRoomMessage struct {
 	IsAttachment   bool      `json:"isAttachment" bson:"isAttachment"`
 	AttachmentType string    `json:"attachmentType" bson:"attachmentType"`
 	AttachmentURL  string    `json:"attachmentURL" bson:"attachmentURL"`
+	DeviceInfo     string    `json:"deviceInfo" bson:"deviceInfo"`
 }
 
 type ClipboardRoomMember struct {
