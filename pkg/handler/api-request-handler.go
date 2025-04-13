@@ -383,6 +383,16 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w,code, d)
 		}
 		break
+	case apiRequestHandlerObj.Endpoint + "/room/messages":
+		controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
+		clipboardRoomController := controller.(*controllers.ClipboardRoomController)
+		code, data, e := clipboardRoomController.GetRoomMessages(w, r)
+		if e != nil {
+			response.SendResponse(w, code, e)
+		} else {
+			response.SendResponse(w, code, data)
+		}
+		break
 	default:
 		http.NotFound(w, r)
 	}

@@ -9,6 +9,7 @@ import (
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
 	"project-phoenix/v2/pkg/helper"
+	"strconv"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -183,9 +184,9 @@ func (cs *ClipboardRoomController) JoinRoom(w http.ResponseWriter, r *http.Reque
 
 	// Create new member
 	newMember := model.ClipboardRoomMember{
-		IP:        ip,
-		UserAgent: userAgent,
-		JoinedAt:  time.Now(),
+		IP:         ip,
+		UserAgent:  userAgent,
+		JoinedAt:   time.Now(),
 		DeviceInfo: roomRequestBody.DeviceInfo,
 	}
 
@@ -292,4 +293,69 @@ func (cs *ClipboardRoomController) ProcessRoomMessage(roomCode string, data map[
 	}
 
 	return int(enum.ROOM_UPDATED), message, nil
+}
+func (cs *ClipboardRoomController) GetRoomMessages(w http.ResponseWriter, r *http.Request) (int, interface{}, error) {
+	roomCode := r.URL.Query().Get("roomCode")
+	page := r.URL.Query().Get("page")
+
+	pageNum := 1
+	if page != "" {
+		var err error
+		pageNum, err = strconv.Atoi(page)
+		if err != nil {
+			pageNum = 1
+		}
+	}
+
+	// Calculate skip based on page number (15 messages per page)
+	totalMessagesLimit := 5
+	skip := (pageNum - 1) * totalMessagesLimit
+	limit := totalMessagesLimit
+
+	// Find the room first
+	roomQuery := map[string]interface{}{"code": roomCode}
+	room, e := cs.Find(roomQuery)
+	if e != nil {
+		return int(enum.ROOM_NOT_FOUND), nil, e
+	}
+
+	// Get room as a ClipboardRoom struct
+	var clipboardRoom model.ClipboardRoom
+	err := helper.InterfaceToStruct(room, &clipboardRoom)
+	if err != nil {
+		return int(enum.ERROR), nil, err
+	}
+
+	// Get total messages count
+	totalMessages := len(clipboardRoom.Messages)
+
+	// Apply pagination to messages
+	startIndex := totalMessages - skip - limit
+	endIndex := totalMessages - skip
+
+	if startIndex < 0 {
+		startIndex = 0
+	}
+	if endIndex > totalMessages {
+		endIndex = totalMessages
+	}
+	if endIndex < 0 {
+		endIndex = 0
+	}
+
+	// Create a paginated version of the room
+	if startIndex < endIndex {
+		clipboardRoom.Messages = clipboardRoom.Messages[startIndex:endIndex]
+	} else {
+		clipboardRoom.Messages = []model.ClipboardRoomMessage{}
+	}
+
+	response := map[string]interface{}{
+		"totalMessages": totalMessages,
+		"page":          pageNum,
+		"messages":      clipboardRoom.Messages,
+		"limit":         limit,
+	}
+
+	return int(enum.ROOM_FOUND), response, nil
 }
