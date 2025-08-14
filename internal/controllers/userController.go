@@ -209,7 +209,7 @@ func (u *UserController) GoogleLogin(w http.ResponseWriter, r *http.Request) (in
 				return int(enum.ERROR), "Error while creating user", nil, nil
 			} else {
 				userModel.ID = helper.InterfaceToString(returnedUserID)
-				u.HandleLoginActivity(userModel, model.LoginModel{FcmKey: generatedToken}, r, generatedToken)
+				u.HandleLoginActivity(userModel, model.LoginModel{FcmKey: googleLoginBody.FcmToken}, r, generatedToken)
 
 				return int(enum.USER_LOGGED_IN), "", helper.MergeStructAndMap(userModel, map[string]interface{}{"token": generatedToken}), nil
 			}

@@ -13,6 +13,7 @@ type LoginModel struct {
 
 type GoogleLoginModel struct {
 	Token string `json:"token"`
+	FcmToken string `json:"fcmKey"`
 }
 
 type GoogleUserModel struct {
