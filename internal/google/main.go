@@ -27,7 +27,7 @@ func GetAPIKey() string {
 func SearchYoutube(searchQuery string, maxResults int64, nextPage string, prevPage string) (interface{}, error){
 
 	ctx := context.Background()
-	logger.Println("Creating YouTube service using API Key:", GetAPIKey())
+	logger.Println("Creating YouTube service")
 	service, err := youtube.NewService(ctx, option.WithAPIKey(GetAPIKey()))
 	if err != nil {
 		log.Fatalf("Error creating YouTube service: %v", err)
