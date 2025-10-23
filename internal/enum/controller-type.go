@@ -12,4 +12,6 @@ const (
 	LoginActivityController
 	CaptureScreenController
 	ClipboardRoomController
+	GoogleController
+
 )

@@ -28,6 +28,7 @@ var (
 	loginActivityControllerInstance   *LoginActivityController
 	captureScreenControllerInstance   *CaptureScreenController
 	clipboardRoomControllerInstance   *ClipboardRoomController
+	googleControllerInstance   		  *GoogleController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
@@ -185,6 +186,14 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			}
 		}
 		return clipboardRoomControllerInstance
+	case enum.GoogleController:
+		if googleControllerInstance == nil {
+			log.Println("Initialize Google Controller")
+			googleControllerInstance = &GoogleController{
+				DB: nil,
+			}
+		}
+		return googleControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil

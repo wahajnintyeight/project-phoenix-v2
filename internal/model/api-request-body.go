@@ -74,3 +74,16 @@ type ClipboardUpdateNameRequestModel struct {
 	Code string `json:"code" bson:"code"`
 	RoomName string `json:"roomName" bson:"roomName"`
 }
+
+type GoogleSearchVideoRequestModel struct {
+	Query string `json:"query" bson:"query"`
+	MaxResults int `json:"maxResults" bson:"maxResults"`
+	NextPage string `json:"nextPage" bson:"nextPage"`
+	PrevPage string `json:"prevPage" bson:"prevPage"`
+}
+
+type GoogleDownloadVideoRequestModel struct {
+	VideoId string `json:"videoId" bson:"videoId"`
+	YoutubeURL string `json:"youtubeURL" bson:"youtubeURL"`
+	Format string  `json:"format" bson:"format"`
+}

@@ -72,12 +72,12 @@ func (apiHandler APIRequestHandler) DELETERoutes(w http.ResponseWriter, r *http.
 		log.Println("Delete Device")
 		controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
 		captureScreenController := controller.(*controllers.CaptureScreenController)
-		code, err := captureScreenController.DeleteDevice(w,r)
+		code, err := captureScreenController.DeleteDevice(w, r)
 		if err != nil {
-			response.SendErrorResponse(w,code,err)
+			response.SendErrorResponse(w, code, err)
 			return
 		}
-		response.SendResponse(w,code,nil)
+		response.SendResponse(w, code, nil)
 		return
 	default:
 		http.NotFound(w, r)
@@ -289,12 +289,24 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 		log.Println("Join Room")
 		controller := controllers.GetControllerInstance(enum.ClipboardRoomController, enum.MONGODB)
 		clipboardRoomController := controller.(*controllers.ClipboardRoomController)
-		_, roomData, e := clipboardRoomController.JoinRoom(w,r)
+		_, roomData, e := clipboardRoomController.JoinRoom(w, r)
 		if e != nil {
 			response.SendResponse(w, int(enum.ROOM_NOT_FOUND), e)
 			return
 		} else {
 			response.SendResponse(w, int(enum.ROOM_JOINED), roomData)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/search-yt-videos":
+		log.Println("Search YT Videos")
+		controller := controllers.GetControllerInstance(enum.GoogleController, enum.MONGODB)
+		googleController := controller.(*controllers.GoogleController)
+		_, res, e := googleController.SearchYoutubeVideos(w, r)
+		if e != nil {
+			response.SendResponse(w, int(enum.DATA_NOT_FETCHED), e)
+			return
+		} else {
+			response.SendResponse(w, int(enum.DATA_FETCHED), res)
 			return
 		}
 	default:
@@ -363,7 +375,7 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		if e != nil {
 			response.SendErrorResponse(w, code, e)
 		} else {
-			response.SendResponse(w,code,d)
+			response.SendResponse(w, code, d)
 		}
 		break
 	case apiRequestHandlerObj.Endpoint + "/device":
@@ -373,14 +385,14 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		deviceId := r.URL.Query().Get("deviceId")
 
 		if deviceId == "" {
-			response.SendErrorResponse(w,int(enum.DEVICE_ID_NOT_SET), nil)
+			response.SendErrorResponse(w, int(enum.DEVICE_ID_NOT_SET), nil)
 			break
 		}
 		code, d, e := screenCaptureController.ShowDeviceInfo(deviceId)
 		if e != nil {
 			response.SendErrorResponse(w, code, e)
 		} else {
-			response.SendResponse(w,code, d)
+			response.SendResponse(w, code, d)
 		}
 		break
 	case apiRequestHandlerObj.Endpoint + "/room/messages":
