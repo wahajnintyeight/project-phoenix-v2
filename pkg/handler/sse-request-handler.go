@@ -9,7 +9,9 @@ import (
 )
 
 type SSERequestHandler struct {
-	clients      map[chan map[string]interface{}]bool
+	clients map[chan map[string]interface{}]bool
+	// Add client routing support
+	clientRoutes map[chan map[string]interface{}]map[string]bool // client -> route keys
 	addClient    chan chan map[string]interface{}
 	removeClient chan chan map[string]interface{}
 	broadcast    chan map[string]interface{}
@@ -21,6 +23,7 @@ var sseRequestHandlerObj SSERequestHandler
 func NewSSERequestHandler() *SSERequestHandler {
 	handler := &SSERequestHandler{
 		clients:      make(map[chan map[string]interface{}]bool),
+		clientRoutes: make(map[chan map[string]interface{}]map[string]bool),
 		addClient:    make(chan chan map[string]interface{}),
 		removeClient: make(chan chan map[string]interface{}),
 		broadcast:    make(chan map[string]interface{}),
@@ -44,6 +47,7 @@ func (handler *SSERequestHandler) Run() {
 			handler.mutex.Lock()
 			if _, ok := handler.clients[client]; ok {
 				delete(handler.clients, client)
+				delete(handler.clientRoutes, client)
 				close(client)
 				log.Println("Client disconnected")
 			}
@@ -51,16 +55,33 @@ func (handler *SSERequestHandler) Run() {
 		case msg := <-handler.broadcast:
 			log.Println("Broadcast message received:", msg["message"])
 			handler.mutex.Lock()
-			log.Println("Clients:", handler.clients)
+
+			// Check if message has routing info
+			routeKey, hasRoute := msg["routeKey"].(string)
+
 			for client := range handler.clients {
-				log.Println("Client found", client)
-				select {
-				case client <- msg:
-					log.Println("Message sent to client:", msg)
-				default:
-					close(client)
-					delete(handler.clients, client)
-					log.Println("Client disconnected due to failure")
+				shouldSend := true
+
+				// If message has routing, check if client subscribed to this route
+				if hasRoute {
+					if routes, exists := handler.clientRoutes[client]; exists {
+						shouldSend = routes[routeKey]
+					} else {
+						shouldSend = false // Client not subscribed to any routes
+					}
+				}
+				// If no routing info, broadcast to all (backward compatibility)
+
+				if shouldSend {
+					select {
+					case client <- msg:
+						log.Println("Message sent to client:", msg)
+					default:
+						close(client)
+						delete(handler.clients, client)
+						delete(handler.clientRoutes, client)
+						log.Println("Client disconnected due to failure")
+					}
 				}
 			}
 			handler.mutex.Unlock()
@@ -113,7 +134,39 @@ func (handler *SSERequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// Public method to add client with route subscription
+func (handler *SSERequestHandler) AddClientWithRoute(routeKey string) chan map[string]interface{} {
+	clientChan := make(chan map[string]interface{})
+	handler.addClient <- clientChan
+	handler.SubscribeClientToRoute(clientChan, routeKey)
+	return clientChan
+}
+
+// Public method to remove client
+func (handler *SSERequestHandler) RemoveClient(clientChan chan map[string]interface{}) {
+	handler.removeClient <- clientChan
+}
+
 func (handler *SSERequestHandler) Broadcast(message map[string]interface{}) {
 	handler.broadcast <- message
 	log.Println("Broadcast message:", message)
+}
+
+// Subscribe client to specific routes (for targeted messaging)
+func (handler *SSERequestHandler) SubscribeClientToRoute(client chan map[string]interface{}, routeKey string) {
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+
+	if handler.clientRoutes[client] == nil {
+		handler.clientRoutes[client] = make(map[string]bool)
+	}
+	handler.clientRoutes[client][routeKey] = true
+	log.Printf("Client subscribed to route: %s", routeKey)
+}
+
+// Broadcast to specific route only
+func (handler *SSERequestHandler) BroadcastToRoute(routeKey string, message map[string]interface{}) {
+	message["routeKey"] = routeKey
+	handler.broadcast <- message
+	log.Printf("Broadcasting to route %s: %v", routeKey, message)
 }

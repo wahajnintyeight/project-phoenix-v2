@@ -14,6 +14,17 @@
           "topicHandler": "HandleCaptureDeviceData"
         }
       ]
+    },
+    {
+      "name": "video-download-service",
+      "exchange": "video-download-exchange",
+      "queue": "video-download-queue",
+      "subscribedTopics": [
+        {
+          "topicName": "process-yt-video",
+          "topicHandler": "HandleVideoDownload"
+        }
+      ]
     }
   ]
 }

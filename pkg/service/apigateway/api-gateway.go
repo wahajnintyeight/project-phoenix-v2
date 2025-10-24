@@ -104,6 +104,7 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/handle-webhook",
 		s.serviceConfig.EndpointPrefix + "/return-device-name",
 		s.serviceConfig.EndpointPrefix + "/search-yt-videos",
+		s.serviceConfig.EndpointPrefix + "/download-yt-videos",
 	}
 	customMiddlewareWrapper := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -309,6 +309,18 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, int(enum.DATA_FETCHED), res)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/download-yt-videos":
+		log.Println("Download YT Videos")
+		controller := controllers.GetControllerInstance(enum.GoogleController, enum.MONGODB)
+		googleController := controller.(*controllers.GoogleController)
+		_, res, e := googleController.DownloadYoutubeVideos(w, r)
+		if e != nil {
+			response.SendResponse(w, int(enum.DATA_NOT_FETCHED), e)
+			return
+		} else {
+			response.SendResponse(w, int(enum.DATA_FETCHED), res)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}

@@ -3,6 +3,7 @@ package service
 import (
 	// "context"
 
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,6 +14,7 @@ import (
 
 	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/enum"
+	"project-phoenix/v2/internal/google"
 	"project-phoenix/v2/internal/model"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/handler"
@@ -169,7 +171,7 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 
 	deviceDataMap["isOnline"] = true
 	deviceDataMap["lastOnline"] = time.Now().UTC()
-	
+
 	updateData := map[string]interface{}{}
 
 	switch messageType {
@@ -225,6 +227,81 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 
 }
 
+// HandleVideoDownload processes video download requests from the queue
+func (sse *SSEService) HandleVideoDownload(p microBroker.Event) error {
+	log.Println("HandleVideoDownload called")
+
+	data := make(map[string]interface{})
+	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
+		return fmt.Errorf("error unmarshalling video download data: %v", err)
+	}
+
+	downloadId := data["downloadId"].(string)
+	videoId := data["videoId"].(string)
+	format := data["format"].(string)
+	bitRate := data["bitRate"].(string)
+
+	log.Printf("Processing video download - ID: %s, VideoID: %s", downloadId, videoId)
+
+	// Send initial status to SSE clients
+	sse.sseHandler.BroadcastToRoute(fmt.Sprintf("download-%s", downloadId), map[string]interface{}{
+		"downloadId": downloadId,
+		"status":     "processing",
+		"progress":   0,
+		"message":    "Starting video download...",
+		"type":       "download_progress",
+	})
+
+	// Process the actual video download
+	go sse.processVideoDownload(downloadId, videoId, format, bitRate)
+
+	return nil
+}
+
+// processVideoDownload handles the actual video download with progress updates
+func (sse *SSEService) processVideoDownload(downloadId, videoId string, format string, bitRate string) {
+	routeKey := fmt.Sprintf("download-%s", downloadId)
+
+	// Send progress update
+	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+		"downloadId": downloadId,
+		"status":     "downloading",
+		"progress":   25,
+		"message":    "Initiating download...",
+		"type":       "download_progress",
+	})
+
+	// Call the actual download function
+	fileContent, filename, err := google.DownloadYoutubeVideoToBuffer(videoId, format, bitRate)
+	if err != nil {
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "error",
+			"progress":   0,
+			"message":    fmt.Sprintf("Download failed: %v", err),
+			"type":       "download_error",
+		})
+		log.Printf("Download %s failed: %v", downloadId, err)
+		return
+	}
+
+	base64Content := base64.StdEncoding.EncodeToString(fileContent)
+	// Send completion message with file blob
+	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+		"downloadId": downloadId,
+		"status":     "completed",
+		"progress":   100,
+		"message":    "Download completed successfully!",
+		"type":       "download_complete",
+		"filename":   filename,
+		"fileSize":   len(fileContent),
+		"fileData":   base64Content, // Base64 encoded video
+		"mimeType":   google.GetStreamMimeType(format),
+	})
+
+	log.Printf("Download %s completed successfully", downloadId)
+}
+
 func (ls *SSEService) InitServiceConfig() {
 	serviceConfig, er := internal.ReturnServiceConfig("sse-service")
 	if er != nil {
@@ -252,7 +329,12 @@ func (sse *SSEService) Start(port string) error {
 
 	// Create a new router and register the SSE handler
 	sse.router = mux.NewRouter()
+
+	// Generic events endpoint (existing functionality)
 	sse.router.HandleFunc("/events", sse.sseHandler.ServeHTTP)
+
+	// Route-specific endpoints for different projects
+	sse.router.HandleFunc("/events/{route}", sse.handleRouteSpecificSSE)
 
 	sse.server = &http.Server{
 		Addr:    ":" + port,
@@ -265,6 +347,49 @@ func (sse *SSEService) Start(port string) error {
 
 	return nil
 
+}
+
+// Handle route-specific SSE connections
+func (sse *SSEService) handleRouteSpecificSSE(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	route := vars["route"]
+
+	// Set headers for SSE
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	log.Printf("Route-specific SSE connection for route: %s", route)
+
+	// Add client with route subscription using public method
+	clientChan := sse.sseHandler.AddClientWithRoute(route)
+
+	// Remove client when connection is closed
+	defer func() {
+		sse.sseHandler.RemoveClient(clientChan)
+	}()
+
+	for {
+		select {
+		case msg := <-clientChan:
+			// Serialize the message to JSON
+			jsonData, err := json.Marshal(msg)
+			if err != nil {
+				log.Printf("Error marshalling message to JSON: %v", err)
+				return
+			}
+			// Send the JSON data as a string
+			_, err = fmt.Fprintf(w, "data: %s\n\n", jsonData)
+			if err != nil {
+				log.Printf("Error sending message to client: %v", err)
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		}
+	}
 }
 
 func (sse *SSEService) Stop() error {

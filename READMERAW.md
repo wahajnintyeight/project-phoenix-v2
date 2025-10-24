@@ -26,3 +26,6 @@ git pull && docker stop ppv2-api-gateway && docker rm ppv2-api-gateway && docker
 
 Socket Service
 git pull && docker stop ppv2-socket-service && docker rm ppv2-socket-service && docker rmi ppv2-socket-service &&   docker build -t ppv2-socket-service -f pkg/service/socketservice/Dockerfile . && docker run --name ppv2-socket-service -d --restart always -p 8884:8884 ppv2-socket-service
+
+SSE Service
+git pull && docker stop ppv2-sse-service && docker rm ppv2-sse-service && docker rmi ppv2-sse-service &&  docker build -t ppv2-sse-service -f pkg/service/sse-service/Dockerfile . && docker run --name ppv2-sse-service -d --restart always -p 8882:8882 ppv2-sse-service
