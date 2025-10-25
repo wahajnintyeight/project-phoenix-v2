@@ -28,16 +28,17 @@ var (
 
 func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 	godotenv.Load()
-	
+	ytDLPPath := os.Getenv("YT_DLP_BIN")
+	log.Println("Path YT_DLP_BIN: ", ytDLPPath) 
 	// Try explicit YT_DLP_BIN first
-	if bin := os.Getenv("YT_DLP_BIN"); strings.TrimSpace(bin) != "" {
-		if cmd, err := validateAndBuild(bin, args); err == nil {
+	if strings.TrimSpace(ytDLPPath) != "" {
+		if cmd, err := validateAndBuild(ytDLPPath, args); err == nil {
 			return cmd, nil
 		}
 	}
 	
 	// Try direct binary lookup
-	candidates := []string{"yt-dlp", "yt_dlp"}
+	candidates := []string{"yt-dlp", "yt_dlp","/usr/local/bin/yt-dlp","/usr/bin/yt-dlp"}
 	for _, name := range candidates {
 		if path, err := exec.LookPath(name); err == nil {
 			if cmd, err := validateAndBuild(path, args); err == nil {
