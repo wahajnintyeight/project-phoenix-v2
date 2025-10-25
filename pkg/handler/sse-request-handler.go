@@ -53,7 +53,7 @@ func (handler *SSERequestHandler) Run() {
 			}
 			handler.mutex.Unlock()
 		case msg := <-handler.broadcast:
-			log.Println("Broadcast message received:", msg["message"])
+			log.Printf("Broadcast message received: type=%s, progress=%v", msg["type"], msg["progress"])
 			handler.mutex.Lock()
 
 			// Check if message has routing info
@@ -168,5 +168,25 @@ func (handler *SSERequestHandler) SubscribeClientToRoute(client chan map[string]
 func (handler *SSERequestHandler) BroadcastToRoute(routeKey string, message map[string]interface{}) {
 	message["routeKey"] = routeKey
 	handler.broadcast <- message
-	log.Printf("Broadcasting to route %s: %v", routeKey)
+
+	// Log without base64 content to avoid cluttering logs
+	logMsg := make(map[string]interface{})
+	for k, v := range message {
+		if k == "file" {
+			if fileData, ok := v.(map[string]interface{}); ok {
+				// Log file metadata without base64 content
+				logFile := make(map[string]interface{})
+				for fk, fv := range fileData {
+					if fk != "fileContent" {
+						logFile[fk] = fv
+					}
+				}
+				logFile["fileContent"] = "[base64 data omitted]"
+				logMsg[k] = logFile
+			}
+		} else {
+			logMsg[k] = v
+		}
+	}
+	log.Printf("Broadcasting to route %s: %v", routeKey, logMsg)
 }
