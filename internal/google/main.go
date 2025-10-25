@@ -26,6 +26,36 @@ var (
 	logger = log.New(os.Stdout, "GOOGLE: ", log.LstdFlags)
 )
 
+func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
+	godotenv.Load()
+	if bin := os.Getenv("YT_DLP_BIN"); strings.TrimSpace(bin) != "" {
+		return exec.Command(bin, args...), nil
+	}
+	if path, err := exec.LookPath("yt-dlp"); err == nil {
+		return exec.Command(path, args...), nil
+	}
+	if path, err := exec.LookPath("yt_dlp"); err == nil {
+		return exec.Command(path, args...), nil
+	}
+	pythonCandidates := []string{
+		os.Getenv("PYTHON"),
+		os.Getenv("PYTHON_PATH"),
+		"python3",
+		"python",
+		"py",
+	}
+	for _, py := range pythonCandidates {
+		if strings.TrimSpace(py) == "" {
+			continue
+		}
+		if path, err := exec.LookPath(py); err == nil {
+			all := append([]string{"-m", "yt_dlp"}, args...)
+			return exec.Command(path, all...), nil
+		}
+	}
+	return nil, fmt.Errorf("yt-dlp not found: set YT_DLP_BIN or install yt-dlp, or ensure Python with module yt_dlp is available")
+}
+
 func GetAPIKey() string {
 	godotenv.Load()
 	API_KEY := os.Getenv("GOOGLE_API_KEY")
@@ -58,6 +88,7 @@ func SearchYoutube(searchQuery string, maxResults int64, nextPage string, prevPa
 	}
 
 }
+
 func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string) ([]byte, string, error) {
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
 	formatString := buildFormatString(model.GoogleDownloadVideoRequestModel{
@@ -66,8 +97,9 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string)
 	})
 
 	var cmd *exec.Cmd
+	var err error
 	if format == "mp3" {
-		cmd = exec.Command("/usr/bin/python3", "-m", "yt_dlp",
+		cmd, err = buildYtDlpCmd(
 			"--extract-audio",
 			"--audio-format", "mp3",
 			"--audio-quality", getBitrate(bitRate),
@@ -77,13 +109,16 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string)
 			videoURL,
 		)
 	} else {
-		cmd = exec.Command("/usr/bin/python3", "-m", "yt_dlp",
+		cmd, err = buildYtDlpCmd(
 			"--format", formatString,
 			"--output", "-",
 			"--no-playlist",
 			"--quiet",
 			videoURL,
 		)
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to resolve yt-dlp: %v", err)
 	}
 
 	stdout, err := cmd.StdoutPipe()
@@ -109,6 +144,7 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string)
 	filename := fmt.Sprintf("video_%s.%s", videoId, format)
 	return fileContent, filename, nil
 }
+
 // DownloadYoutubeVideo downloads a YouTube video using yt-dlp and returns file as base64
 func DownloadYoutubeVideo(videoId string, format string, bitRate string) (interface{}, error) {
 	// Create temporary directory for downloads
@@ -125,12 +161,15 @@ func DownloadYoutubeVideo(videoId string, format string, bitRate string) (interf
 	outputTemplate := filepath.Join(tempDir, "%(title)s.%(ext)s")
 
 	// yt-dlp command with options for best quality video+audio
-	cmd := exec.Command("yt-dlp",
-		"--format", "best[ext=mp4]/best", // Prefer mp4, fallback to best available
+	cmd, err := buildYtDlpCmd(
+		"--format", "best[ext=mp4]/best",
 		"--output", outputTemplate,
-		"--no-playlist", // Only download single video
+		"--no-playlist",
 		videoURL,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve yt-dlp: %v", err)
+	}
 
 	// Execute yt-dlp command
 	output, err := cmd.CombinedOutput()
