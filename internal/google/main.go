@@ -219,7 +219,7 @@ func StreamYoutubeDownload(w http.ResponseWriter, videoId, format, quality, bitr
 	}
 
 	filename := fmt.Sprintf("video_%s.%s", videoId, format)
-	mimeType := getStreamMimeType(format)
+	mimeType := GetStreamMimeType(format)
 
 	w.Header().Set("Content-Type", mimeType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
@@ -375,7 +375,7 @@ func getBitrate(bitrate string) string {
 }
 
 // getStreamMimeType returns MIME type for streaming based on format
-func getStreamMimeType(format string) string {
+func GetStreamMimeType(format string) string {
 	mimeTypes := map[string]string{
 		"mp4":  "video/mp4",
 		"webm": "video/webm",
