@@ -31,6 +31,15 @@ var (
 // buildYtDlpCmd resolves yt-dlp binary and builds command
 func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 	// Try environment variable first
+
+	if cookieFile := strings.TrimSpace(os.Getenv("YT_DLP_COOKIES")); cookieFile != "" {
+		if _, err := os.Stat(cookieFile); err == nil {
+			args = append([]string{"--cookies", cookieFile}, args...)
+		} else {
+			logger.Printf("YT_DLP_COOKIES set but unreadable: %v", err)
+		}
+	}
+
 	binstr := strings.TrimSpace(os.Getenv("YT_DLP_BIN"))
 	if binstr != "" {
 		parts := strings.Fields(binstr)
@@ -86,7 +95,6 @@ func runYtDlp(cmd *exec.Cmd) ([]byte, string, error) {
 
 	return data, stderr.String(), nil
 }
-
 
 func validateAndBuild(binPath string, args []string) (*exec.Cmd, error) {
 	info, err := os.Stat(binPath)
