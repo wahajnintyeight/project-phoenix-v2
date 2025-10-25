@@ -23,16 +23,13 @@ FROM scratch
 
 # Final stage
 FROM alpine:latest  
-RUN apk --no-cache add ca-certificates ffmpeg
+RUN apk --no-cache add ca-certificates ffmpeg python3 py3-pip
+RUN pip3 install --break-system-packages yt-dlp
 
 WORKDIR /app
 
 # Copy the pre-built binary file from the previous stage
 COPY --from=builder /build .
-
-# Copy yt-dlp binary from host machine
-COPY yt-dlp /usr/local/bin/yt-dlp
-RUN chmod +x /usr/local/bin/yt-dlp
 
 EXPOSE 8885
 
