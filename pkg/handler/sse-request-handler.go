@@ -20,6 +20,71 @@ type SSERequestHandler struct {
 
 var sseRequestHandlerObj SSERequestHandler
 
+// filterLogMessage removes base64 content from log messages to avoid cluttering logs
+func filterLogMessage(message map[string]interface{}) map[string]interface{} {
+	const redacted = "[base64 data omitted]"
+
+	var cleanse func(v interface{}) interface{}
+	cleanse = func(v interface{}) interface{} {
+		switch t := v.(type) {
+		case map[string]interface{}:
+			out := make(map[string]interface{}, len(t))
+			for k, val := range t {
+				switch k {
+				case "fileContent", "fileData":
+					out[k] = redacted
+				case "file":
+					// handle a nested file map or array of files
+					switch fv := val.(type) {
+					case map[string]interface{}:
+						out[k] = cleanse(fv).(map[string]interface{})
+						// ensure base64 fields are redacted inside "file"
+						if m, ok := out[k].(map[string]interface{}); ok {
+							if _, ok := m["fileContent"]; ok {
+								m["fileContent"] = redacted
+							}
+							if _, ok := m["fileData"]; ok {
+								m["fileData"] = redacted
+							}
+						}
+					case []interface{}:
+						arr := make([]interface{}, len(fv))
+						for i, iv := range fv {
+							c := cleanse(iv)
+							// ensure redaction inside each file map
+							if m, ok := c.(map[string]interface{}); ok {
+								if _, ok := m["fileContent"]; ok {
+									m["fileContent"] = redacted
+								}
+								if _, ok := m["fileData"]; ok {
+									m["fileData"] = redacted
+								}
+							}
+							arr[i] = c
+						}
+						out[k] = arr
+					default:
+						out[k] = val
+					}
+				default:
+					out[k] = cleanse(val)
+				}
+			}
+			return out
+		case []interface{}:
+			out := make([]interface{}, len(t))
+			for i, iv := range t {
+				out[i] = cleanse(iv)
+			}
+			return out
+		default:
+			return v
+		}
+	}
+
+	return cleanse(message).(map[string]interface{})
+}
+
 func NewSSERequestHandler() *SSERequestHandler {
 	handler := &SSERequestHandler{
 		clients:      make(map[chan map[string]interface{}]bool),
@@ -75,7 +140,7 @@ func (handler *SSERequestHandler) Run() {
 				if shouldSend {
 					select {
 					case client <- msg:
-						log.Println("Message sent to client:", msg)
+						log.Println("Message sent to client:", filterLogMessage(msg))
 					default:
 						close(client)
 						delete(handler.clients, client)
@@ -168,25 +233,5 @@ func (handler *SSERequestHandler) SubscribeClientToRoute(client chan map[string]
 func (handler *SSERequestHandler) BroadcastToRoute(routeKey string, message map[string]interface{}) {
 	message["routeKey"] = routeKey
 	handler.broadcast <- message
-
-	// Log without base64 content to avoid cluttering logs
-	logMsg := make(map[string]interface{})
-	for k, v := range message {
-		if k == "file" {
-			if fileData, ok := v.(map[string]interface{}); ok {
-				// Log file metadata without base64 content
-				logFile := make(map[string]interface{})
-				for fk, fv := range fileData {
-					if fk != "fileContent" {
-						logFile[fk] = fv
-					}
-				}
-				logFile["fileContent"] = "[base64 data omitted]"
-				logMsg[k] = logFile
-			}
-		} else {
-			logMsg[k] = v
-		}
-	}
-	log.Printf("Broadcasting to route %s: %v", routeKey, logMsg)
+	log.Printf("Broadcasting to route %s: %v", routeKey, filterLogMessage(message))
 }
