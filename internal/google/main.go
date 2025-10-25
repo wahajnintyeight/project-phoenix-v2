@@ -25,48 +25,56 @@ type Google interface {
 var (
 	logger = log.New(os.Stdout, "GOOGLE: ", log.LstdFlags)
 )
-
 func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
+	
 	godotenv.Load()
-	ytDLPPath := os.Getenv("YT_DLP_BIN")
-	log.Println("Path YT_DLP_BIN: ", ytDLPPath) 
 	// Try explicit YT_DLP_BIN first
-	if strings.TrimSpace(ytDLPPath) != "" {
-		if cmd, err := validateAndBuild(ytDLPPath, args); err == nil {
-			return cmd, nil
+	if bin := os.Getenv("YT_DLP_BIN"); strings.TrimSpace(bin) != "" {
+		logger.Printf("Attempting YT_DLP_BIN: %s", bin)
+		
+		// Check if file exists
+		if _, err := os.Stat(bin); err != nil {
+			logger.Printf("YT_DLP_BIN stat failed: %v", err)
+		} else {
+			logger.Printf("YT_DLP_BIN file exists, creating command")
+			return exec.Command(bin, args...), nil
+		}
+	} else {
+		logger.Printf("YT_DLP_BIN not set")
+	}
+
+	// Try common full paths
+	commonPaths := []string{
+		"/usr/local/bin/yt-dlp",
+		"/usr/bin/yt-dlp",
+		"/opt/homebrew/bin/yt-dlp",
+	}
+
+	for _, path := range commonPaths {
+		if _, err := os.Stat(path); err == nil {
+			logger.Printf("Found yt-dlp at: %s", path)
+			return exec.Command(path, args...), nil
 		}
 	}
-	
-	// Try direct binary lookup
-	candidates := []string{"yt-dlp", "yt_dlp","/usr/local/bin/yt-dlp","/usr/bin/yt-dlp"}
-	for _, name := range candidates {
-		if path, err := exec.LookPath(name); err == nil {
-			if cmd, err := validateAndBuild(path, args); err == nil {
-				return cmd, nil
-			}
-		}
+
+	// Try PATH lookup
+	if path, err := exec.LookPath("yt-dlp"); err == nil {
+		logger.Printf("Found yt-dlp in PATH: %s", path)
+		return exec.Command(path, args...), nil
 	}
-	
+
 	// Try Python module fallback
-	pythonCandidates := []string{
-		os.Getenv("PYTHON"),
-		os.Getenv("PYTHON_PATH"),
-		"python3",
-		"python",
-		"py",
-	}
-	
+	pythonCandidates := []string{"python3", "python"}
+
 	for _, py := range pythonCandidates {
-		if strings.TrimSpace(py) == "" {
-			continue
-		}
 		if path, err := exec.LookPath(py); err == nil {
 			all := append([]string{"-m", "yt_dlp"}, args...)
+			logger.Printf("Using Python module: %s", path)
 			return exec.Command(path, all...), nil
 		}
 	}
-	
-	return nil, fmt.Errorf("yt-dlp not found: ensure binary is executable or Python with yt_dlp module is available")
+
+	return nil, fmt.Errorf("yt-dlp not found")
 }
 
 func validateAndBuild(binPath string, args []string) (*exec.Cmd, error) {
