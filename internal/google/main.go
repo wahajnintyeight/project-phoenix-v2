@@ -67,7 +67,7 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string)
 
 	var cmd *exec.Cmd
 	if format == "mp3" {
-		cmd = exec.Command("python3", "-m", "yt_dlp",
+		cmd = exec.Command("/usr/bin/python3", "-m", "yt_dlp",
 			"--extract-audio",
 			"--audio-format", "mp3",
 			"--audio-quality", getBitrate(bitRate),
@@ -77,7 +77,7 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string)
 			videoURL,
 		)
 	} else {
-		cmd = exec.Command("python3", "-m", "yt_dlp",
+		cmd = exec.Command("/usr/bin/python3", "-m", "yt_dlp",
 			"--format", formatString,
 			"--output", "-",
 			"--no-playlist",
