@@ -79,3 +79,30 @@ func (g *GoogleController) DownloadYoutubeVideos(w http.ResponseWriter, r *http.
 
 	return int(enum.DATA_FETCHED), response, nil
 }
+
+// StreamDownloadYoutubeVideo streams a YouTube video directly to the client
+func (g *GoogleController) StreamDownloadYoutubeVideo(w http.ResponseWriter, r *http.Request) (int, interface{}, error) {
+	downloadRequestBody := model.GoogleDownloadVideoRequestModel{}
+	decodeErr := json.NewDecoder(r.Body).Decode(&downloadRequestBody)
+	if decodeErr != nil {
+		return int(enum.ERROR), nil, decodeErr
+	}
+
+	// Set default values
+	if downloadRequestBody.Format == "" {
+		downloadRequestBody.Format = "mp4"
+	}
+	if downloadRequestBody.BitRate == "" {
+		downloadRequestBody.BitRate = "best"
+	}
+
+	// Stream the video directly
+	err := google.StreamYoutubeDownload(w, downloadRequestBody.VideoId, downloadRequestBody.Format, downloadRequestBody.BitRate, downloadRequestBody.BitRate)
+	if err != nil {
+		return int(enum.ERROR), nil, err
+	}
+
+	return int(enum.DATA_FETCHED), map[string]interface{}{
+		"message": "Video streamed successfully",
+	}, nil
+}

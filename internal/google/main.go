@@ -1,12 +1,14 @@
 package google
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,69 +27,78 @@ type Google interface {
 var (
 	logger = log.New(os.Stdout, "GOOGLE: ", log.LstdFlags)
 )
+
+// buildYtDlpCmd resolves yt-dlp binary and builds command
 func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
-	
-	godotenv.Load()
-	// Try explicit YT_DLP_BIN first
-	if bin := os.Getenv("YT_DLP_BIN"); strings.TrimSpace(bin) != "" {
-		logger.Printf("Attempting YT_DLP_BIN: %s", bin)
-		
-		// Check if file exists
-		if _, err := os.Stat(bin); err != nil {
-			logger.Printf("YT_DLP_BIN stat failed: %v", err)
-		} else {
-			logger.Printf("YT_DLP_BIN file exists, creating command")
-			return exec.Command(bin, args...), nil
-		}
-	} else {
-		logger.Printf("YT_DLP_BIN not set")
-	}
-
-	// Try common full paths
-	commonPaths := []string{
-		"/usr/local/bin/yt-dlp",
-		"/usr/bin/yt-dlp",
-		"/opt/homebrew/bin/yt-dlp",
-	}
-
-	for _, path := range commonPaths {
-		if _, err := os.Stat(path); err == nil {
-			logger.Printf("Found yt-dlp at: %s", path)
-			return exec.Command(path, args...), nil
+	// Try environment variable first
+	binstr := strings.TrimSpace(os.Getenv("YT_DLP_BIN"))
+	if binstr != "" {
+		parts := strings.Fields(binstr)
+		if len(parts) > 0 {
+			all := append(parts[1:], args...)
+			return exec.Command(parts[0], all...), nil
 		}
 	}
 
-	// Try PATH lookup
+	// Try yt-dlp in PATH
 	if path, err := exec.LookPath("yt-dlp"); err == nil {
-		logger.Printf("Found yt-dlp in PATH: %s", path)
 		return exec.Command(path, args...), nil
 	}
 
-	// Try Python module fallback
-	pythonCandidates := []string{"python3", "python"}
-
-	for _, py := range pythonCandidates {
+	// Try python module
+	for _, py := range []string{"python3", "python"} {
 		if path, err := exec.LookPath(py); err == nil {
 			all := append([]string{"-m", "yt_dlp"}, args...)
-			logger.Printf("Using Python module: %s", path)
 			return exec.Command(path, all...), nil
 		}
 	}
 
-	return nil, fmt.Errorf("yt-dlp not found")
+	return nil, fmt.Errorf("yt-dlp not found in PATH or as python module")
 }
+
+// runYtDlp executes yt-dlp command and captures output
+func runYtDlp(cmd *exec.Cmd) ([]byte, string, error) {
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, "", fmt.Errorf("stdout pipe: %v", err)
+	}
+
+	logger.Printf("Running: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
+
+	if err := cmd.Start(); err != nil {
+		return nil, "", fmt.Errorf("start yt-dlp: %v, stderr: %s", err, stderr.String())
+	}
+
+	data, readErr := io.ReadAll(stdout)
+	waitErr := cmd.Wait()
+
+	if readErr != nil {
+		cmd.Process.Kill()
+		return nil, "", fmt.Errorf("read stdout: %v, stderr: %s", readErr, stderr.String())
+	}
+
+	if waitErr != nil {
+		return nil, "", fmt.Errorf("yt-dlp failed: %v, stderr: %s", waitErr, stderr.String())
+	}
+
+	return data, stderr.String(), nil
+}
+
 
 func validateAndBuild(binPath string, args []string) (*exec.Cmd, error) {
 	info, err := os.Stat(binPath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Check if executable
 	if info.Mode()&0111 == 0 {
 		return nil, fmt.Errorf("binary not executable: %s", binPath)
 	}
-	
+
 	return exec.Command(binPath, args...), nil
 }
 func GetAPIKey() string {
@@ -125,58 +136,106 @@ func SearchYoutube(searchQuery string, maxResults int64, nextPage string, prevPa
 
 func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string) ([]byte, string, error) {
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
-	formatString := buildFormatString(model.GoogleDownloadVideoRequestModel{
-		Format:  format,
-		BitRate: bitRate,
-	})
 
-	var cmd *exec.Cmd
-	var err error
+	var args []string
 	if format == "mp3" {
-		cmd, err = buildYtDlpCmd(
+		args = []string{
 			"--extract-audio",
 			"--audio-format", "mp3",
 			"--audio-quality", getBitrate(bitRate),
-			"--output", "-",
 			"--no-playlist",
-			"--quiet",
+			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+			"--output", "-",
 			videoURL,
-		)
+		}
 	} else {
-		cmd, err = buildYtDlpCmd(
-			"--format", formatString,
-			"--output", "-",
+		// Use progressive format for better stdout streaming
+		args = []string{
+			"--format", "best*[vcodec*=avc1][acodec*=mp4a][ext=mp4]/best[ext=mp4]/best",
 			"--no-playlist",
-			"--quiet",
+			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+			"--output", "-",
 			videoURL,
-		)
+		}
 	}
+
+	cmd, err := buildYtDlpCmd(args...)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to resolve yt-dlp: %v", err)
 	}
 
-	stdout, err := cmd.StdoutPipe()
+	data, _, err := runYtDlp(cmd)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create stdout pipe: %v", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return nil, "", fmt.Errorf("failed to start yt-dlp: %v", err)
-	}
-
-	// Read all output into buffer
-	fileContent, err := io.ReadAll(stdout)
-	if err != nil {
-		cmd.Process.Kill()
-		return nil, "", fmt.Errorf("failed to read video: %v", err)
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return nil, "", fmt.Errorf("yt-dlp process failed: %v", err)
+		return nil, "", err // already includes stderr
 	}
 
 	filename := fmt.Sprintf("video_%s.%s", videoId, format)
-	return fileContent, filename, nil
+	return data, filename, nil
+}
+
+// StreamYoutubeDownload streams a YouTube video directly to http.ResponseWriter
+func StreamYoutubeDownload(w http.ResponseWriter, videoId, format, quality, bitrate string) error {
+	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
+
+	var args []string
+	if format == "mp3" {
+		args = []string{
+			"--extract-audio",
+			"--audio-format", "mp3",
+			"--audio-quality", getBitrate(bitrate),
+			"--no-playlist",
+			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+			"--output", "-",
+			videoURL,
+		}
+	} else {
+		formatStr := buildStreamFormatString(format, quality)
+		args = []string{
+			"--format", formatStr,
+			"--no-playlist",
+			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+			"--output", "-",
+			videoURL,
+		}
+	}
+
+	cmd, err := buildYtDlpCmd(args...)
+	if err != nil {
+		return fmt.Errorf("failed to resolve yt-dlp: %v", err)
+	}
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %v", err)
+	}
+
+	logger.Printf("Streaming: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start yt-dlp: %v, stderr: %s", err, stderr.String())
+	}
+
+	filename := fmt.Sprintf("video_%s.%s", videoId, format)
+	mimeType := getStreamMimeType(format)
+
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Transfer-Encoding", "chunked")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	if _, err := io.Copy(w, stdout); err != nil {
+		cmd.Process.Kill()
+		return fmt.Errorf("failed to stream video: %v, stderr: %s", err, stderr.String())
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("yt-dlp process failed: %v, stderr: %s", err, stderr.String())
+	}
+
+	return nil
 }
 
 // DownloadYoutubeVideo downloads a YouTube video using yt-dlp and returns file as base64
@@ -316,7 +375,7 @@ func getBitrate(bitrate string) string {
 }
 
 // getStreamMimeType returns MIME type for streaming based on format
-func GetStreamMimeType(format string) string {
+func getStreamMimeType(format string) string {
 	mimeTypes := map[string]string{
 		"mp4":  "video/mp4",
 		"webm": "video/webm",
@@ -328,4 +387,34 @@ func GetStreamMimeType(format string) string {
 		return mime
 	}
 	return "application/octet-stream"
+}
+
+// buildStreamFormatString creates format string optimized for streaming
+func buildStreamFormatString(format, quality string) string {
+	if quality == "" {
+		quality = "best"
+	}
+
+	formatMap := map[string]map[string]string{
+		"mp4": {
+			"best":  "best*[vcodec*=avc1][acodec*=mp4a][ext=mp4]/best[ext=mp4]/best",
+			"worst": "worst[ext=mp4]",
+			"720":   "best[height<=720][ext=mp4]",
+			"1080":  "best[height<=1080][ext=mp4]",
+			"4k":    "best[height<=2160][ext=mp4]",
+		},
+		"webm": {
+			"best":  "best[ext=webm]",
+			"worst": "worst[ext=webm]",
+			"720":   "best[height<=720][ext=webm]",
+			"1080":  "best[height<=1080][ext=webm]",
+		},
+	}
+
+	if formats, exists := formatMap[format]; exists {
+		if formatStr, exists := formats[quality]; exists {
+			return formatStr
+		}
+	}
+	return "best"
 }
