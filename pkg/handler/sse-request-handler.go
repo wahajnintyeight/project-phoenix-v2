@@ -168,5 +168,5 @@ func (handler *SSERequestHandler) SubscribeClientToRoute(client chan map[string]
 func (handler *SSERequestHandler) BroadcastToRoute(routeKey string, message map[string]interface{}) {
 	message["routeKey"] = routeKey
 	handler.broadcast <- message
-	log.Printf("Broadcasting to route %s: %v", routeKey, message)
+	log.Printf("Broadcasting to route %s: %v", routeKey)
 }
