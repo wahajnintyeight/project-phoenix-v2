@@ -28,15 +28,25 @@ var (
 
 func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 	godotenv.Load()
+	
+	// Try explicit YT_DLP_BIN first
 	if bin := os.Getenv("YT_DLP_BIN"); strings.TrimSpace(bin) != "" {
-		return exec.Command(bin, args...), nil
+		if cmd, err := validateAndBuild(bin, args); err == nil {
+			return cmd, nil
+		}
 	}
-	if path, err := exec.LookPath("yt-dlp"); err == nil {
-		return exec.Command(path, args...), nil
+	
+	// Try direct binary lookup
+	candidates := []string{"yt-dlp", "yt_dlp"}
+	for _, name := range candidates {
+		if path, err := exec.LookPath(name); err == nil {
+			if cmd, err := validateAndBuild(path, args); err == nil {
+				return cmd, nil
+			}
+		}
 	}
-	if path, err := exec.LookPath("yt_dlp"); err == nil {
-		return exec.Command(path, args...), nil
-	}
+	
+	// Try Python module fallback
 	pythonCandidates := []string{
 		os.Getenv("PYTHON"),
 		os.Getenv("PYTHON_PATH"),
@@ -44,6 +54,7 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 		"python",
 		"py",
 	}
+	
 	for _, py := range pythonCandidates {
 		if strings.TrimSpace(py) == "" {
 			continue
@@ -53,9 +64,23 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 			return exec.Command(path, all...), nil
 		}
 	}
-	return nil, fmt.Errorf("yt-dlp not found: set YT_DLP_BIN or install yt-dlp, or ensure Python with module yt_dlp is available")
+	
+	return nil, fmt.Errorf("yt-dlp not found: ensure binary is executable or Python with yt_dlp module is available")
 }
 
+func validateAndBuild(binPath string, args []string) (*exec.Cmd, error) {
+	info, err := os.Stat(binPath)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Check if executable
+	if info.Mode()&0111 == 0 {
+		return nil, fmt.Errorf("binary not executable: %s", binPath)
+	}
+	
+	return exec.Command(binPath, args...), nil
+}
 func GetAPIKey() string {
 	godotenv.Load()
 	API_KEY := os.Getenv("GOOGLE_API_KEY")
