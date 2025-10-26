@@ -151,7 +151,7 @@ func (s *APIGatewayService) registerRoutes() {
 		})
 	}
 
-	allowedOrigins := []string{"http://localhost:5173","http://localhost:5173/", "electron://altair"}
+	allowedOrigins := []string{"http://localhost:5173","http://localhost:5173/", "electron://altair", "http://localhost:8081"}
 
     // Set up CORS middleware
     corsMiddleware := handlers.CORS(

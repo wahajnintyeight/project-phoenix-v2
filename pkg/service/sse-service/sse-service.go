@@ -263,6 +263,17 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId string, format s
 	routeKey := fmt.Sprintf("download-%s", downloadId)
 
 	// Send progress update
+	progressCallback := func(progress float64) {
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "downloading",
+			"progress":   int(progress),
+			"message":    fmt.Sprintf("Downloading... %.1f%%", progress),
+			"type":       "download_progress",
+		})
+	}
+
+	// Emit starting progress
 	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 		"downloadId": downloadId,
 		"status":     "downloading",
@@ -271,8 +282,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId string, format s
 		"type":       "download_progress",
 	})
 
-	// Call the actual download function
-	fileContent, filename, err := google.DownloadYoutubeVideoToBuffer(videoId, format, bitRate)
+	fileContent, filename, err := google.DownloadYoutubeVideoToBuffer(videoId, format, bitRate, progressCallback)
 	if err != nil {
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
@@ -285,8 +295,18 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId string, format s
 		return
 	}
 
+	// Emit finalization progress
+	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+		"downloadId": downloadId,
+		"status":     "processing",
+		"progress":   95,
+		"message":    "Finalizing...",
+		"type":       "download_progress",
+	})
+
 	base64Content := base64.StdEncoding.EncodeToString(fileContent)
-	// Send completion message with file blob
+
+	// Emit completion
 	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 		"downloadId": downloadId,
 		"status":     "completed",
@@ -295,7 +315,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId string, format s
 		"type":       "download_complete",
 		"filename":   filename,
 		"fileSize":   len(fileContent),
-		"fileData":   base64Content, // Base64 encoded video
+		"fileData":   base64Content,
 		"mimeType":   google.GetStreamMimeType(format),
 	})
 

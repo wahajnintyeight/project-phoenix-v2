@@ -1,18 +1,16 @@
 package google
 
 import (
+	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"project-phoenix/v2/internal/model"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -24,8 +22,11 @@ type Google interface {
 	SearchYoutube(searchQuery string)
 }
 
+type ProgressCallback func(progress float64)
+
 var (
-	logger = log.New(os.Stdout, "GOOGLE: ", log.LstdFlags)
+	logger        = log.New(os.Stdout, "GOOGLE: ", log.LstdFlags)
+	progressRegex = regexp.MustCompile(`\[download\]\s+(\d+\.\d+)%`)
 )
 
 // buildYtDlpCmd resolves yt-dlp binary and builds command
@@ -66,34 +67,55 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 }
 
 // runYtDlp executes yt-dlp command and captures output
-func runYtDlp(cmd *exec.Cmd) ([]byte, string, error) {
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
+func runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallback) ([]byte, string, error) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, "", fmt.Errorf("stdout pipe: %v", err)
 	}
 
+	stderror, e := cmd.StderrPipe()
+	if e != nil {
+		return nil, "", fmt.Errorf("stderr pipe: %v", e)
+	}
+
 	logger.Printf("Running: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
 
 	if err := cmd.Start(); err != nil {
-		return nil, "", fmt.Errorf("start yt-dlp: %v, stderr: %s", err, stderr.String())
+		return nil, "", fmt.Errorf("start yt-dlp: %v", err)
 	}
+	var stderrBuf bytes.Buffer
+	go func() {
+		scanner := bufio.NewScanner(stderror)
+		for scanner.Scan() {
+			line := scanner.Text()
+			stderrBuf.WriteString(line + "\n")
+
+			// Extract progress percentage
+			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 1 {
+				if percent, err := strconv.ParseFloat(matches[1], 64); err == nil {
+					// Scale to 25-95% range (reserve 0-25 for queuing, 95-100 for finalization)
+					scaledProgress := 25 + (percent * 0.7)
+					if progressCallback != nil {
+						progressCallback(scaledProgress)
+					}
+				}
+			}
+		}
+	}()
 
 	data, readErr := io.ReadAll(stdout)
 	waitErr := cmd.Wait()
 
 	if readErr != nil {
-		cmd.Process.Kill()
-		return nil, "", fmt.Errorf("read stdout: %v, stderr: %s", readErr, stderr.String())
+		_ = cmd.Process.Kill()
+		return nil, "", fmt.Errorf("read stdout: %v, stderr: %s", readErr, stderrBuf.String())
 	}
 
 	if waitErr != nil {
-		return nil, "", fmt.Errorf("yt-dlp failed: %v, stderr: %s", waitErr, stderr.String())
+		return nil, "", fmt.Errorf("yt-dlp failed: %v, stderr: %s", waitErr, stderrBuf.String())
 	}
 
-	return data, stderr.String(), nil
+	return data, "Success", nil
 }
 
 func validateAndBuild(binPath string, args []string) (*exec.Cmd, error) {
@@ -142,7 +164,7 @@ func SearchYoutube(searchQuery string, maxResults int64, nextPage string, prevPa
 
 }
 
-func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string) ([]byte, string, error) {
+func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string, progressCallback ProgressCallback) ([]byte, string, error) {
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
 
 	var args []string
@@ -152,6 +174,7 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string)
 			"--audio-format", "mp3",
 			"--audio-quality", getBitrate(bitRate),
 			"--no-playlist",
+			"--newline",
 			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 			"--output", "-",
 			videoURL,
@@ -161,6 +184,7 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string)
 		args = []string{
 			"--format", "best*[vcodec*=avc1][acodec*=mp4a][ext=mp4]/best[ext=mp4]/best",
 			"--no-playlist",
+			"--newline",
 			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 			"--output", "-",
 			videoURL,
@@ -172,200 +196,13 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, bitRate string)
 		return nil, "", fmt.Errorf("failed to resolve yt-dlp: %v", err)
 	}
 
-	data, _, err := runYtDlp(cmd)
+	data, _, err := runYtDlp(cmd, progressCallback)
 	if err != nil {
 		return nil, "", err // already includes stderr
 	}
 
 	filename := fmt.Sprintf("video_%s.%s", videoId, format)
 	return data, filename, nil
-}
-
-// StreamYoutubeDownload streams a YouTube video directly to http.ResponseWriter
-func StreamYoutubeDownload(w http.ResponseWriter, videoId, format, quality, bitrate string) error {
-	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
-
-	var args []string
-	if format == "mp3" {
-		args = []string{
-			"--extract-audio",
-			"--audio-format", "mp3",
-			"--audio-quality", getBitrate(bitrate),
-			"--no-playlist",
-			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			"--output", "-",
-			videoURL,
-		}
-	} else {
-		formatStr := buildStreamFormatString(format, quality)
-		args = []string{
-			"--format", formatStr,
-			"--no-playlist",
-			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			"--output", "-",
-			videoURL,
-		}
-	}
-
-	cmd, err := buildYtDlpCmd(args...)
-	if err != nil {
-		return fmt.Errorf("failed to resolve yt-dlp: %v", err)
-	}
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %v", err)
-	}
-
-	logger.Printf("Streaming: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start yt-dlp: %v, stderr: %s", err, stderr.String())
-	}
-
-	filename := fmt.Sprintf("video_%s.%s", videoId, format)
-	mimeType := GetStreamMimeType(format)
-
-	w.Header().Set("Content-Type", mimeType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-	w.Header().Set("Transfer-Encoding", "chunked")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-
-	if _, err := io.Copy(w, stdout); err != nil {
-		cmd.Process.Kill()
-		return fmt.Errorf("failed to stream video: %v, stderr: %s", err, stderr.String())
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("yt-dlp process failed: %v, stderr: %s", err, stderr.String())
-	}
-
-	return nil
-}
-
-// DownloadYoutubeVideo downloads a YouTube video using yt-dlp and returns file as base64
-func DownloadYoutubeVideo(videoId string, format string, bitRate string) (interface{}, error) {
-	// Create temporary directory for downloads
-	tempDir, err := os.MkdirTemp("", "youtube_download_")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir) // Clean up temp directory
-
-	// Construct YouTube URL
-	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
-
-	// Output template for yt-dlp (will create filename with title and extension)
-	outputTemplate := filepath.Join(tempDir, "%(title)s.%(ext)s")
-
-	// yt-dlp command with options for best quality video+audio
-	cmd, err := buildYtDlpCmd(
-		"--format", "best[ext=mp4]/best",
-		"--output", outputTemplate,
-		"--no-playlist",
-		videoURL,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve yt-dlp: %v", err)
-	}
-
-	// Execute yt-dlp command
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("yt-dlp failed: %v, output: %s", err, string(output))
-	}
-
-	// Find the downloaded file
-	files, err := ioutil.ReadDir(tempDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read temp directory: %v", err)
-	}
-
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no files downloaded")
-	}
-
-	// Get the first (and should be only) downloaded file
-	downloadedFile := files[0]
-	filePath := filepath.Join(tempDir, downloadedFile.Name())
-
-	// Read file content
-	fileContent, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read downloaded file: %v", err)
-	}
-
-	// Convert to base64 for transmission
-	base64Content := base64.StdEncoding.EncodeToString(fileContent)
-
-	// Get file extension for MIME type
-	ext := strings.ToLower(filepath.Ext(downloadedFile.Name()))
-	mimeType := getMimeType(ext)
-
-	return map[string]interface{}{
-		"videoId":     videoId,
-		"status":      "completed",
-		"message":     "Video downloaded successfully",
-		"filename":    downloadedFile.Name(),
-		"fileSize":    len(fileContent),
-		"mimeType":    mimeType,
-		"fileContent": base64Content, // Base64 encoded file content
-	}, nil
-}
-
-// getMimeType returns appropriate MIME type based on file extension
-func getMimeType(ext string) string {
-	switch ext {
-	case ".mp4":
-		return "video/mp4"
-	case ".webm":
-		return "video/webm"
-	case ".mkv":
-		return "video/x-matroska"
-	case ".avi":
-		return "video/x-msvideo"
-	case ".mov":
-		return "video/quicktime"
-	case ".flv":
-		return "video/x-flv"
-	default:
-		return "video/mp4" // Default fallback
-	}
-}
-
-// buildFormatString creates yt-dlp format string based on request
-func buildFormatString(req model.GoogleDownloadVideoRequestModel) string {
-	format := req.Format
-	quality := req.BitRate
-	if quality == "320k" {
-		quality = "best"
-	}
-
-	formatMap := map[string]map[string]string{
-		"mp4": {
-			"best":  "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
-			"worst": "worst[ext=mp4]",
-			"720":   "best[height<=720][ext=mp4]",
-			"1080":  "best[height<=1080][ext=mp4]",
-			"4k":    "best[height<=2160][ext=mp4]",
-		},
-		"webm": {
-			"best":  "best[ext=webm]",
-			"worst": "worst[ext=webm]",
-			"720":   "best[height<=720][ext=webm]",
-			"1080":  "best[height<=1080][ext=webm]",
-		},
-	}
-
-	if formats, exists := formatMap[format]; exists {
-		if formatStr, exists := formats[quality]; exists {
-			return formatStr
-		}
-	}
-	return "best"
 }
 
 // getBitrate returns valid bitrate for audio downloads
