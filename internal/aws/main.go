@@ -125,7 +125,7 @@ func (s *S3Service) GetPresignedUrl(
 	key string,
 	ttlMinutes int,
 ) (string, error) {
-	presignClient := s3.NewPresignFromClient(s.client)
+	presignClient := s3.NewPresignClient(s.client)
 
 	request, err := presignClient.PresignGetObject(
 		ctx,
