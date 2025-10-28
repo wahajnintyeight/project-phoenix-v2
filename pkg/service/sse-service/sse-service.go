@@ -295,15 +295,6 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId string, format s
 		return
 	}
 
-	// Emit finalization progress
-	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-		"downloadId": downloadId,
-		"status":     "processing",
-		"progress":   95,
-		"message":    "Finalizing...",
-		"type":       "download_progress",
-	})
-
 	base64Content := base64.StdEncoding.EncodeToString(fileContent)
 
 	// Emit completion
