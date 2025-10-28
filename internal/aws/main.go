@@ -26,7 +26,8 @@ type S3Service struct {
 func NewS3Service(bucketName, region string) (*S3Service, error) {
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(region),
-		config.WithClientLogMode(aws.LogRetries | aws.LogRequestWithBody),
+		// Keep minimal client logging; do NOT log request bodies to avoid dumping binary payloads
+		config.WithClientLogMode(aws.LogRetries),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %v", err)
@@ -64,7 +65,8 @@ func NewS3ServiceFromEnv() (*S3Service, string, error) {
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(region),
 		config.WithCredentialsProvider(aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""))),
-		config.WithClientLogMode(aws.LogRetries|aws.LogRequestWithBody),
+		// Keep minimal client logging; do NOT log request bodies to avoid dumping binary payloads
+		config.WithClientLogMode(aws.LogRetries),
 	)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to load AWS config: %v", err)
