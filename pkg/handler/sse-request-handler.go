@@ -142,10 +142,10 @@ func (handler *SSERequestHandler) Run() {
 					case client <- msg:
 						log.Println("[RUN]Message sent to client:", filterLogMessage(msg))
 					default:
-						close(client)
-						delete(handler.clients, client)
-						delete(handler.clientRoutes, client)
-						log.Println("Client disconnected due to failure")
+						// close(client)
+						// delete(handler.clients, client)
+						// delete(handler.clientRoutes, client)
+						log.Printf("Client is busy, dropping message for client %v", client)
 					}
 				}
 			}
