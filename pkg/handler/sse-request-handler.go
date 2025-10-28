@@ -14,6 +14,8 @@ type SSERequestHandler struct {
 	clientRoutes map[chan map[string]interface{}]map[string]bool // client -> route keys
 	addClient    chan chan map[string]interface{}
 	removeClient chan chan map[string]interface{}
+	routeBuffer     map[string][]map[string]interface{}  // ← ADD THIS
+    routeBufferLock sync.Mutex
 	broadcast    chan map[string]interface{}
 	mutex        sync.Mutex
 }
@@ -201,9 +203,22 @@ func (handler *SSERequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 // Public method to add client with route subscription
 func (handler *SSERequestHandler) AddClientWithRoute(routeKey string) chan map[string]interface{} {
-	clientChan := make(chan map[string]interface{})
+	clientChan := make(chan map[string]interface{}, 50)
 	handler.addClient <- clientChan
 	handler.SubscribeClientToRoute(clientChan, routeKey)
+	handler.routeBufferLock.Lock()
+	if buffer, exists := handler.routeBuffer[routeKey]; exists && len(buffer) > 0 {
+		log.Printf("[HANDLER] Replaying %d buffered messages for route %s", len(buffer), routeKey)
+		for _, msg := range buffer {
+			select {
+			case clientChan <- msg:
+				log.Printf("[HANDLER] Replayed: %v", msg["type"])
+			default:
+				log.Printf("[HANDLER] Buffer full, dropped message")
+			}
+		}
+	}
+	handler.routeBufferLock.Unlock()
 	return clientChan
 }
 

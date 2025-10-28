@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"reflect"
 	"sync"
 	"time"
@@ -339,7 +340,9 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId string, format s
 	}
 
 	// Build S3 key and upload
-	key := fmt.Sprintf("downloads/%s/%s", downloadId, filename)
+	godotenv.Load()
+	videoDownloadDir := os.Getenv("S3_FOLDER_NAME") // Returns "" if not set
+key := fmt.Sprintf(videoDownloadDir+"/%s/%s", downloadId, filename)
 	mimeType := google.GetStreamMimeType(format)
 
 	size := len(fileContent)
