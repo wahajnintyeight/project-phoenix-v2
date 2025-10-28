@@ -50,7 +50,12 @@ func (g *GoogleController) DownloadYoutubeVideos(w http.ResponseWriter, r *http.
 	}
 
 	// Generate unique download ID
-	downloadId := uuid.New().String()
+	var downloadId string
+	if downloadRequestBody.DownloadId == "" {
+		downloadId = uuid.New().String()
+	} else {
+		downloadId = downloadRequestBody.DownloadId
+	}
 
 	// Create broker instance
 	rabbitMQBroker := broker.CreateBroker(enum.RABBITMQ)

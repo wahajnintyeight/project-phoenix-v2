@@ -84,6 +84,7 @@ type GoogleSearchVideoRequestModel struct {
 
 type GoogleDownloadVideoRequestModel struct {
 	VideoId string `json:"videoId" bson:"videoId"`
+	DownloadId string `json:"downloadId" bson:"downloadId"`
 	YoutubeURL string `json:"youtubeURL" bson:"youtubeURL"`
 	Format string  `json:"format" bson:"format"`
 	BitRate string `json:"bitRate" bson:"bitRate"`
