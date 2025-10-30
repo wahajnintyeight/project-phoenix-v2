@@ -64,6 +64,7 @@ func (g *GoogleController) DownloadYoutubeVideos(w http.ResponseWriter, r *http.
 	downloadMessage := map[string]interface{}{
 		"downloadId": downloadId,
 		"videoId":    downloadRequestBody.VideoId,
+		"videoTitle": downloadRequestBody.VideoTitle,
 		"format":     downloadRequestBody.Format,
 		"bitRate":    downloadRequestBody.BitRate,
 		"youtubeURL": downloadRequestBody.YoutubeURL,

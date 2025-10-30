@@ -272,6 +272,7 @@ func (sse *SSEService) HandleVideoDownload(p microBroker.Event) error {
 
 	downloadId := data["downloadId"].(string)
 	videoId := data["videoId"].(string)
+	videoTitle := data["videoTitle"].(string)
 	format := data["format"].(string)
 	bitRate := data["bitRate"].(string)
 
@@ -287,13 +288,13 @@ func (sse *SSEService) HandleVideoDownload(p microBroker.Event) error {
 	})
 
 	// Process the actual video download
-	go sse.processVideoDownload(downloadId, videoId, format, bitRate)
+	go sse.processVideoDownload(downloadId, videoId, format, bitRate, videoTitle)
 
 	return nil
 }
 
 // processVideoDownload handles the actual video download with progress updates
-func (sse *SSEService) processVideoDownload(downloadId, videoId string, format string, bitRate string) {
+func (sse *SSEService) processVideoDownload(downloadId, videoId string, format string, bitRate string, videoTitle string) {
 	routeKey := fmt.Sprintf("download-%s", downloadId)
 	ctx := context.Background()
 
@@ -341,8 +342,8 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId string, format s
 
 	// Build S3 key and upload
 	godotenv.Load()
-	videoDownloadDir := os.Getenv("S3_FOLDER_NAME") // Returns "" if not set
-key := fmt.Sprintf(videoDownloadDir+"/%s/%s", downloadId, filename)
+	videoDownloadDir := os.Getenv("S3_FOLDER_NAME")
+	key := fmt.Sprintf(videoDownloadDir+"/%s/%s", downloadId, filename)
 	mimeType := google.GetStreamMimeType(format)
 
 	size := len(fileContent)
@@ -373,6 +374,7 @@ key := fmt.Sprintf(videoDownloadDir+"/%s/%s", downloadId, filename)
 		"downloadId":  downloadId,
 		"status":      "completed",
 		"progress":    100,
+		"videoTitle":  videoTitle,
 		"message":     "Download completed successfully!",
 		"type":        "download_complete",
 		"filename":    filename,
