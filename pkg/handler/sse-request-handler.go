@@ -245,8 +245,29 @@ func (handler *SSERequestHandler) SubscribeClientToRoute(client chan map[string]
 }
 
 // Broadcast to specific route only
+
 func (handler *SSERequestHandler) BroadcastToRoute(routeKey string, message map[string]interface{}) {
 	message["routeKey"] = routeKey
+	
+	// ← ADD THIS: Buffer the message
+	handler.routeBufferLock.Lock()
+	if handler.routeBuffer == nil {
+		handler.routeBuffer = make(map[string][]map[string]interface{})
+	}
+	if handler.routeBuffer[routeKey] == nil {
+		handler.routeBuffer[routeKey] = make([]map[string]interface{}, 0)
+	}
+	// Deep copy to avoid mutations
+	msgCopy := make(map[string]interface{})
+	for k, v := range message {
+		msgCopy[k] = v
+	}
+	handler.routeBuffer[routeKey] = append(handler.routeBuffer[routeKey], msgCopy)
+	// Keep only last 100 messages per route
+	if len(handler.routeBuffer[routeKey]) > 100 {
+		handler.routeBuffer[routeKey] = handler.routeBuffer[routeKey][1:]
+	}
+	handler.routeBufferLock.Unlock()
+
 	handler.broadcast <- message
-	// log.Printf("Broadcasting to route %s: %v", routeKey, filterLogMessage(message))
 }

@@ -1,17 +1,19 @@
 package service
 
 import (
-	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
-	"project-phoenix/v2/internal/aws"
 	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/google"
@@ -21,20 +23,12 @@ import (
 	"project-phoenix/v2/pkg/helper"
 	"project-phoenix/v2/pkg/service"
 
-	// "sync"
-
 	"github.com/go-micro/plugins/v4/broker/rabbitmq"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"go-micro.dev/v4"
 	microBroker "go-micro.dev/v4/broker"
-	// "log"
 )
-
-type DownloadCleanupJob struct {
-	Key       string
-	ExpiresAt time.Time
-}
 
 type SSEService struct {
 	service            micro.Service
@@ -44,35 +38,22 @@ type SSEService struct {
 	subscribedServices []internal.SubscribedServices
 	brokerObj          microBroker.Broker
 	sseHandler         *handler.SSERequestHandler
-	s3Service          *aws.S3Service
-	cleanupScheduler   chan DownloadCleanupJob
-	cleanupJobs        map[string]chan bool // downloadId -> stop channel
+	downloadQueue      *DownloadQueue
 }
 
-// cleanupWorker processes file deletions on schedule
-func (sse *SSEService) cleanupWorker() {
-	for job := range sse.cleanupScheduler {
-		go func(j DownloadCleanupJob) {
-			timer := time.NewTimer(time.Until(j.ExpiresAt))
-			defer timer.Stop()
-
-			<-timer.C
-
-			if sse.s3Service == nil {
-				log.Printf("Cleanup skipped, s3Service is nil for key: %s", j.Key)
-				return
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-
-			if err := sse.s3Service.DeleteFile(ctx, j.Key); err != nil {
-				log.Printf(" Failed to delete S3 file %s: %v", j.Key, err)
-			} else {
-				log.Printf(" Auto-deleted S3 file: %s", j.Key)
-			}
-		}(job)
-	}
+func sanitizeFilename(name string) string {
+    name = strings.TrimSpace(name)
+    re := regexp.MustCompile(`[^a-zA-Z0-9-_ ]+`)
+    name = re.ReplaceAllString(name, "")
+    name = strings.TrimSpace(name)
+    name = strings.ReplaceAll(name, " ", "_")
+    if len(name) == 0 {
+        name = "video"
+    }
+    if len(name) > 100 {
+        name = name[:100]
+    }
+    return name
 }
 
 var once sync.Once
@@ -274,118 +255,182 @@ func (sse *SSEService) HandleVideoDownload(p microBroker.Event) error {
 	videoId := data["videoId"].(string)
 	videoTitle := data["videoTitle"].(string)
 	format := data["format"].(string)
+	var quality string
+	qualityStr, ok := data["quality"].(string)
+	if !ok {
+		quality = ""
+	} else {
+		quality = qualityStr
+	}
 	bitRate := data["bitRate"].(string)
 
-	log.Printf("Processing video download - ID: %s, VideoID: %s", downloadId, videoId)
+	log.Printf("🟡 Processing: %s (format: %s, quality: %s)", downloadId, format, quality)
 
 	// Send initial status to SSE clients
 	sse.sseHandler.BroadcastToRoute(fmt.Sprintf("download-%s", downloadId), map[string]interface{}{
 		"downloadId": downloadId,
 		"status":     "processing",
 		"progress":   0,
-		"message":    "Starting video download...",
+		"message":    "Starting download...",
 		"type":       "download_progress",
 	})
 
 	// Process the actual video download
-	go sse.processVideoDownload(downloadId, videoId, format, bitRate, videoTitle)
+	sse.downloadQueue.AddJob(downloadId, videoId, format, quality, bitRate, videoTitle)
 
 	return nil
 }
 
 // processVideoDownload handles the actual video download with progress updates
-func (sse *SSEService) processVideoDownload(downloadId, videoId string, format string, bitRate string, videoTitle string) {
+func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality, bitRate, videoTitle string) {
 	routeKey := fmt.Sprintf("download-%s", downloadId)
-	ctx := context.Background()
 
-	// Send progress update
-	progressCallback := func(progress float64) {
-		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+	job := sse.downloadQueue.GetJob(downloadId)
+	if job == nil {
+		return
+	}
+
+	job.mu.Lock()
+	job.Status = enum.DOWNLOADING
+	job.mu.Unlock()
+
+	streamStarted := false
+
+	onProgress := func(progress float64) {
+		job.mu.Lock()
+		job.Progress = int(progress)
+		job.mu.Unlock()
+
+		event := map[string]interface{}{
 			"downloadId": downloadId,
 			"status":     "downloading",
 			"progress":   int(progress),
 			"message":    fmt.Sprintf("Downloading... %.1f%%", progress),
 			"type":       "download_progress",
-		})
-	}
+		}
+		sse.sseHandler.BroadcastToRoute(routeKey, event)
 
-	fileContent, filename, err := google.DownloadYoutubeVideoToBuffer(videoId, format, bitRate, progressCallback)
-	if err != nil {
-		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-			"downloadId": downloadId,
-			"status":     "error",
-			"progress":   0,
-			"message":    fmt.Sprintf("Download failed: %v", err),
-			"type":       "download_error",
-		})
-		log.Printf(" Download %s failed: %v", downloadId, err)
-		return
-	}
-
-
-	// Ensure S3 service exists
-	if sse.s3Service == nil {
-		if s3svc, _, err := aws.NewS3ServiceFromEnv(); err != nil {
-			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-				"downloadId": downloadId,
-				"status":     "error",
-				"progress":   0,
-				"message":    fmt.Sprintf("S3 init failed: %v", err),
-				"type":       "download_error",
-			})
-			log.Printf(" S3 init failed for %s: %v", downloadId, err)
-			return
-		} else {
-			sse.s3Service = s3svc
+		if !streamStarted && progress >= 10 {
+			streamStarted = true
+			log.Printf("🟢 Stream ready at %.1f%%", progress)
 		}
 	}
 
-	// Build S3 key and upload
-	godotenv.Load()
-	videoDownloadDir := os.Getenv("S3_FOLDER_NAME")
-	key := fmt.Sprintf(videoDownloadDir+"/%s/%s", downloadId, filename)
-	mimeType := google.GetStreamMimeType(format)
-
-	size := len(fileContent)
-	url, upErr := sse.s3Service.UploadFile(ctx, key, fileContent, mimeType, 60)
-	if upErr != nil {
+	session, err := google.DownloadYoutubeVideoToBuffer(
+		videoId,
+		format,
+		quality,
+		bitRate,
+		videoTitle,
+		onProgress,
+	)
+	if err != nil {
+		job.mu.Lock()
+		job.Status = enum.SSEStreamEnum("error")
+		job.mu.Unlock()
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
 			"status":     "error",
-			"progress":   0,
-			"message":    fmt.Sprintf("Upload failed: %v", upErr),
-			"type":       "download_error",
+			"message":    fmt.Sprintf("Failed: %v", err),
+			"type":       "download_progress",
 		})
-		log.Printf(" S3 upload failed for %s: %v", downloadId, upErr)
 		return
 	}
 
-	// Schedule auto-deletion after 60 minutes
-	expiresAt := time.Now().Add(60 * time.Minute)
-	if sse.cleanupScheduler != nil {
-		sse.cleanupScheduler <- DownloadCleanupJob{Key: key, ExpiresAt: expiresAt}
+	job.mu.Lock()
+	job.session = session
+	job.mu.Unlock()
+
+	if err := session.Wait(); err != nil {
+		job.mu.Lock()
+		job.Status = enum.SSEStreamEnum("error")
+		job.mu.Unlock()
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "error",
+			"message":    fmt.Sprintf("Download failed: %v", err),
+			"type":       "download_progress",
+		})
+		return
 	}
 
-	// Clear the buffer
-	fileContent = nil
+	filePath := session.GetFilePath()
+	fileSize := session.GetFileSize()
+	filename := fmt.Sprintf("%s_%s.%s", sanitizeFilename(videoTitle), videoId, format)
 
-	// Emit completion with URL and expiry info
+	job.mu.Lock()
+	job.FilePath = filePath
+	job.FileSize = fileSize
+	job.Status = enum.COMPLETED
+	job.Progress = 100
+	job.mu.Unlock()
+
+	log.Printf("✅ Download complete: %s (%d bytes)", filePath, fileSize)
+
+	sse.streamFileChunks(routeKey, downloadId, filePath, filename, fileSize)
+
+	time.AfterFunc(1*time.Hour, func() {
+		os.Remove(filePath)
+		log.Printf("🗑️ Cleaned up: %s", filePath)
+	})
+}
+
+func (sse *SSEService) streamFileChunks(routeKey, downloadId, filePath, filename string, totalSize int64) {
+	const chunkSize = 64 * 1024 // 64KB
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Printf("❌ Failed to open file: %v", err)
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"type":       "download_error",
+			"message":    "Failed to read file",
+		})
+		return
+	}
+	defer file.Close()
+
+	totalChunks := (totalSize + chunkSize - 1) / chunkSize
+	log.Printf("📦 Streaming %d bytes in %d chunks", totalSize, totalChunks)
+
+	buffer := make([]byte, chunkSize)
+	chunkIndex := 0
+	for {
+		n, err := file.Read(buffer)
+		if n == 0 || err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("❌ Read error: %v", err)
+			return
+		}
+
+		chunkData := base64.StdEncoding.EncodeToString(buffer[:n])
+
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId":  downloadId,
+			"type":        "file_chunk",
+			"chunkIndex":  chunkIndex,
+			"totalChunks": totalChunks,
+			"chunkData":   chunkData,
+			"chunkSize":   n,
+		})
+
+		chunkIndex++
+		log.Printf("📤 Chunk %d/%d sent", chunkIndex, totalChunks)
+	}
+
 	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-		"downloadId":  downloadId,
-		"status":      "completed",
-		"progress":    100,
-		"videoTitle":  videoTitle,
-		"message":     "Download completed successfully!",
-		"type":        "download_complete",
-		"filename":    filename,
-		"fileSize":    size,
-		"mimeType":    mimeType,
-		"downloadUrl": url,
-		"expiresIn":   3600, // seconds
-		"expiresAt":   expiresAt.Unix(),
+		"downloadId": downloadId,
+		"type":       "download_complete",
+		"status":     "completed",
+		"progress":   100,
+		"message":    "Download completed!",
+		"filename":   filename,
+		"fileSize":   totalSize,
 	})
 
-	log.Printf(" Download %s completed and uploaded to S3: %s", downloadId, url)
+	log.Printf("✅ File streaming complete")
 }
 
 func (ls *SSEService) InitServiceConfig() {
@@ -398,27 +443,12 @@ func (ls *SSEService) InitServiceConfig() {
 }
 
 func NewSSEService(serviceObj micro.Service, serviceName string) service.ServiceInterface {
-    // Initialize base service via existing initializer
-    base := (&SSEService{}).InitializeService(serviceObj, serviceName)
-    sse := base.(*SSEService)
+	// Initialize base service via existing initializer
+	base := (&SSEService{}).InitializeService(serviceObj, serviceName)
+	sse := base.(*SSEService)
 
-    // Initialize S3 service from envs (once)
-    if sse.s3Service == nil {
-        if s3svc, _, err := aws.NewS3ServiceFromEnv(); err != nil {
-            log.Printf("S3 init from env failed: %v", err)
-        } else {
-            sse.s3Service = s3svc
-        }
-    }
-
-    // Start cleanup worker
-    if sse.cleanupScheduler == nil {
-        sse.cleanupScheduler = make(chan DownloadCleanupJob, 100)
-        sse.cleanupJobs = make(map[string]chan bool)
-        go sse.cleanupWorker()
-    }
-
-    return sse
+	sse.downloadQueue = NewDownloadQueue(3, sse)
+	return sse
 }
 
 func (s *SSEService) registerRoutes() {
