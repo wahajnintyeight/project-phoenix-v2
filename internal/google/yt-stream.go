@@ -64,6 +64,8 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 
 	stderror, e := cmd.StderrPipe()
 	if e != nil {
+		yt.done <- fmt.Errorf("stderr pipe error: %w", e)
+		close(yt.done)
 		return
 	}
 
@@ -71,6 +73,8 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 
 	if err := cmd.Start(); err != nil {
 		logger.Printf("start yt-dlp: %v", err)
+		yt.done <- err
+		close(yt.done)
 		return
 	}
 	var stderrBuf bytes.Buffer
@@ -79,6 +83,7 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 		for scanner.Scan() {
 			line := scanner.Text()
 			stderrBuf.WriteString(line + "\n")
+			logger.Printf("YT-DLP: %s", line)
 
 			// Extract progress percentage
 			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 1 {
@@ -94,14 +99,32 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 	}()
 
 	if err := yt.cmd.Wait(); err != nil {
+		logger.Printf(" yt-dlp exited with error: %v", err)
+		logger.Printf("STDERR: %s", stderrBuf.String())
 		yt.done <- fmt.Errorf("yt-dlp failed: %w", err)
 		close(yt.done)
 		return
 	}
 
+	// Check expected output file
 	filePath := fmt.Sprintf("/tmp/yt-downloads/%s_%s.%s", videoTitle, videoId, videoFormat)
+	logger.Printf(" Looking for file: %s", filePath)
+
+	// List directory contents for debugging
+	files, _ := os.ReadDir("/tmp/yt-downloads")
+	logger.Printf(" Files in /tmp/yt-downloads:")
+	for _, f := range files {
+		logger.Printf("   - %s (size: %d)", f.Name(), func() int64 {
+			if info, err := f.Info(); err == nil {
+				return info.Size()
+			}
+			return 0
+		}())
+	}
+
 	stat, err := os.Stat(filePath)
 	if err != nil {
+		logger.Printf(" File not found: %v", err)
 		yt.done <- fmt.Errorf("file not found: %w", err)
 		close(yt.done)
 		return
@@ -112,7 +135,7 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 	yt.fileSize = stat.Size()
 	yt.mu.Unlock()
 
-	logger.Printf("✅ Download complete: %s (%d bytes)", filePath, stat.Size())
+	logger.Printf(" Download complete: %s (%d bytes)", filePath, stat.Size())
 	yt.done <- nil
 	close(yt.done)
 }
@@ -174,7 +197,7 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, quality string,
 			"--no-playlist",
 			"--newline",
 			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			"--output", "-",
+			"--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s%%(ext)s", videoTitle, videoId),
 			videoURL,
 		}
 	} else {

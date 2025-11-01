@@ -316,12 +316,15 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 		}
 	}
 
+	// Sanitize title to ensure safe filesystem pathing and consistent output name
+	sanitizedTitle := sanitizeFilename(videoTitle)
+
 	session, err := google.DownloadYoutubeVideoToBuffer(
 		videoId,
 		format,
 		quality,
 		bitRate,
-		videoTitle,
+		sanitizedTitle,
 		onProgress,
 	)
 	if err != nil {
@@ -356,7 +359,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 
 	filePath := session.GetFilePath()
 	fileSize := session.GetFileSize()
-	filename := fmt.Sprintf("%s_%s.%s", sanitizeFilename(videoTitle), videoId, format)
+	filename := fmt.Sprintf("%s_%s.%s", sanitizedTitle, videoId, format)
 
 	job.mu.Lock()
 	job.FilePath = filePath
