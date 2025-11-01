@@ -11,13 +11,13 @@ import (
 type SSERequestHandler struct {
 	clients map[chan map[string]interface{}]bool
 	// Add client routing support
-	clientRoutes map[chan map[string]interface{}]map[string]bool // client -> route keys
-	addClient    chan chan map[string]interface{}
-	removeClient chan chan map[string]interface{}
-	routeBuffer     map[string][]map[string]interface{}  // ← ADD THIS
-    routeBufferLock sync.Mutex
-	broadcast    chan map[string]interface{}
-	mutex        sync.Mutex
+	clientRoutes    map[chan map[string]interface{}]map[string]bool // client -> route keys
+	addClient       chan chan map[string]interface{}
+	removeClient    chan chan map[string]interface{}
+	routeBuffer     map[string][]map[string]interface{} // ← ADD THIS
+	routeBufferLock sync.Mutex
+	broadcast       chan map[string]interface{}
+	mutex           sync.Mutex
 }
 
 var sseRequestHandlerObj SSERequestHandler
@@ -139,17 +139,18 @@ func (handler *SSERequestHandler) Run() {
 				}
 				// If no routing info, broadcast to all (backward compatibility)
 				log.Printf("SHOULD SEND", shouldSend)
-				if shouldSend {
-					select {
-					case client <- msg:
-						log.Println("[RUN]Message sent to client:", filterLogMessage(msg))
-					default:
-						// close(client)
-						// delete(handler.clients, client)
-						// delete(handler.clientRoutes, client)
-						log.Printf("Client is busy, dropping message for client %v", client)
-					}
-				}
+				// if shouldSend {
+				// 	select {
+				// 	case client <- msg:
+				// 		log.Println("[RUN]Message sent to client:", filterLogMessage(msg))
+				// 	default:
+				// 		// close(client)
+				// 		// delete(handler.clients, client)
+				// 		// delete(handler.clientRoutes, client)
+				// 		log.Printf("Client is busy, dropping message for client %v", client)
+				// 	}
+				// }
+				client <- msg
 			}
 			handler.mutex.Unlock()
 		default:
@@ -203,7 +204,7 @@ func (handler *SSERequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 // Public method to add client with route subscription
 func (handler *SSERequestHandler) AddClientWithRoute(routeKey string) chan map[string]interface{} {
-	clientChan := make(chan map[string]interface{}, 50)
+	clientChan := make(chan map[string]interface{}, 1000)
 	handler.addClient <- clientChan
 	handler.SubscribeClientToRoute(clientChan, routeKey)
 	handler.routeBufferLock.Lock()
@@ -248,7 +249,7 @@ func (handler *SSERequestHandler) SubscribeClientToRoute(client chan map[string]
 
 func (handler *SSERequestHandler) BroadcastToRoute(routeKey string, message map[string]interface{}) {
 	message["routeKey"] = routeKey
-	
+
 	// ← ADD THIS: Buffer the message
 	handler.routeBufferLock.Lock()
 	if handler.routeBuffer == nil {
