@@ -33,7 +33,7 @@ func filterLogMessage(message map[string]interface{}) map[string]interface{} {
 			out := make(map[string]interface{}, len(t))
 			for k, val := range t {
 				switch k {
-				case "fileContent", "fileData":
+				case "fileContent", "fileData", "chunkData":
 					out[k] = redacted
 				case "file":
 					// handle a nested file map or array of files
