@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -106,26 +107,32 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 		return
 	}
 
-	// Check expected output file
-	filePath := fmt.Sprintf("/tmp/yt-downloads/%s_%s.%s", videoTitle, videoId, videoFormat)
-	logger.Printf(" Looking for file: %s", filePath)
+	// Locate actual output file (handles cases like mp4.mp3 produced by post-processing)
+	pattern := fmt.Sprintf("/tmp/yt-downloads/%s_%s*", videoTitle, videoId)
+	logger.Printf(" Searching for files matching: %s", pattern)
 
-	// List directory contents for debugging
-	files, _ := os.ReadDir("/tmp/yt-downloads")
-	logger.Printf(" Files in /tmp/yt-downloads:")
-	for _, f := range files {
-		logger.Printf("   - %s (size: %d)", f.Name(), func() int64 {
+	matches, gerr := filepath.Glob(pattern)
+	if gerr != nil || len(matches) == 0 {
+		logger.Printf(" No files found matching pattern")
+		// List directory contents for debugging
+		files, _ := os.ReadDir("/tmp/yt-downloads")
+		logger.Printf(" Files in /tmp/yt-downloads:")
+		for _, f := range files {
 			if info, err := f.Info(); err == nil {
-				return info.Size()
+				logger.Printf("   - %s (size: %d)", f.Name(), info.Size())
 			}
-			return 0
-		}())
+		}
+		yt.done <- fmt.Errorf("file not found")
+		close(yt.done)
+		return
 	}
+
+	filePath := matches[0]
+	logger.Printf(" Found file: %s", filePath)
 
 	stat, err := os.Stat(filePath)
 	if err != nil {
-		logger.Printf(" File not found: %v", err)
-		yt.done <- fmt.Errorf("file not found: %w", err)
+		yt.done <- fmt.Errorf("stat failed: %w", err)
 		close(yt.done)
 		return
 	}
