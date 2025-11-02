@@ -379,7 +379,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 }
 
 func (sse *SSEService) streamFileChunks(routeKey, downloadId, filePath, filename string, totalSize int64) {
-	const chunkSize = 64 * 1024 // 64KB
+	const chunkSize = 65535  // 64KB
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -393,7 +393,7 @@ func (sse *SSEService) streamFileChunks(routeKey, downloadId, filePath, filename
 	}
 	defer file.Close()
 
-	totalChunks := (totalSize + chunkSize - 1) / chunkSize
+	totalChunks := (totalSize + int64(chunkSize) - 1) / int64(chunkSize)
 	log.Printf("📦 Streaming %d bytes in %d chunks", totalSize, totalChunks)
 
 	buffer := make([]byte, chunkSize)
