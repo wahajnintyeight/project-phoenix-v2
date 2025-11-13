@@ -8,8 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -42,18 +42,18 @@ type SSEService struct {
 }
 
 func sanitizeFilename(name string) string {
-    name = strings.TrimSpace(name)
-    re := regexp.MustCompile(`[^a-zA-Z0-9-_ ]+`)
-    name = re.ReplaceAllString(name, "")
-    name = strings.TrimSpace(name)
-    name = strings.ReplaceAll(name, " ", "_")
-    if len(name) == 0 {
-        name = "video"
-    }
-    if len(name) > 100 {
-        name = name[:100]
-    }
-    return name
+	name = strings.TrimSpace(name)
+	re := regexp.MustCompile(`[^a-zA-Z0-9-_ ]+`)
+	name = re.ReplaceAllString(name, "")
+	name = strings.TrimSpace(name)
+	name = strings.ReplaceAll(name, " ", "_")
+	if len(name) == 0 {
+		name = "video"
+	}
+	if len(name) > 100 {
+		name = name[:100]
+	}
+	return name
 }
 
 var once sync.Once
@@ -379,7 +379,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 }
 
 func (sse *SSEService) streamFileChunks(routeKey, downloadId, filePath, filename string, totalSize int64) {
-	const chunkSize = 65535  // 64KB
+	const chunkSize = 65535
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -398,42 +398,93 @@ func (sse *SSEService) streamFileChunks(routeKey, downloadId, filePath, filename
 
 	buffer := make([]byte, chunkSize)
 	chunkIndex := 0
+
+	heartbeatTicker := time.NewTicker(15 * time.Second)
+	defer heartbeatTicker.Stop()
+
+	// Channel to signal when file reading is done
+	fileDone := make(chan error, 1)
+	chunkChan := make(chan struct {
+		index int
+		data  string
+		size  int
+	}, 10) // buffer chunks for concurrent processing
+
+	// Goroutine to read file chunks
+	go func() {
+		defer close(chunkChan)
+		for {
+			n, err := file.Read(buffer)
+			if n == 0 || err == io.EOF {
+				fileDone <- nil
+				return
+			}
+			if err != nil {
+				fileDone <- err
+				return
+			}
+
+			chunkData := base64.StdEncoding.EncodeToString(buffer[:n])
+			chunkChan <- struct {
+				index int
+				data  string
+				size  int
+			}{
+				index: chunkIndex,
+				data:  chunkData,
+				size:  n,
+			}
+			chunkIndex++
+		}
+	}()
+
+	chunksSent := 0
 	for {
-		n, err := file.Read(buffer)
-		if n == 0 || err == io.EOF {
-			break
+		select {
+		case chunk, ok := <-chunkChan:
+			if !ok {
+				err := <-fileDone
+				if err != nil {
+					log.Printf("❌ Read error: %v", err)
+					return
+				}
+
+				// File read complete, send final message
+				sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+					"downloadId": downloadId,
+					"type":       "download_complete",
+					"status":     "completed",
+					"progress":   100,
+					"message":    "Download completed!",
+					"filename":   filename,
+					"fileSize":   totalSize,
+				})
+				log.Printf("✅ File streaming complete (%d chunks sent)", chunksSent)
+				return
+			}
+
+			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+				"downloadId":  downloadId,
+				"type":        "file_chunk",
+				"chunkIndex":  chunk.index,
+				"totalChunks": totalChunks,
+				"chunkData":   chunk.data,
+				"chunkSize":   chunk.size,
+			})
+
+			chunksSent++
+			if chunksSent%100 == 0 {
+				log.Printf("📤 Chunk %d/%d sent", chunksSent, totalChunks)
+			}
+
+		// Send heartbeat every 15 seconds to keep connection alive
+		case <-heartbeatTicker.C:
+			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+				"type": "heartbeat",
+			})
+			log.Printf("Heartbeat sent (chunks: %d/%d)", chunksSent, totalChunks)
 		}
-		if err != nil {
-			log.Printf("❌ Read error: %v", err)
-			return
-		}
-
-		chunkData := base64.StdEncoding.EncodeToString(buffer[:n])
-
-		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-			"downloadId":  downloadId,
-			"type":        "file_chunk",
-			"chunkIndex":  chunkIndex,
-			"totalChunks": totalChunks,
-			"chunkData":   chunkData,
-			"chunkSize":   n,
-		})
-
-		chunkIndex++
-		log.Printf("📤 Chunk %d/%d sent", chunkIndex, totalChunks)
 	}
-
-	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-		"downloadId": downloadId,
-		"type":       "download_complete",
-		"status":     "completed",
-		"progress":   100,
-		"message":    "Download completed!",
-		"filename":   filename,
-		"fileSize":   totalSize,
-	})
-
-	log.Printf("✅ File streaming complete")
 }
 
 func (ls *SSEService) InitServiceConfig() {

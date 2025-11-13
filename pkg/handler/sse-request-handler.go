@@ -14,8 +14,6 @@ type SSERequestHandler struct {
 	clientRoutes    map[chan map[string]interface{}]map[string]bool // client -> route keys
 	addClient       chan chan map[string]interface{}
 	removeClient    chan chan map[string]interface{}
-	routeBuffer     map[string][]map[string]interface{} // ← ADD THIS
-	routeBufferLock sync.Mutex
 	broadcast       chan map[string]interface{}
 	mutex           sync.Mutex
 }
@@ -203,23 +201,12 @@ func (handler *SSERequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 }
 
 // Public method to add client with route subscription
+// Note: No message replay - SSE is real-time. Clients connecting late should handle their own state recovery.
 func (handler *SSERequestHandler) AddClientWithRoute(routeKey string) chan map[string]interface{} {
 	clientChan := make(chan map[string]interface{}, 1000)
 	handler.addClient <- clientChan
 	handler.SubscribeClientToRoute(clientChan, routeKey)
-	handler.routeBufferLock.Lock()
-	if buffer, exists := handler.routeBuffer[routeKey]; exists && len(buffer) > 0 {
-		log.Printf("[HANDLER] Replaying %d buffered messages for route %s", len(buffer), routeKey)
-		for _, msg := range buffer {
-			select {
-			case clientChan <- msg:
-				log.Printf("[HANDLER] Replayed: %v", msg["type"])
-			default:
-				log.Printf("[HANDLER] Buffer full, dropped message")
-			}
-		}
-	}
-	handler.routeBufferLock.Unlock()
+	log.Printf("[HANDLER] Client connected to route: %s", routeKey)
 	return clientChan
 }
 
@@ -246,29 +233,9 @@ func (handler *SSERequestHandler) SubscribeClientToRoute(client chan map[string]
 }
 
 // Broadcast to specific route only
-
+// Note: No buffering - messages are real-time only. Reduces memory usage and prevents
+// issues with large file chunks being replayed incorrectly.
 func (handler *SSERequestHandler) BroadcastToRoute(routeKey string, message map[string]interface{}) {
 	message["routeKey"] = routeKey
-
-	// ← ADD THIS: Buffer the message
-	handler.routeBufferLock.Lock()
-	if handler.routeBuffer == nil {
-		handler.routeBuffer = make(map[string][]map[string]interface{})
-	}
-	if handler.routeBuffer[routeKey] == nil {
-		handler.routeBuffer[routeKey] = make([]map[string]interface{}, 0)
-	}
-	// Deep copy to avoid mutations
-	msgCopy := make(map[string]interface{})
-	for k, v := range message {
-		msgCopy[k] = v
-	}
-	handler.routeBuffer[routeKey] = append(handler.routeBuffer[routeKey], msgCopy)
-	// Keep only last 100 messages per route
-	if len(handler.routeBuffer[routeKey]) > 100 {
-		handler.routeBuffer[routeKey] = handler.routeBuffer[routeKey][1:]
-	}
-	handler.routeBufferLock.Unlock()
-
 	handler.broadcast <- message
 }
