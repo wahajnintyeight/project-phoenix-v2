@@ -316,9 +316,9 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 			case <-heartbeatTicker.C:
 				// Only send heartbeat if we're still in initialization phase
 				if time.Since(lastProgressUpdate) > 5*time.Second {
-					job.mu.RLock()
+					job.mu.Lock()
 					currentProgress := job.Progress
-					job.mu.RUnlock()
+					job.mu.Unlock()
 					
 					// Ensure progress is at least 3% to show activity
 					if currentProgress < 3 {
