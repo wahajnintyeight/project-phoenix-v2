@@ -294,12 +294,57 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 	job.Status = enum.DOWNLOADING
 	job.mu.Unlock()
 
+	// Send immediate progress update to keep client connected
+	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+		"downloadId": downloadId,
+		"status":     "downloading",
+		"progress":   1,
+		"message":    "Connecting to YouTube...",
+		"type":       "download_progress",
+	})
+
 	streamStarted := false
+	lastProgressUpdate := time.Now()
+
+	// Send periodic heartbeats during initialization to keep client engaged
+	heartbeatTicker := time.NewTicker(10 * time.Second)
+	initializationDone := make(chan bool, 1)
+	
+	go func() {
+		for {
+			select {
+			case <-heartbeatTicker.C:
+				// Only send heartbeat if we're still in initialization phase
+				if time.Since(lastProgressUpdate) > 5*time.Second {
+					job.mu.RLock()
+					currentProgress := job.Progress
+					job.mu.RUnlock()
+					
+					// Ensure progress is at least 3% to show activity
+					if currentProgress < 3 {
+						currentProgress = 3
+					}
+					
+					sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+						"downloadId": downloadId,
+						"status":     "downloading",
+						"progress":   currentProgress,
+						"message":    "Analyzing video formats...",
+						"type":       "download_progress",
+					})
+				}
+			case <-initializationDone:
+				heartbeatTicker.Stop()
+				return
+			}
+		}
+	}()
 
 	onProgress := func(progress float64) {
 		job.mu.Lock()
 		job.Progress = int(progress)
 		job.mu.Unlock()
+		lastProgressUpdate = time.Now()
 
 		event := map[string]interface{}{
 			"downloadId": downloadId,
@@ -312,12 +357,25 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 
 		if !streamStarted && progress >= 10 {
 			streamStarted = true
+			select {
+			case initializationDone <- true:
+			default:
+			}
 			log.Printf("🟢 Stream ready at %.1f%%", progress)
 		}
 	}
 
 	// Sanitize title to ensure safe filesystem pathing and consistent output name
 	sanitizedTitle := sanitizeFilename(videoTitle)
+
+	// Send status update before calling yt-dlp
+	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+		"downloadId": downloadId,
+		"status":     "downloading",
+		"progress":   2,
+		"message":    "Starting download...",
+		"type":       "download_progress",
+	})
 
 	session, err := google.DownloadYoutubeVideoToBuffer(
 		videoId,
@@ -327,6 +385,13 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 		sanitizedTitle,
 		onProgress,
 	)
+	
+	// Stop heartbeat ticker when yt-dlp starts (or errors) - use select to avoid blocking
+	select {
+	case initializationDone <- true:
+	default:
+	}
+	
 	if err != nil {
 		job.mu.Lock()
 		job.Status = enum.SSEStreamEnum("error")
@@ -334,11 +399,20 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
 			"status":     "error",
-			"message":    fmt.Sprintf("Failed: %v", err),
+			"message":    fmt.Sprintf("Failed to start download: %v", err),
 			"type":       "download_progress",
 		})
 		return
 	}
+	
+	// Send status update when yt-dlp is running
+	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+		"downloadId": downloadId,
+		"status":     "downloading",
+		"progress":   5,
+		"message":    "Video download in progress...",
+		"type":       "download_progress",
+	})
 
 	job.mu.Lock()
 	job.session = session

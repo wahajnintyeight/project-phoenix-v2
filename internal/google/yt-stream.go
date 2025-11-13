@@ -72,6 +72,11 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 
 	logger.Printf("Running: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
 
+	// Send initial callback to indicate yt-dlp started
+	if progressCallback != nil {
+		progressCallback(10) // 10% indicates yt-dlp has started
+	}
+
 	if err := cmd.Start(); err != nil {
 		logger.Printf("start yt-dlp: %v", err)
 		yt.done <- err
@@ -85,6 +90,14 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 			line := scanner.Text()
 			stderrBuf.WriteString(line + "\n")
 			logger.Printf("YT-DLP: %s", line)
+
+			// Send progress callback on retry/format selection messages to keep client engaged
+			if strings.Contains(line, "Retrying") || strings.Contains(line, "format") || strings.Contains(line, "extracting") {
+				if progressCallback != nil {
+					// Small progress update to show activity
+					progressCallback(15) // 15% during format selection/retry
+				}
+			}
 
 			// Extract progress percentage
 			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 1 {
