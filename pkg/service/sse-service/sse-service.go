@@ -1,7 +1,7 @@
 package service
 
 import (
-	"encoding/base64"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"project-phoenix/v2/internal/aws"
 	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/google"
@@ -39,6 +40,7 @@ type SSEService struct {
 	brokerObj          microBroker.Broker
 	sseHandler         *handler.SSERequestHandler
 	downloadQueue      *DownloadQueue
+	s3Service          *aws.S3Service
 }
 
 func sanitizeFilename(name string) string {
@@ -89,6 +91,15 @@ func (sse *SSEService) InitializeService(serviceObj micro.Service, serviceName s
 		// Initialize the SSE handler
 		sse.sseHandler = handler.NewSSERequestHandler()
 		go sse.sseHandler.Run()
+
+		// Initialize S3 service
+		s3Svc, _, err := aws.NewS3ServiceFromEnv()
+		if err != nil {
+			log.Printf("Warning: S3 service initialization failed: %v. File uploads will not work.", err)
+		} else {
+			sse.s3Service = s3Svc
+			log.Println("S3 service initialized successfully")
+		}
 	})
 
 	return sse
@@ -281,7 +292,7 @@ func (sse *SSEService) HandleVideoDownload(p microBroker.Event) error {
 	return nil
 }
 
-// processVideoDownload handles the actual video download with progress updates
+// processVideoDownload handles the actual video download and S3 upload
 func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality, bitRate, videoTitle string) {
 	routeKey := fmt.Sprintf("download-%s", downloadId)
 
@@ -294,88 +305,14 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 	job.Status = enum.DOWNLOADING
 	job.mu.Unlock()
 
-	// Send immediate progress update to keep client connected
-	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-		"downloadId": downloadId,
-		"status":     "downloading",
-		"progress":   1,
-		"message":    "Connecting to YouTube...",
-		"type":       "download_progress",
-	})
-
-	streamStarted := false
-	lastProgressUpdate := time.Now()
-
-	// Send periodic heartbeats during initialization to keep client engaged
-	heartbeatTicker := time.NewTicker(10 * time.Second)
-	initializationDone := make(chan bool, 1)
-	
-	go func() {
-		for {
-			select {
-			case <-heartbeatTicker.C:
-				// Only send heartbeat if we're still in initialization phase
-				if time.Since(lastProgressUpdate) > 5*time.Second {
-					job.mu.Lock()
-					currentProgress := job.Progress
-					job.mu.Unlock()
-					
-					// Ensure progress is at least 3% to show activity
-					if currentProgress < 3 {
-						currentProgress = 3
-					}
-					
-					sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-						"downloadId": downloadId,
-						"status":     "downloading",
-						"progress":   currentProgress,
-						"message":    "Analyzing video formats...",
-						"type":       "download_progress",
-					})
-				}
-			case <-initializationDone:
-				heartbeatTicker.Stop()
-				return
-			}
-		}
-	}()
+	// Sanitize title to ensure safe filesystem pathing and consistent output name
+	sanitizedTitle := sanitizeFilename(videoTitle)
 
 	onProgress := func(progress float64) {
 		job.mu.Lock()
 		job.Progress = int(progress)
 		job.mu.Unlock()
-		lastProgressUpdate = time.Now()
-
-		event := map[string]interface{}{
-			"downloadId": downloadId,
-			"status":     "downloading",
-			"progress":   int(progress),
-			"message":    fmt.Sprintf("Downloading... %.1f%%", progress),
-			"type":       "download_progress",
-		}
-		sse.sseHandler.BroadcastToRoute(routeKey, event)
-
-		if !streamStarted && progress >= 10 {
-			streamStarted = true
-			select {
-			case initializationDone <- true:
-			default:
-			}
-			log.Printf("🟢 Stream ready at %.1f%%", progress)
-		}
 	}
-
-	// Sanitize title to ensure safe filesystem pathing and consistent output name
-	sanitizedTitle := sanitizeFilename(videoTitle)
-
-	// Send status update before calling yt-dlp
-	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-		"downloadId": downloadId,
-		"status":     "downloading",
-		"progress":   2,
-		"message":    "Starting download...",
-		"type":       "download_progress",
-	})
 
 	session, err := google.DownloadYoutubeVideoToBuffer(
 		videoId,
@@ -385,13 +322,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 		sanitizedTitle,
 		onProgress,
 	)
-	
-	// Stop heartbeat ticker when yt-dlp starts (or errors) - use select to avoid blocking
-	select {
-	case initializationDone <- true:
-	default:
-	}
-	
+
 	if err != nil {
 		job.mu.Lock()
 		job.Status = enum.SSEStreamEnum("error")
@@ -400,23 +331,10 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 			"downloadId": downloadId,
 			"status":     "error",
 			"message":    fmt.Sprintf("Failed to start download: %v", err),
-			"type":       "download_progress",
+			"type":       "download_error",
 		})
 		return
 	}
-	
-	// Send status update when yt-dlp is running
-	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-		"downloadId": downloadId,
-		"status":     "downloading",
-		"progress":   5,
-		"message":    "Video download in progress...",
-		"type":       "download_progress",
-	})
-
-	job.mu.Lock()
-	job.session = session
-	job.mu.Unlock()
 
 	if err := session.Wait(); err != nil {
 		job.mu.Lock()
@@ -426,7 +344,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 			"downloadId": downloadId,
 			"status":     "error",
 			"message":    fmt.Sprintf("Download failed: %v", err),
-			"type":       "download_progress",
+			"type":       "download_error",
 		})
 		return
 	}
@@ -435,6 +353,74 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 	fileSize := session.GetFileSize()
 	filename := fmt.Sprintf("%s_%s.%s", sanitizedTitle, videoId, format)
 
+	log.Printf("✅ Download complete: %s (%d bytes)", filePath, fileSize)
+
+	// Upload to S3
+	if sse.s3Service == nil {
+		job.mu.Lock()
+		job.Status = enum.SSEStreamEnum("error")
+		job.mu.Unlock()
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "error",
+			"message":    "S3 service not initialized",
+			"type":       "download_error",
+		})
+		os.Remove(filePath)
+		return
+	}
+
+	// Read file into memory
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		job.mu.Lock()
+		job.Status = enum.SSEStreamEnum("error")
+		job.mu.Unlock()
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "error",
+			"message":    fmt.Sprintf("Failed to read file: %v", err),
+			"type":       "download_error",
+		})
+		os.Remove(filePath)
+		return
+	}
+
+	// Generate S3 key
+	s3Key := fmt.Sprintf("downloads/%s/%s", downloadId, filename)
+
+	// Determine MIME type based on format
+	mimeType := "application/octet-stream"
+	if format == "mp3" {
+		mimeType = "audio/mpeg"
+	} else if format == "mp4" {
+		mimeType = "video/mp4"
+	}
+
+	// Upload to S3 with 24-hour TTL
+	presignedUrl, err := sse.s3Service.UploadFile(
+		context.Background(),
+		s3Key,
+		fileData,
+		mimeType,
+		1440, // 24 hours
+	)
+
+	if err != nil {
+		job.mu.Lock()
+		job.Status = enum.SSEStreamEnum("error")
+		job.mu.Unlock()
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "error",
+			"message":    fmt.Sprintf("Failed to upload to S3: %v", err),
+			"type":       "download_error",
+		})
+		os.Remove(filePath)
+		return
+	}
+
+	// Mark job as completed
 	job.mu.Lock()
 	job.FilePath = filePath
 	job.FileSize = fileSize
@@ -442,124 +428,27 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 	job.Progress = 100
 	job.mu.Unlock()
 
-	log.Printf("✅ Download complete: %s (%d bytes)", filePath, fileSize)
+	// Send completion message with download URL
+	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+		"downloadId":   downloadId,
+		"type":         "download_complete",
+		"status":       "completed",
+		"progress":     100,
+		"message":      "Download completed!",
+		"filename":     filename,
+		"fileSize":     fileSize,
+		"downloadUrl":  presignedUrl,
+	})
 
-	sse.streamFileChunks(routeKey, downloadId, filePath, filename, fileSize)
+	log.Printf("✅ File uploaded to S3: %s", s3Key)
 
+	// Clean up local file after 1 hour
 	time.AfterFunc(1*time.Hour, func() {
 		os.Remove(filePath)
 		log.Printf("🗑️ Cleaned up: %s", filePath)
 	})
 }
 
-func (sse *SSEService) streamFileChunks(routeKey, downloadId, filePath, filename string, totalSize int64) {
-	const chunkSize = 65535
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Printf("❌ Failed to open file: %v", err)
-		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-			"downloadId": downloadId,
-			"type":       "download_error",
-			"message":    "Failed to read file",
-		})
-		return
-	}
-	defer file.Close()
-
-	totalChunks := (totalSize + int64(chunkSize) - 1) / int64(chunkSize)
-	log.Printf("📦 Streaming %d bytes in %d chunks", totalSize, totalChunks)
-
-	buffer := make([]byte, chunkSize)
-	chunkIndex := 0
-
-	heartbeatTicker := time.NewTicker(15 * time.Second)
-	defer heartbeatTicker.Stop()
-
-	// Channel to signal when file reading is done
-	fileDone := make(chan error, 1)
-	chunkChan := make(chan struct {
-		index int
-		data  string
-		size  int
-	}, 10) // buffer chunks for concurrent processing
-
-	// Goroutine to read file chunks
-	go func() {
-		defer close(chunkChan)
-		for {
-			n, err := file.Read(buffer)
-			if n == 0 || err == io.EOF {
-				fileDone <- nil
-				return
-			}
-			if err != nil {
-				fileDone <- err
-				return
-			}
-
-			chunkData := base64.StdEncoding.EncodeToString(buffer[:n])
-			chunkChan <- struct {
-				index int
-				data  string
-				size  int
-			}{
-				index: chunkIndex,
-				data:  chunkData,
-				size:  n,
-			}
-			chunkIndex++
-		}
-	}()
-
-	chunksSent := 0
-	for {
-		select {
-		case chunk, ok := <-chunkChan:
-			if !ok {
-				err := <-fileDone
-				if err != nil {
-					log.Printf("❌ Read error: %v", err)
-					return
-				}
-
-				// File read complete, send final message
-				sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-					"downloadId": downloadId,
-					"type":       "download_complete",
-					"status":     "completed",
-					"progress":   100,
-					"message":    "Download completed!",
-					"filename":   filename,
-					"fileSize":   totalSize,
-				})
-				log.Printf("✅ File streaming complete (%d chunks sent)", chunksSent)
-				return
-			}
-
-			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-				"downloadId":  downloadId,
-				"type":        "file_chunk",
-				"chunkIndex":  chunk.index,
-				"totalChunks": totalChunks,
-				"chunkData":   chunk.data,
-				"chunkSize":   chunk.size,
-			})
-
-			chunksSent++
-			if chunksSent%100 == 0 {
-				log.Printf("📤 Chunk %d/%d sent", chunksSent, totalChunks)
-			}
-
-		// Send heartbeat every 15 seconds to keep connection alive
-		case <-heartbeatTicker.C:
-			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-				"type": "heartbeat",
-			})
-			log.Printf("Heartbeat sent (chunks: %d/%d)", chunksSent, totalChunks)
-		}
-	}
-}
 
 func (ls *SSEService) InitServiceConfig() {
 	serviceConfig, er := internal.ReturnServiceConfig("sse-service")
