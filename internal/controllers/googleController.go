@@ -68,6 +68,7 @@ func (g *GoogleController) DownloadYoutubeVideos(w http.ResponseWriter, r *http.
 		"format":     downloadRequestBody.Format,
 		"bitRate":    downloadRequestBody.BitRate,
 		"youtubeURL": downloadRequestBody.YoutubeURL,
+		"quality": downloadRequestBody.Quality,
 		"timestamp":  time.Now().UTC(),
 		"status":     "queued",
 	}
