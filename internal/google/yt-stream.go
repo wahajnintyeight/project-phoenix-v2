@@ -217,7 +217,7 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, quality string,
 			"--no-playlist",
 			"--newline",
 			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			"--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s%%(ext)s", videoTitle, videoId),
+			"--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
 			videoURL,
 		}
 	} else {
@@ -228,7 +228,7 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, quality string,
 			"--no-playlist",
 			"--newline",
 			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			"--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s%%(ext)s", videoTitle, videoId),
+			"--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
 			videoURL,
 		}
 	}

@@ -23,8 +23,8 @@ FROM scratch
 
 # Final stage
 FROM alpine:latest  
-RUN apk --no-cache add ca-certificates ffmpeg python3 py3-pip
-RUN pip3 install --break-system-packages yt-dlp
+RUN apk --no-cache add ca-certificates ffmpeg python3 py3-pip nodejs
+RUN pip3 install --break-system-packages -U yt-dlp
 
 WORKDIR /app
 
