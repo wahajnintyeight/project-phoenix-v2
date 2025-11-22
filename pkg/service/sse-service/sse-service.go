@@ -441,10 +441,23 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 
 	log.Printf("✅ File uploaded to S3: %s", s3Key)
 
-	// Clean up local file after 1 hour
+	// Clean up local file and S3 file after 1 hour
 	time.AfterFunc(1*time.Hour, func() {
-		os.Remove(filePath)
-		log.Printf("🗑️ Cleaned up: %s", filePath)
+		// Delete local file
+		if err := os.Remove(filePath); err != nil {
+			log.Printf("⚠️ Failed to delete local file %s: %v", filePath, err)
+		} else {
+			log.Printf("🗑️ Cleaned up local file: %s", filePath)
+		}
+
+		// Delete S3 file
+		if sse.s3Service != nil {
+			if err := sse.s3Service.DeleteFile(context.Background(), s3Key); err != nil {
+				log.Printf("⚠️ Failed to delete S3 file %s: %v", s3Key, err)
+			} else {
+				log.Printf("🗑️ Cleaned up S3 file: %s", s3Key)
+			}
+		}
 	})
 }
 

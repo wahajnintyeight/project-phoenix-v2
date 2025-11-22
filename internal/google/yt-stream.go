@@ -284,6 +284,8 @@ func GetStreamMimeType(format string) string {
 }
 
 func buildVideoFormatString(format, quality string) string {
+	logger.Printf("🎬 buildVideoFormatString called: format=%s, quality=%s", format, quality)
+	
 	// Default to best if quality not specified
 	if quality == "" || quality == "best" {
 		quality = "best"
@@ -303,7 +305,17 @@ func buildVideoFormatString(format, quality string) string {
 
 	height := heightMap[quality]
 	if height == "" {
-		height = "best" // Fallback to best if quality not recognized
+		// Try to extract height from quality string (e.g., "360" -> "360")
+		if strings.Contains(quality, "p") {
+			// Already in format like "360p", should have been in map
+			logger.Printf("⚠️ Quality '%s' not recognized, falling back to best", quality)
+			height = "best"
+		} else if quality != "best" {
+			// Might be just a number like "360"
+			height = quality
+		} else {
+			height = "best"
+		}
 	}
 
 	var formatStr string
@@ -336,6 +348,7 @@ func buildVideoFormatString(format, quality string) string {
 		formatStr = "best[ext=mp4]/best"
 	}
 
+	logger.Printf("✅ Built format string: %s (height=%s)", formatStr, height)
 	return formatStr
 }
 
