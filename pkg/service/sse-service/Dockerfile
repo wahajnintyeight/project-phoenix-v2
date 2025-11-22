@@ -23,13 +23,8 @@ FROM scratch
 
 # Final stage
 FROM alpine:latest  
-RUN apk --no-cache add ca-certificates ffmpeg python3 py3-pip nodejs npm curl
-# Install latest yt-dlp with all dependencies
+RUN apk --no-cache add ca-certificates ffmpeg python3 py3-pip nodejs
 RUN pip3 install --break-system-packages -U yt-dlp
-# Install yt-dlp with EJS support for YouTube signature solving
-RUN pip3 install --break-system-packages -U yt-dlp-ejs-github
-# Ensure Node.js is available as JavaScript runtime (required for YouTube signature solving)
-RUN node --version && npm --version
 
 WORKDIR /app
 
