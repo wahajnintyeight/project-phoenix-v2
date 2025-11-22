@@ -313,6 +313,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 		job.mu.Unlock()
 	}
 
+	log.Printf("[SSE-SERVICE] Starting download for video %s with format %s, quality %s, bitrate %s", videoId, format, quality, bitRate)
 	session, err := google.DownloadYoutubeVideoToBuffer(
 		videoId,
 		format,

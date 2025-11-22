@@ -207,7 +207,9 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, quality string,
 		return nil, fmt.Errorf("failed to create download dir: %w", err)
 	}
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
-
+	
+	logger.Printf("Downloading video %s in format %s, quality %s, bitrate %s", videoId, format, quality, bitRate)
+	
 	var args []string
 	if format == "mp3" {
 		args = []string{
