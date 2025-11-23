@@ -133,9 +133,7 @@ jobs:
             set -e
             cd /var/www/project-phoenix-v2
             
-            # Safe update
             git pull origin "$BRANCH" || echo "Git pull failed (local changes?), continuing..."
-
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$USER" --password-stdin
 
             IFS=' ' read -r -a paths <<< "$PATHS"
@@ -143,11 +141,9 @@ jobs:
             
             for path in "${paths[@]}"; do
               svc=$(basename "$path")
-              # Map folder names to docker-compose service names
               case "$svc" in
                 apigateway)       deploy_targets+=("api-gateway") ;;
                 apigateway-grpc)  deploy_targets+=("api-gateway-grpc") ;;
-                # locationservice)  deploy_targets+=("location-service") ;;
                 socketservice)    deploy_targets+=("socket-service") ;;
                 sse-service)      deploy_targets+=("sse-service") ;;
               esac
@@ -155,27 +151,23 @@ jobs:
 
             if [ ${#deploy_targets[@]} -gt 0 ]; then
                echo "Rolling update for: ${deploy_targets[*]}"
-               # Pull only changed images
                docker compose pull "${deploy_targets[@]}"
-
-               # Remove legacy standalone containers that may hold ports (from pre-compose era)
-               for svc in "${deploy_targets[@]}"; do
-                 case "$svc" in
-                   api-gateway)
-                     docker rm -f ppv2-api-gateway 2>/dev/null || true ;;
-                   api-gateway-grpc)
-                     docker rm -f ppv2-api-gateway-grpc 2>/dev/null || true ;;
-                   sse-service)
-                     docker rm -f ppv2-sse-service 2>/dev/null || true ;;
-                   socket-service)
-                     docker rm -f ppv2-socket-service 2>/dev/null || true ;;
-                 esac
-               done
-
-               # Recreate targeted services to avoid "-1" duplicates and free conflicting ports
                docker compose -p ppv2 rm -f "${deploy_targets[@]}" 2>/dev/null || true
                docker compose -p ppv2 up -d --no-deps --wait "${deploy_targets[@]}"
                docker compose ps
-            else
-               echo "Only unmapped services (like datacommunicator) changed. No Compose update needed."
+
+               # Cleanup: Remove ONLY old untagged ppv2 project images
+               echo "Cleaning up old ppv2 project images..."
+               
+               # Define ppv2 services
+               ppv2_services=("apigateway" "apigateway-grpc" "socketservice" "sse-service")
+               
+               for svc in "${ppv2_services[@]}"; do
+                 # Remove untagged images for this specific service
+                 docker images -a "ghcr.io/wahajnintyeight/$svc" | grep '<none>' | awk '{print $3}' | sort -u | xargs -r docker rmi -f 2>/dev/null || true
+               done
+               
+               echo "Cleanup complete"
+               echo "Remaining ppv2 images:"
+               docker images ghcr.io/wahajnintyeight/apigateway* ghcr.io/wahajnintyeight/socketservice* ghcr.io/wahajnintyeight/sse-service* 2>/dev/null || true
             fi
