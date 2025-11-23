@@ -81,8 +81,9 @@ jobs:
           changed=()
           [ "${{ steps.changes.outputs.apigateway }}" = "true" ] && changed+=("pkg/service/apigateway")
           [ "${{ steps.changes.outputs.apigateway_grpc }}" = "true" ] && changed+=("pkg/service/apigateway-grpc")
-          [ "${{ steps.changes.outputs.datacommunicator }}" = "true" ] && changed+=("pkg/service/datacommunicator")
-          [ "${{ steps.changes.outputs.locationservice }}" = "true" ] && changed+=("pkg/service/locationservice")
+          # Skipped temporarily by request
+          # [ "${{ steps.changes.outputs.datacommunicator }}" = "true" ] && changed+=("pkg/service/datacommunicator")
+          # [ "${{ steps.changes.outputs.locationservice }}" = "true" ] && changed+=("pkg/service/locationservice")
           [ "${{ steps.changes.outputs.socketservice }}" = "true" ] && changed+=("pkg/service/socketservice")
           [ "${{ steps.changes.outputs.sse_service }}" = "true" ] && changed+=("pkg/service/sse-service")
           
@@ -146,7 +147,7 @@ jobs:
               case "$svc" in
                 apigateway)       deploy_targets+=("api-gateway") ;;
                 apigateway-grpc)  deploy_targets+=("api-gateway-grpc") ;;
-                locationservice)  deploy_targets+=("location-service") ;;
+                # locationservice)  deploy_targets+=("location-service") ;;
                 socketservice)    deploy_targets+=("socket-service") ;;
                 sse-service)      deploy_targets+=("sse-service") ;;
               esac
