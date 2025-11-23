@@ -22,7 +22,6 @@ type DownloadJob struct {
 	session  *google.StreamSession
 	mu       sync.Mutex
 }
-
 type DownloadQueue struct {
 	jobs            map[string]*DownloadJob
 	queue           chan *DownloadJob

@@ -2,6 +2,8 @@ services:
   api-gateway:
     image: ghcr.io/wahajnintyeight/apigateway:latest
     container_name: ppv2-api-gateway
+    env_file:
+      - .env
     ports:
       - "8881:8881"
     command: ["./main", "--service-name", "api-gateway", "--port", "8881"]
@@ -14,6 +16,8 @@ services:
   socket-service:
     image: ghcr.io/wahajnintyeight/socketservice:latest
     container_name: ppv2-socket-service
+    env_file:
+      - .env
     ports:
       - "8884:8884"
     command: ["./main", "--service-name", "socket-service", "--port", "8884"]
@@ -26,6 +30,8 @@ services:
   sse-service:
     image: ghcr.io/wahajnintyeight/sse-service:latest
     container_name: ppv2-sse-service
+    env_file:
+      - .env
     ports:
       - "8885:8885"
     command: ["./main", "--service-name", "sse-service", "--port", "8885"]
@@ -38,6 +44,8 @@ services:
   api-gateway-grpc:
     image: ghcr.io/wahajnintyeight/apigateway-grpc:latest
     container_name: ppv2-api-gateway-grpc
+    env_file:
+      - .env
     ports:
       - "8886:8886"
     command: ["./main", "--service-name", "api-gateway-grpc", "--port", "8886"]

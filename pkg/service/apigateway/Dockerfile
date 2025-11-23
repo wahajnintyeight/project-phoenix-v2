@@ -34,8 +34,9 @@ COPY --from=builder /build/main .
 # Copy runtime configs
 COPY --from=builder /build/internal/service-configs ./internal/service-configs
 
+# Copy environment file (used by godotenv)
+COPY --from=builder /build/.env ./.env
 
 EXPOSE 8881
-
 
 CMD ["./main", "--service-name", "api-gateway", "--port", "8881"]
