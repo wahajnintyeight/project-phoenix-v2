@@ -73,17 +73,17 @@ func (dq *DownloadQueue) worker(id int) {
 		delete(dq.activeDownloads, job.ID)
 		dq.mu.Unlock()
 
-		log.Printf("✅ [WORKER %d] Finished: %s (status: %s)", id, job.ID, job.Status)
+		log.Printf(" [WORKER %d] Finished: %s (status: %s)", id, job.ID, job.Status)
 	}
 }
 
-func (dq *DownloadQueue) AddJob(id, videoID, format, bitRate, quality, videoTitle string) {
+func (dq *DownloadQueue) AddJob(id, videoID, format, quality, bitRate, videoTitle string) {
 	job := &DownloadJob{
 		ID:       id,
 		VideoID:  videoID,
 		Format:   format,
-		BitRate:  bitRate,
 		Quality:  quality,
+		BitRate:  bitRate,
 		VideoTitle: videoTitle,
 		Status:   enum.QUEUED,
 		Progress: 0,
@@ -94,6 +94,7 @@ func (dq *DownloadQueue) AddJob(id, videoID, format, bitRate, quality, videoTitl
 	dq.mu.Unlock()
 
 	dq.queue <- job
+	log.Printf(" Download queued: %s", id)
 	log.Printf("📋 Download queued: %s", id)
 }
 
