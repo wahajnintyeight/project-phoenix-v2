@@ -1,0 +1,160 @@
+name: Build and Deploy (changed only)
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            # Include specific files to minimize false positives
+            apigateway:
+              - 'pkg/service/apigateway/**'
+              - 'pkg/**'
+              - 'internal/**'
+              - 'go.mod'
+              - 'go.sum'
+            apigateway_grpc:
+              - 'pkg/service/apigateway-grpc/**'
+              - 'pkg/**'
+              - 'internal/**'
+              - 'go.mod'
+              - 'go.sum'
+            datacommunicator:
+              - 'pkg/service/datacommunicator/**'
+              - 'pkg/**'
+              - 'internal/**'
+              - 'go.mod'
+              - 'go.sum'
+            locationservice:
+              - 'pkg/service/locationservice/**'
+              - 'pkg/**'
+              - 'internal/**'
+              - 'go.mod'
+              - 'go.sum'
+            socketservice:
+              - 'pkg/service/socketservice/**'
+              - 'pkg/**'
+              - 'internal/**'
+              - 'go.mod'
+              - 'go.sum'
+            sse_service:
+              - 'pkg/service/sse-service/**'
+              - 'pkg/**'
+              - 'internal/**'
+              - 'go.mod'
+              - 'go.sum'
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute changed list
+        id: list
+        run: |
+          changed=()
+          [ "${{ steps.changes.outputs.apigateway }}" = "true" ] && changed+=("apigateway")
+          [ "${{ steps.changes.outputs.apigateway_grpc }}" = "true" ] && changed+=("apigateway-grpc")
+          [ "${{ steps.changes.outputs.datacommunicator }}" = "true" ] && changed+=("datacommunicator")
+          [ "${{ steps.changes.outputs.locationservice }}" = "true" ] && changed+=("locationservice")
+          [ "${{ steps.changes.outputs.socketservice }}" = "true" ] && changed+=("socketservice")
+          [ "${{ steps.changes.outputs.sse_service }}" = "true" ] && changed+=("sse-service")
+          
+          if [ ${#changed[@]} -eq 0 ]; then
+             echo "none=true" >> $GITHUB_OUTPUT
+             echo "No services changed."
+          else
+             echo "services=${changed[*]}" >> $GITHUB_OUTPUT
+             echo "none=false" >> $GITHUB_OUTPUT
+             echo "Detected changes in: ${changed[*]}"
+          fi
+
+      - name: Build changed services
+        if: steps.list.outputs.none == 'false'
+        run: |
+          IFS=' ' read -r -a svcs <<< "${{ steps.list.outputs.services }}"
+          for s in "${svcs[@]}"; do
+            echo "Building $s"
+            # Note: We pass the service name as a build-arg to make the Dockerfile generic if needed,
+            # or simply use it to point to the correct main file.
+            docker buildx build \
+              --file "pkg/service/$s/Dockerfile" \
+              --platform linux/amd64 \
+              --tag "ghcr.io/${{ github.repository_owner }}/$s:sha-${{ github.sha }}" \
+              --tag "ghcr.io/${{ github.repository_owner }}/$s:latest" \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
+              $([ "${{ github.event_name }}" != "pull_request" ] && echo "--push") \
+              .
+          done
+
+      - name: Remote deploy changed to VPS
+        if: steps.list.outputs.none == 'false' && github.event_name != 'pull_request'
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          SERVICES: "${{ steps.list.outputs.services }}"
+          BRANCH: "${{ github.ref_name }}"
+          GHCR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          envs: SERVICES,BRANCH,GHCR_TOKEN,GITHUB_ACTOR
+          script: |
+            set -e
+            cd /var/www/project-phoenix-v2
+            
+            # Simple pull to update docker-compose.yml if changed
+            echo "Updating repo..."
+            git pull origin "$BRANCH" || echo "Git pull failed, proceeding with existing config..."
+
+            IFS=' ' read -r -a svcs <<< "$SERVICES"
+            
+            # Map build names to compose service names
+            mapped=()
+            for s in "${svcs[@]}"; do
+              case "$s" in
+                apigateway) mapped+=("api-gateway") ;;
+                apigateway-grpc) mapped+=("api-gateway-grpc") ;;
+                datacommunicator) echo "Skipping datacommunicator (not in compose)" ;;
+                locationservice) mapped+=("location-service") ;;
+                socketservice) mapped+=("socket-service") ;;
+                sse-service) mapped+=("sse-service") ;;
+              esac
+            done
+            
+            if [ ${#mapped[@]} -gt 0 ]; then
+              echo "Deploying: ${mapped[*]}"
+              echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+              docker compose -p project-phoenix-v2 pull "${mapped[@]}"
+              docker compose -p project-phoenix-v2 up -d --no-deps --wait "${mapped[@]}"
+            else
+              echo "No deployable services found."
+            fi
+            

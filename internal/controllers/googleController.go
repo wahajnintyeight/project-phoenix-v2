@@ -48,7 +48,6 @@ func (g *GoogleController) DownloadYoutubeVideos(w http.ResponseWriter, r *http.
 	if decodeErr != nil {
 		return int(enum.ERROR), nil, decodeErr
 	}
-
 	// Generate unique download ID
 	var downloadId string
 	if downloadRequestBody.DownloadId == "" {
