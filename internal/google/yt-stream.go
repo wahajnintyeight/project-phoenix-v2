@@ -40,8 +40,17 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 		parts := strings.Fields(binstr)
 		if len(parts) > 0 {
 			all := append(parts[1:], args...)
-			return exec.Command(parts[0], all...), nil
+			if cmd, err := validateAndBuild(parts[0], all); err == nil {
+				return cmd, nil
+			} else {
+				logger.Printf("YT_DLP_BIN invalid (%s), falling back: %v", parts[0], err)
+			}
 		}
+	}
+
+	// Try common install location
+	if cmd, err := validateAndBuild("/usr/local/bin/yt-dlp", args); err == nil {
+		return cmd, nil
 	}
 
 	// Try yt-dlp in PATH
