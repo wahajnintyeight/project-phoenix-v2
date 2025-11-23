@@ -6,8 +6,9 @@ WORKDIR /build
 
 RUN apk add --no-cache git
 
-COPY go.mod go.su* ./
+COPY go.mod go.sum ./
 RUN go mod download
+RUN go mod tidy
 
 COPY . .
 

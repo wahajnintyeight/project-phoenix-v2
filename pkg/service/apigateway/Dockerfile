@@ -7,11 +7,15 @@ WORKDIR /build
 RUN apk add --no-cache git
 
 # Copy go mod and sum files first to leverage Docker cache
-COPY go.mod go.su* ./
+COPY go.mod go.sum ./
+
 RUN go mod download
 
 # Copy the source code
 COPY . .
+
+# Ensure go.mod/go.sum have all required entries for all imported packages
+RUN go mod tidy
 
 # Build the application
 # -ldflags="-w -s" reduces binary size by stripping debug information
