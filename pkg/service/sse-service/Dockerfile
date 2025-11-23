@@ -37,7 +37,7 @@ COPY --from=builder /build/main .
 
 # Copy runtime configs
 COPY --from=builder /build/internal/service-configs ./internal/service-configs
-COPY --from=builder /build/.env ./.env
+
 
 EXPOSE 8885
 
