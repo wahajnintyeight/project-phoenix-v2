@@ -71,7 +71,6 @@ func (g *GoogleController) DownloadYoutubeVideos(w http.ResponseWriter, r *http.
 		"timestamp":  time.Now().UTC(),
 		"status":     "queued",
 	}
-
 	// Publish to process-yt-video queue for SSE service to consume
 	rabbitMQBroker.PublishMessage(downloadMessage, g.APIGatewayServiceConfig.ServiceName, "process-yt-video")
 

@@ -28,6 +28,8 @@ jobs:
               - 'pkg/service/apigateway/**'
               - 'pkg/**'
               - 'internal/**'
+              - 'internal/controllers/**'
+              - 'internal/service-configs/**'
               - 'go.mod'
               - 'go.sum'
             apigateway_grpc:
