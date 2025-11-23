@@ -33,9 +33,8 @@ RUN apk --no-cache add \
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp
 
-# Install PhantomJS for yt-dlp signature solving (EJS challenges)
+# Install JS runtime for yt-dlp EJS signature solving
 RUN apk --no-cache add npm && \
-    curl -L https://github.com/dustinblackman/phantomized/releases/download/2.1.1/dockerized-phantomjs.tar.gz | tar xz -C / && \
     npm install -g phantomjs-prebuilt
 
 WORKDIR /app
