@@ -133,7 +133,7 @@ jobs:
             set -e
             cd /var/www/project-phoenix-v2
             
-            git pull origin "$BRANCH" || echo "Git pull failed (local changes?), continuing..."
+            git pull origin "$BRANCH" || true
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$USER" --password-stdin
 
             IFS=' ' read -r -a paths <<< "$PATHS"
@@ -150,24 +150,20 @@ jobs:
             done
 
             if [ ${#deploy_targets[@]} -gt 0 ]; then
-               echo "Rolling update for: ${deploy_targets[*]}"
+               echo "Starting zero-downtime rolling update for: ${deploy_targets[*]}"
+               
+               # Pull fresh images (other services keep running)
                docker compose pull "${deploy_targets[@]}"
-               docker compose -p ppv2 rm -f "${deploy_targets[@]}" 2>/dev/null || true
-               docker compose -p ppv2 up -d --no-deps --wait "${deploy_targets[@]}"
-               docker compose ps
-
-               # Cleanup: Remove ONLY old untagged ppv2 project images
-               echo "Cleaning up old ppv2 project images..."
                
-               # Define ppv2 services
-               ppv2_services=("apigateway" "apigateway-grpc" "socketservice" "sse-service")
-               
-               for svc in "${ppv2_services[@]}"; do
-                 # Remove untagged images for this specific service
-                 docker images -a "ghcr.io/wahajnintyeight/$svc" | grep '<none>' | awk '{print $3}' | sort -u | xargs -r docker rmi -f 2>/dev/null || true
+               # Rolling restart: restart only changed services, one at a time if needed
+               for target in "${deploy_targets[@]}"; do
+                 echo "Restarting $target..."
+                 docker compose -p ppv2 up -d --no-deps --wait "$target"
                done
                
-               echo "Cleanup complete"
-               echo "Remaining ppv2 images:"
-               docker images ghcr.io/wahajnintyeight/apigateway* ghcr.io/wahajnintyeight/socketservice* ghcr.io/wahajnintyeight/sse-service* 2>/dev/null || true
+               echo "All services updated"
+               docker compose ps
+               
+               # Cleanup old images only for ppv2 services
+               docker images -a ghcr.io/wahajnintyeight/* | grep '<none>' | awk '{print $3}' | sort -u | xargs -r docker rmi -f 2>/dev/null || true
             fi

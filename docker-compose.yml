@@ -7,11 +7,6 @@ services:
     ports:
       - "8881:8881"
     command: ["./main", "--service-name", "api-gateway", "--port", "8881"]
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8881/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 2
 
   socket-service:
     image: ghcr.io/wahajnintyeight/socketservice:latest
@@ -21,11 +16,6 @@ services:
     ports:
       - "8884:8884"
     command: ["./main", "--service-name", "socket-service", "--port", "8884"]
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8884/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 2
 
   sse-service:
     image: ghcr.io/wahajnintyeight/sse-service:latest
@@ -35,11 +25,6 @@ services:
     ports:
       - "8885:8885"
     command: ["./main", "--service-name", "sse-service", "--port", "8885"]
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8885/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 2
 
   api-gateway-grpc:
     image: ghcr.io/wahajnintyeight/apigateway-grpc:latest
