@@ -447,17 +447,17 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 	time.AfterFunc(1*time.Hour, func() {
 		// Delete local file
 		if err := os.Remove(filePath); err != nil {
-			log.Printf("⚠️ Failed to delete local file %s: %v", filePath, err)
+			log.Printf("Failed to delete local file %s: %v", filePath, err)
 		} else {
-			log.Printf("🗑️ Cleaned up local file: %s", filePath)
+			log.Printf("Cleaned up local file: %s", filePath)
 		}
 
 		// Delete S3 file
 		if sse.s3Service != nil {
 			if err := sse.s3Service.DeleteFile(context.Background(), s3Key); err != nil {
-				log.Printf("⚠️ Failed to delete S3 file %s: %v", s3Key, err)
+				log.Printf("Failed to delete S3 file %s: %v", s3Key, err)
 			} else {
-				log.Printf("🗑️ Cleaned up S3 file: %s", s3Key)
+				log.Printf("Cleaned up S3 file: %s", s3Key)
 			}
 		}
 	})

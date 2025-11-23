@@ -157,7 +157,23 @@ jobs:
                echo "Rolling update for: ${deploy_targets[*]}"
                # Pull only changed images
                docker compose pull "${deploy_targets[@]}"
-               # Recreation is fast because we use --no-deps
+
+               # Remove legacy standalone containers that may hold ports (from pre-compose era)
+               for svc in "${deploy_targets[@]}"; do
+                 case "$svc" in
+                   api-gateway)
+                     docker rm -f ppv2-api-gateway 2>/dev/null || true ;;
+                   api-gateway-grpc)
+                     docker rm -f ppv2-api-gateway-grpc 2>/dev/null || true ;;
+                   sse-service)
+                     docker rm -f ppv2-sse-service 2>/dev/null || true ;;
+                   socket-service)
+                     docker rm -f ppv2-socket-service 2>/dev/null || true ;;
+                 esac
+               done
+
+               # Recreate targeted services to avoid "-1" duplicates and free conflicting ports
+               docker compose -p ppv2 rm -f "${deploy_targets[@]}" 2>/dev/null || true
                docker compose -p ppv2 up -d --no-deps --wait "${deploy_targets[@]}"
                docker compose ps
             else
