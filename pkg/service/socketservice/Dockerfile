@@ -7,7 +7,7 @@ WORKDIR /build
 # Copy the go mod and sum files to download dependencies
 COPY go.mod go.su* ./
 RUN go mod download
-
+RUN go mod tidy
 # Copy the source code into the container
 COPY . .
 
