@@ -77,6 +77,7 @@ func (dq *DownloadQueue) worker(id int) {
 	}
 }
 
+
 func (dq *DownloadQueue) AddJob(id, videoID, format, quality, bitRate, videoTitle string) {
 	job := &DownloadJob{
 		ID:       id,
