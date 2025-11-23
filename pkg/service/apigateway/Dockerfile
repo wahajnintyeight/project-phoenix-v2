@@ -31,6 +31,9 @@ WORKDIR /app
 # Copy only the compiled binary from builder
 COPY --from=builder /build/main .
 
+# Copy runtime configs
+COPY --from=builder /build/internal/service-configs ./internal/service-configs
+
 
 EXPOSE 8881
 

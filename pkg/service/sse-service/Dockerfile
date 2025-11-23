@@ -35,6 +35,8 @@ WORKDIR /app
 
 COPY --from=builder /build/main .
 
+# Copy runtime configs
+COPY --from=builder /build/internal/service-configs ./internal/service-configs
 
 EXPOSE 8885
 
