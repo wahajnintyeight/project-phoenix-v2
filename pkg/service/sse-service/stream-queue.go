@@ -53,7 +53,7 @@ func (dq *DownloadQueue) worker(id int) {
 		dq.activeDownloads[job.ID] = job
 		dq.mu.Unlock()
 
-		log.Printf("🟢 [WORKER %d] Processing: %s", id, job.ID)
+		log.Printf("[WORKER %d] Processing: %s", id, job.ID)
 
 		job.mu.Lock()
 		job.Status = enum.DOWNLOADING
