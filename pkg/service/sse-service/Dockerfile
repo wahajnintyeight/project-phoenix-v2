@@ -23,13 +23,15 @@ FROM alpine:3.19
 RUN apk --no-cache add \
     ca-certificates \
     ffmpeg \
+    aria2 \
     python3 \
     py3-pip \
     nodejs \
     curl
 
-# Install yt-dlp
-RUN pip3 install --break-system-packages -U yt-dlp
+# Install latest yt-dlp binary (faster updates than distro/pip)
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    chmod a+rx /usr/local/bin/yt-dlp
 
 WORKDIR /app
 

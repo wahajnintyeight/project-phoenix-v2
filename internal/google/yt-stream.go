@@ -211,31 +211,36 @@ func DownloadYoutubeVideoToBuffer(videoId string, format string, quality string,
 	logger.Printf("Downloading video %s in format %s, quality %s, bitrate %s", videoId, format, quality, bitRate)
 	
 	var args []string
-	if format == "mp3" {
-		args = []string{
-			"--extract-audio",
-			"--audio-format", "mp3",
-			"--audio-quality", getBitrate(bitRate),
-			"--no-playlist",
-			"--newline",
-			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			"--remote-components", "ejs:github",
-			"--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
-			videoURL,
-		}
-	} else {
-		formatStr := buildVideoFormatString(format, quality)
-		// Use progressive format for better stdout streaming
-		args = []string{
-			"--format", formatStr,
-			"--no-playlist",
-			"--newline",
-			"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			"--remote-components", "ejs:github",
-			"--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
-			videoURL,
-		}
-	}
+    // Common args to reduce throttling and improve reliability
+    commonArgs := []string{
+        "--no-playlist",
+        "--newline",
+        "--no-mtime",
+        "--downloader", "aria2c",
+        "--downloader-args", "aria2c:-x 16 -k 1M",
+        "--force-ipv4",
+        "--concurrent-fragments", "5",
+        "--remote-components", "ejs:github",
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    }
+
+    if format == "mp3" {
+        args = append([]string{
+            "--extract-audio",
+            "--audio-format", "mp3",
+            "--audio-quality", getBitrate(bitRate),
+            "--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
+            videoURL,
+        }, commonArgs...)
+    } else {
+        formatStr := buildVideoFormatString(format, quality)
+        // Use progressive format for better stdout streaming
+        args = append([]string{
+            "--format", formatStr,
+            "--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
+            videoURL,
+        }, commonArgs...)
+    }
 
 	cmd, err := buildYtDlpCmd(args...)
 	if err != nil {

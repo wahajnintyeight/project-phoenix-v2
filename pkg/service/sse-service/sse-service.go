@@ -351,12 +351,6 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 
 	filePath := session.GetFilePath()
 	fileSize := session.GetFileSize()
-	filename := fmt.Sprintf("%s_%s.%s", sanitizedTitle, videoId, format)
-
-	log.Printf("✅ Download complete: %s (%d bytes)", filePath, fileSize)
-
-
-	// Upload to S3
 	if sse.s3Service == nil {
 		job.mu.Lock()
 		job.Status = enum.SSEStreamEnum("error")
@@ -367,12 +361,11 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 			"message":    "S3 service not initialized",
 			"type":       "download_error",
 		})
-		os.Remove(filePath)
 		return
 	}
 
-	// Read file into memory
-	fileData, err := os.ReadFile(filePath)
+	// Open file as stream
+	f, err := os.Open(filePath)
 	if err != nil {
 		job.mu.Lock()
 		job.Status = enum.SSEStreamEnum("error")
@@ -380,12 +373,13 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
 			"status":     "error",
-			"message":    fmt.Sprintf("Failed to read file: %v", err),
+			"message":    fmt.Sprintf("Failed to open file: %v", err),
 			"type":       "download_error",
 		})
 		os.Remove(filePath)
 		return
 	}
+	defer f.Close()
 
 	// Generate S3 key
 	s3Key := fmt.Sprintf("downloads/%s/%s", downloadId, filename)
@@ -398,11 +392,11 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 		mimeType = "video/mp4"
 	}
 
-	// Upload to S3 with 24-hour TTL
-	presignedUrl, err := sse.s3Service.UploadFile(
+	// Upload to S3 with 24-hour TTL using streaming
+	presignedUrl, err := sse.s3Service.UploadFileStream(
 		context.Background(),
 		s3Key,
-		fileData,
+		f,
 		mimeType,
 		1440, // 24 hours
 	)

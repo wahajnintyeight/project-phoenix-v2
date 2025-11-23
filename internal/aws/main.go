@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -21,6 +22,36 @@ type S3Service struct {
 	bucketName string
 	region     string
 	baseUrl    string
+}
+
+// UploadFileStream uploads a stream to S3 and returns a presigned URL with TTL
+func (s *S3Service) UploadFileStream(
+    ctx context.Context,
+    key string,
+    body io.Reader,
+    mimeType string,
+    ttlMinutes int,
+) (presignedUrl string, err error) {
+    log.Printf(" Uploading (stream) to S3: s3://%s/%s", s.bucketName, key)
+
+    _, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+        Bucket:      aws.String(s.bucketName),
+        Key:         aws.String(key),
+        Body:        body,
+        ContentType: aws.String(mimeType),
+        Metadata: map[string]string{
+            "uploadTime": time.Now().UTC().Format(time.RFC3339),
+        },
+    })
+    if err != nil {
+        return "", fmt.Errorf("failed to upload stream to S3: %v", err)
+    }
+
+    presignedUrl, err = s.GetPresignedUrl(ctx, key, ttlMinutes)
+    if err != nil {
+        return "", err
+    }
+    return presignedUrl, nil
 }
 
 func NewS3Service(bucketName, region string) (*S3Service, error) {
