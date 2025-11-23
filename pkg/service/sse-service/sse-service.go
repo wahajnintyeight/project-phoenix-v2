@@ -351,6 +351,18 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 
 	filePath := session.GetFilePath()
 	fileSize := session.GetFileSize()
+	// Derive final filename using sanitized title and actual file extension
+	var filename string
+	{
+		ext := ""
+		if i := strings.LastIndex(filePath, "."); i != -1 && i+1 < len(filePath) {
+			ext = filePath[i+1:]
+		} else {
+			// Fallback to requested format
+			ext = format
+		}
+		filename = fmt.Sprintf("%s_%s.%s", sanitizedTitle, videoId, ext)
+	}
 	if sse.s3Service == nil {
 		job.mu.Lock()
 		job.Status = enum.SSEStreamEnum("error")
