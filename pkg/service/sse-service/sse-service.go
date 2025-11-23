@@ -355,6 +355,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 
 	log.Printf("✅ Download complete: %s (%d bytes)", filePath, fileSize)
 
+	
 	// Upload to S3
 	if sse.s3Service == nil {
 		job.mu.Lock()
