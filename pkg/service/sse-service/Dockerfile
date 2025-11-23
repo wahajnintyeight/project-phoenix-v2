@@ -6,12 +6,13 @@ WORKDIR /build
 
 RUN apk add --no-cache git
 
-COPY go.mod go.su* ./
-RUN go mod download
+# Use vendored modules from CI for deterministic, offline builds
+COPY go.mod go.sum ./
+COPY vendor ./vendor
 
 COPY . .
 
-RUN go mod tidy
+ENV GOFLAGS="-mod=vendor"
 
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main .
 

@@ -6,15 +6,15 @@ WORKDIR /build
 # Install git required for fetching dependencies
 RUN apk add --no-cache git
 
-# Copy go mod and sum files first to leverage Docker cache
-COPY go.mod go.su* ./
-RUN go mod download
+# Copy module files and vendor directory prepared by CI
+COPY go.mod go.sum ./
+COPY vendor ./vendor
 
 # Copy the source code
 COPY . .
 
-# Ensure go.mod/go.sum have all required entries for all imported packages
-RUN go mod tidy
+# Ensure vendored build (no network, no checksum resolution)
+ENV GOFLAGS="-mod=vendor"
 
 # Build the application
 # -ldflags="-w -s" reduces binary size by stripping debug information
