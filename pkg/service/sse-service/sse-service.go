@@ -355,7 +355,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 
 	log.Printf("✅ Download complete: %s (%d bytes)", filePath, fileSize)
 
-	
+
 	// Upload to S3
 	if sse.s3Service == nil {
 		job.mu.Lock()
@@ -441,7 +441,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 		"downloadUrl":  presignedUrl,
 	})
 
-	log.Printf("✅ File uploaded to S3: %s", s3Key)
+	log.Printf("File uploaded to S3: %s", s3Key)
 
 	// Clean up local file and S3 file after 1 hour
 	time.AfterFunc(1*time.Hour, func() {
