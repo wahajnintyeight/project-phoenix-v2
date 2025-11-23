@@ -10,63 +10,49 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Detect changed services
+      - name: Detect changes
         id: changes
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            # Include specific files to minimize false positives
             apigateway:
               - 'pkg/service/apigateway/**'
               - 'pkg/**'
               - 'internal/**'
-              - 'internal/controllers/**'
-              - 'internal/service-configs/**'
               - 'go.mod'
-              - 'go.sum'
             apigateway_grpc:
               - 'pkg/service/apigateway-grpc/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
-              - 'go.sum'
             datacommunicator:
               - 'pkg/service/datacommunicator/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
-              - 'go.sum'
             locationservice:
               - 'pkg/service/locationservice/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
-              - 'go.sum'
             socketservice:
               - 'pkg/service/socketservice/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
-              - 'go.sum'
             sse_service:
               - 'pkg/service/sse-service/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
-              - 'go.sum'
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Buildx
+      - name: Set up QEMU & Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
@@ -77,86 +63,91 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute changed list
+      - name: Compute targets
         id: list
         run: |
+          # Map filters to service folder names
           changed=()
-          [ "${{ steps.changes.outputs.apigateway }}" = "true" ] && changed+=("apigateway")
-          [ "${{ steps.changes.outputs.apigateway_grpc }}" = "true" ] && changed+=("apigateway-grpc")
-          [ "${{ steps.changes.outputs.datacommunicator }}" = "true" ] && changed+=("datacommunicator")
-          [ "${{ steps.changes.outputs.locationservice }}" = "true" ] && changed+=("locationservice")
-          [ "${{ steps.changes.outputs.socketservice }}" = "true" ] && changed+=("socketservice")
-          [ "${{ steps.changes.outputs.sse_service }}" = "true" ] && changed+=("sse-service")
+          [ "${{ steps.changes.outputs.apigateway }}" = "true" ] && changed+=("pkg/service/apigateway")
+          [ "${{ steps.changes.outputs.apigateway_grpc }}" = "true" ] && changed+=("pkg/service/apigateway-grpc")
+          [ "${{ steps.changes.outputs.datacommunicator }}" = "true" ] && changed+=("pkg/service/datacommunicator")
+          [ "${{ steps.changes.outputs.locationservice }}" = "true" ] && changed+=("pkg/service/locationservice")
+          [ "${{ steps.changes.outputs.socketservice }}" = "true" ] && changed+=("pkg/service/socketservice")
+          [ "${{ steps.changes.outputs.sse_service }}" = "true" ] && changed+=("pkg/service/sse-service")
           
           if [ ${#changed[@]} -eq 0 ]; then
              echo "none=true" >> $GITHUB_OUTPUT
-             echo "No services changed."
           else
-             echo "services=${changed[*]}" >> $GITHUB_OUTPUT
+             echo "paths=${changed[*]}" >> $GITHUB_OUTPUT
              echo "none=false" >> $GITHUB_OUTPUT
-             echo "Detected changes in: ${changed[*]}"
           fi
 
-      - name: Build changed services
+      - name: Build changed
         if: steps.list.outputs.none == 'false'
         run: |
-          IFS=' ' read -r -a svcs <<< "${{ steps.list.outputs.services }}"
-          for s in "${svcs[@]}"; do
-            echo "Building $s"
-            # Note: We pass the service name as a build-arg to make the Dockerfile generic if needed,
-            # or simply use it to point to the correct main file.
+          IFS=' ' read -r -a paths <<< "${{ steps.list.outputs.paths }}"
+          for path in "${paths[@]}"; do
+            # Extract service name (e.g., 'pkg/service/apigateway' -> 'apigateway')
+            svc_name=$(basename "$path")
+            
+            echo "Building $svc_name from $path"
+            
+            # Point to the specific Dockerfile inside the service folder
             docker buildx build \
-              --file "pkg/service/$s/Dockerfile" \
+              --file "$path/Dockerfile" \
+              --build-arg SERVICE_PATH="$path" \
               --platform linux/amd64 \
-              --tag "ghcr.io/${{ github.repository_owner }}/$s:sha-${{ github.sha }}" \
-              --tag "ghcr.io/${{ github.repository_owner }}/$s:latest" \
+              --tag "ghcr.io/${{ github.repository_owner }}/$svc_name:latest" \
               --cache-from type=gha \
               --cache-to type=gha,mode=max \
               $([ "${{ github.event_name }}" != "pull_request" ] && echo "--push") \
               .
           done
 
-      - name: Remote deploy changed to VPS
+      - name: Deploy to VPS
         if: steps.list.outputs.none == 'false' && github.event_name != 'pull_request'
         uses: appleboy/ssh-action@v1.2.0
         env:
-          SERVICES: "${{ steps.list.outputs.services }}"
+          PATHS: "${{ steps.list.outputs.paths }}"
           BRANCH: "${{ github.ref_name }}"
           GHCR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          USER: ${{ github.actor }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
-          envs: SERVICES,BRANCH,GHCR_TOKEN,GITHUB_ACTOR
+          envs: PATHS,BRANCH,GHCR_TOKEN,USER
           script: |
             set -e
             cd /var/www/project-phoenix-v2
             
-            # Simple pull to update docker-compose.yml if changed
-            echo "Updating repo..."
-            git pull origin "$BRANCH" || echo "Git pull failed, proceeding with existing config..."
+            # Safe update
+            git pull origin "$BRANCH" || echo "Git pull failed (local changes?), continuing..."
 
-            IFS=' ' read -r -a svcs <<< "$SERVICES"
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$USER" --password-stdin
+
+            IFS=' ' read -r -a paths <<< "$PATHS"
+            deploy_targets=()
             
-            # Map build names to compose service names
-            mapped=()
-            for s in "${svcs[@]}"; do
-              case "$s" in
-                apigateway) mapped+=("api-gateway") ;;
-                apigateway-grpc) mapped+=("api-gateway-grpc") ;;
-                datacommunicator) echo "Skipping datacommunicator (not in compose)" ;;
-                locationservice) mapped+=("location-service") ;;
-                socketservice) mapped+=("socket-service") ;;
-                sse-service) mapped+=("sse-service") ;;
+            for path in "${paths[@]}"; do
+              svc=$(basename "$path")
+              # Map folder names to docker-compose service names
+              case "$svc" in
+                apigateway)       deploy_targets+=("api-gateway") ;;
+                apigateway-grpc)  deploy_targets+=("api-gateway-grpc") ;;
+                locationservice)  deploy_targets+=("location-service") ;;
+                socketservice)    deploy_targets+=("socket-service") ;;
+                sse-service)      deploy_targets+=("sse-service") ;;
               esac
             done
-            
-            if [ ${#mapped[@]} -gt 0 ]; then
-              echo "Deploying: ${mapped[*]}"
-              echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-              docker compose -p project-phoenix-v2 pull "${mapped[@]}"
-              docker compose -p project-phoenix-v2 up -d --no-deps --wait "${mapped[@]}"
+
+            if [ ${#deploy_targets[@]} -gt 0 ]; then
+               echo "Rolling update for: ${deploy_targets[*]}"
+               # Pull only changed images
+               docker compose pull "${deploy_targets[@]}"
+               # Recreation is fast because we use --no-deps
+               docker compose -p ppv2 up -d --no-deps --wait "${deploy_targets[@]}"
+               docker compose ps
             else
-              echo "No deployable services found."
+               echo "Only unmapped services (like datacommunicator) changed. No Compose update needed."
             fi
-            

@@ -5,8 +5,7 @@ FROM golang:1.21.6 AS builder
 WORKDIR /build
 
 # Copy the go mod and sum files to download dependencies
-COPY go.mod .
-COPY go.sum .
+COPY go.mod go.su* ./
 RUN go mod download
 
 # Copy the source code into the container

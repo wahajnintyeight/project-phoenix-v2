@@ -6,12 +6,12 @@ services:
       context: .
     ports:
       - "8881:8881"
-  location-service:
-    build:
-      dockerfile: pkg/service/locationservice/Dockerfile
-      context: .
-    ports:
-      - "8882:8882"
+  # location-service:
+  #   build:
+  #     dockerfile: pkg/service/locationservice/Dockerfile
+  #     context: .
+  #   ports:
+  #     - "8882:8882"
   socket-service:
     build:
       dockerfile: pkg/service/socketservice/Dockerfile
