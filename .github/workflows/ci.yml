@@ -110,7 +110,7 @@ jobs:
         env:
           PATHS: "${{ steps.list.outputs.paths }}"
           BRANCH: "${{ github.ref_name }}"
-          GHCR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          GHCR_TOKEN: "${{ secrets.PAT }}"
           USER: ${{ github.actor }}
         with:
           host: ${{ secrets.VPS_HOST }}
