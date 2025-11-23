@@ -1,32 +1,43 @@
-version: "3.8"
 services:
   api-gateway:
-    build:
-      dockerfile: pkg/service/apigateway/Dockerfile
-      context: .
+    image: ghcr.io/wahajnintyeight/apigateway:latest
+    container_name: ppv2-api-gateway
     ports:
       - "8881:8881"
-  # location-service:
-  #   build:
-  #     dockerfile: pkg/service/locationservice/Dockerfile
-  #     context: .
-  #   ports:
-  #     - "8882:8882"
+    command: ["./main", "--service-name", "api-gateway", "--port", "8881"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8881/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 2
+
   socket-service:
-    build:
-      dockerfile: pkg/service/socketservice/Dockerfile
-      context: .
+    image: ghcr.io/wahajnintyeight/socketservice:latest
+    container_name: ppv2-socket-service
     ports:
       - "8884:8884"
+    command: ["./main", "--service-name", "socket-service", "--port", "8884"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8884/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 2
+
   sse-service:
-    build:
-      dockerfile: pkg/service/sse-service/Dockerfile
-      context: .
+    image: ghcr.io/wahajnintyeight/sse-service:latest
+    container_name: ppv2-sse-service
     ports:
       - "8885:8885"
+    command: ["./main", "--service-name", "sse-service", "--port", "8885"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8885/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 2
+
   api-gateway-grpc:
-    build:
-      dockerfile: pkg/service/apigateway-grpc/Dockerfile
-      context: .
+    image: ghcr.io/wahajnintyeight/apigateway-grpc:latest
+    container_name: ppv2-api-gateway-grpc
     ports:
       - "8886:8886"
+    command: ["./main", "--service-name", "api-gateway-grpc", "--port", "8886"]
