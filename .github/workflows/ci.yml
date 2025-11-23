@@ -111,6 +111,10 @@ jobs:
               --cache-from type=gha \
               --cache-to type=gha,mode=max \
               $([ "${{ github.event_name }}" != "pull_request" ] && echo "--push") \
+              --build-context internal=internal \
+              --build-context pkg=pkg \
+              --build-context go.mod=go.mod \
+              --build-context go.sum=go.sum \
               .
           done
 
