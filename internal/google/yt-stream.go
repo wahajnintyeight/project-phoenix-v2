@@ -237,15 +237,14 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
         "--downloader-args", "aria2c:-x 16 -k 1M",
         "--force-ipv4",
         "--concurrent-fragments", "5",
-        "--remote-components", "ejs:github",
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     }
 
-	// If a local deno binary exists in the service-configs utils directory, tell yt-dlp to use it
-	denoPath := "/app/internal/service-configs/sse-service/utils/deno"
-	if info, err := os.Stat(denoPath); err == nil && info.Mode()&0111 != 0 {
-		commonArgs = append(commonArgs, "--js-runtimes", fmt.Sprintf("deno:%s", denoPath))
-	}
+	// // If a local deno binary exists in the service-configs utils directory, tell yt-dlp to use it
+	// denoPath := "/app/internal/service-configs/sse-service/utils/deno"
+	// if info, err := os.Stat(denoPath); err == nil && info.Mode()&0111 != 0 {
+	// 	commonArgs = append(commonArgs, "--js-runtimes", fmt.Sprintf("deno:%s", denoPath))
+	// }
 
     if format == "mp3" {
         args = append([]string{
