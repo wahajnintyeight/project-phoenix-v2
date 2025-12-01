@@ -26,6 +26,8 @@ RUN apk --no-cache add \
     aria2 \
     python3 \
     py3-pip \
+    py3-yt-dlp \
+    py3-pycryptodome \
     nodejs \
     curl
 
@@ -36,8 +38,6 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o 
 # Install JS runtime for yt-dlp EJS signature solving
 RUN apk --no-cache add npm && \
     npm install -g phantomjs-prebuilt
-
-RUN pip3 install --upgrade yt-dlp pycryptodome
 
 WORKDIR /app
 

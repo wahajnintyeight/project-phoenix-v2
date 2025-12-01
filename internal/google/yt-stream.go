@@ -82,6 +82,7 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 		return
 	}
 
+	
 	logger.Printf("Running: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
 
 	// Send initial callback to indicate yt-dlp started
