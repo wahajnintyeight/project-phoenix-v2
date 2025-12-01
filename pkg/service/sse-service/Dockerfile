@@ -37,6 +37,8 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o 
 RUN apk --no-cache add npm && \
     npm install -g phantomjs-prebuilt
 
+RUN pip3 install --upgrade yt-dlp pycryptodome
+
 WORKDIR /app
 
 # Explicitly point app to yt-dlp location
