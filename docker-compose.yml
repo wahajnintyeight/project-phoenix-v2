@@ -20,6 +20,8 @@ services:
   sse-service:
     image: ghcr.io/wahajnintyeight/sse-service:latest
     container_name: ppv2-sse-service
+    volumes:
+      - /var/www/project-phoenix-v2/internal/service-configs/sse-service/utils/deno:/app/internal/service-configs/sse-service/utils/deno:ro
     env_file:
       - .env
     ports:
