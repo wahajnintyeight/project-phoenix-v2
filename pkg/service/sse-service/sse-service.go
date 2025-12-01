@@ -273,6 +273,10 @@ func (sse *SSEService) HandleVideoDownload(p microBroker.Event) error {
 		quality = qualityStr
 	}
 	bitRate := data["bitRate"].(string)
+	var youtubeURL string
+	if urlStr, ok := data["youtubeURL"].(string); ok {
+		youtubeURL = urlStr
+	}
 
 	log.Printf("🟡 Processing: %s (format: %s, quality: %s)", downloadId, format, quality)
 
@@ -286,13 +290,13 @@ func (sse *SSEService) HandleVideoDownload(p microBroker.Event) error {
 	})
 
 	// Process the actual video download
-	sse.downloadQueue.AddJob(downloadId, videoId, format, quality, bitRate, videoTitle)
+	sse.downloadQueue.AddJob(downloadId, videoId, youtubeURL, format, quality, bitRate, videoTitle)
 
 	return nil
 }
 
 // processVideoDownload handles the actual video download and S3 upload
-func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality, bitRate, videoTitle string) {
+func (sse *SSEService) processVideoDownload(downloadId, videoId, youtubeURL, format, quality, bitRate, videoTitle string) {
 	routeKey := fmt.Sprintf("download-%s", downloadId)
 
 	job := sse.downloadQueue.GetJob(downloadId)
@@ -315,6 +319,7 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, format, quality
 
 	log.Printf("[SSE-SERVICE:] Starting download for video %s with format %s, quality %s, bitrate %s", videoId, format, quality, bitRate)
 	session, err := google.DownloadYoutubeVideoToBuffer(
+		youtubeURL,
 		videoId,
 		format,
 		quality,

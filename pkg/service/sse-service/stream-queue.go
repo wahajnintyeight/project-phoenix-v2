@@ -9,9 +9,10 @@ import (
 )
 
 type DownloadJob struct {
-	ID       string
-	VideoID  string
-	Format   string
+	ID         string
+	VideoID    string
+	YoutubeURL string
+	Format     string
 	Quality  string
 	BitRate  string
 	VideoTitle string
@@ -62,6 +63,7 @@ func (dq *DownloadQueue) worker(id int) {
 		dq.sseService.processVideoDownload(
 			job.ID,
 			job.VideoID,
+			job.YoutubeURL,
 			job.Format,
 			job.Quality,
 			job.BitRate,
@@ -76,11 +78,12 @@ func (dq *DownloadQueue) worker(id int) {
 	}
 }
 
-func (dq *DownloadQueue) AddJob(id, videoID, format, quality, bitRate, videoTitle string) {
+func (dq *DownloadQueue) AddJob(id, videoID, youtubeURL, format, quality, bitRate, videoTitle string) {
 	job := &DownloadJob{
-		ID:       id,
-		VideoID:  videoID,
-		Format:   format,
+		ID:         id,
+		VideoID:    videoID,
+		YoutubeURL: youtubeURL,
+		Format:     format,
 		Quality:  quality,
 		BitRate:  bitRate,
 		VideoTitle: videoTitle,

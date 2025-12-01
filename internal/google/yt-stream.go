@@ -209,13 +209,18 @@ func validateAndBuild(binPath string, args []string) (*exec.Cmd, error) {
 	return exec.Command(binPath, args...), nil
 }
 
-func DownloadYoutubeVideoToBuffer(videoId string, format string, quality string, bitRate string, videoTitle string, progressCallback ProgressCallback) (*StreamSession, error) {
+func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format string, quality string, bitRate string, videoTitle string, progressCallback ProgressCallback) (*StreamSession, error) {
 
 	downloadDir := "/tmp/yt-downloads"
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create download dir: %w", err)
 	}
-	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
+
+	// Prefer explicit videoLink when provided, otherwise construct from videoId
+	videoURL := videoLink
+	if videoURL == "" {
+		videoURL = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
+	}
 	
 	logger.Printf("Downloading video %s in format %s, quality %s, bitrate %s", videoId, format, quality, bitRate)
 
