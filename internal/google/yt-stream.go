@@ -51,22 +51,22 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 		}
 	}
 
-	// Try common install location
-	if cmd, err := validateAndBuild("/usr/local/bin/yt-dlp", args); err == nil {
-		return cmd, nil
-	}
-
-	// Try yt-dlp in PATH
-	if path, err := exec.LookPath("yt-dlp"); err == nil {
-		return exec.Command(path, args...), nil
-	}
-
-	// Try python module
+	// Prefer python module so that Node/JS runtimes from the system PATH are visible
 	for _, py := range []string{"python3", "python"} {
 		if path, err := exec.LookPath(py); err == nil {
 			all := append([]string{"-m", "yt_dlp"}, args...)
 			return exec.Command(path, all...), nil
 		}
+	}
+
+	// Fallback: compiled yt-dlp binary in common install location
+	if cmd, err := validateAndBuild("/usr/local/bin/yt-dlp", args); err == nil {
+		return cmd, nil
+	}
+
+	// Last resort: yt-dlp from PATH
+	if path, err := exec.LookPath("yt-dlp"); err == nil {
+		return exec.Command(path, args...), nil
 	}
 
 	return nil, fmt.Errorf("yt-dlp not found in PATH or as python module")
