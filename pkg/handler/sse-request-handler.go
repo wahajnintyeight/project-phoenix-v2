@@ -120,9 +120,6 @@ func (handler *SSERequestHandler) Run() {
 		case msg := <-handler.broadcast:
 			// log.Printf("Broadcast message received: type=%s, progress=%v", msg["type"], msg["progress"])
 			handler.mutex.Lock()
-
-			// Check if message has routing info
-			routeKey, hasRoute := msg["routeKey"].(string)
 			// log.Printf("HANDLER CLIENTS", handler.clients)
 			for client := range handler.clients {
 				client <- msg

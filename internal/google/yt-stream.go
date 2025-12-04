@@ -402,10 +402,13 @@ func StreamYoutubeVideoToStdout(videoLink string, videoId string, format string,
 	}
 
 	if format == "mp3" {
+		// For MP3, use bestaudio format with specified bitrate (requires ffmpeg for conversion)
+		// If ffmpeg is not available, yt-dlp will fall back to downloading best audio stream
+		bitrate := getBitrate(quality) // quality parameter used as bitrate for audio
 		args = append([]string{
 			"--extract-audio",
 			"--audio-format", "mp3",
-			"--audio-quality", "192K",
+			"--audio-quality", bitrate,
 			videoURL,
 		}, commonArgs...)
 	} else {
