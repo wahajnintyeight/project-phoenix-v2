@@ -659,7 +659,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 			videoURL = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
 		}
 
-		ffmpegCmd, stdout, err := google.StreamYoutubeAudioAsMP3(videoURL, bitrate, progressCallback)
+		_, stdout, err := google.StreamYoutubeAudioAsMP3(videoURL, bitrate, progressCallback)
 		if err != nil {
 			log.Printf("Failed to start MP3 stream for %s: %v", downloadId, err)
 			http.Error(w, fmt.Sprintf("Failed to start MP3 stream: %v", err), http.StatusInternalServerError)
