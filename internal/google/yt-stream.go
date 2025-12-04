@@ -51,13 +51,13 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 		}
 	}
 
-	// Prefer python module so that Node/JS runtimes from the system PATH are visible
-	for _, py := range []string{"python3", "python"} {
-		if path, err := exec.LookPath(py); err == nil {
-			all := append([]string{"-m", "yt_dlp"}, args...)
-			return exec.Command(path, all...), nil
-		}
-	}
+	// // Prefer python module so that Node/JS runtimes from the system PATH are visible
+	// for _, py := range []string{"python3", "python"} {
+	// 	if path, err := exec.LookPath(py); err == nil {
+	// 		all := append([]string{"-m", "yt_dlp"}, args...)
+	// 		return exec.Command(path, all...), nil
+	// 	}
+	// }
 
 	// Fallback: compiled yt-dlp binary in common install location
 	if cmd, err := validateAndBuild("/usr/local/bin/yt-dlp", args); err == nil {
@@ -82,7 +82,6 @@ func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallba
 		return
 	}
 
-	
 	logger.Printf("Running: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
 
 	// Send initial callback to indicate yt-dlp started
@@ -225,21 +224,21 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
 	if videoURL == "" {
 		videoURL = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
 	}
-	
+
 	logger.Printf("Downloading video %s in format %s, quality %s, bitrate %s", videoId, format, quality, bitRate)
 
 	var args []string
-    // Common args to reduce throttling and improve reliability
-    commonArgs := []string{
-        "--no-playlist",
-        "--newline",
-        "--no-mtime",
-        "--downloader", "aria2c",
-        "--downloader-args", "aria2c:-x 16 -k 1M",
-        "--force-ipv4",
-        "--concurrent-fragments", "5",
-        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    }
+	// Common args to reduce throttling and improve reliability
+	commonArgs := []string{
+		"--no-playlist",
+		"--newline",
+		"--no-mtime",
+		"--downloader", "aria2c",
+		"--downloader-args", "aria2c:-x 16 -k 1M",
+		"--force-ipv4",
+		"--concurrent-fragments", "5",
+		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+	}
 
 	// // If a local deno binary exists in the service-configs utils directory, tell yt-dlp to use it
 	// denoPath := "/app/internal/service-configs/sse-service/utils/deno"
@@ -247,23 +246,23 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
 	// 	commonArgs = append(commonArgs, "--js-runtimes", fmt.Sprintf("deno:%s", denoPath))
 	// }
 
-    if format == "mp3" {
-        args = append([]string{
-            "--extract-audio",
-            "--audio-format", "mp3",
-            "--audio-quality", getBitrate(bitRate),
-            "--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
-            videoURL,
-        }, commonArgs...)
-    } else {
-        formatStr := buildVideoFormatString(format, quality)
-        // Use progressive format for better stdout streaming
-        args = append([]string{
-            "--format", formatStr,
-            "--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
-            videoURL,
-        }, commonArgs...)
-    }
+	if format == "mp3" {
+		args = append([]string{
+			"--extract-audio",
+			"--audio-format", "mp3",
+			"--audio-quality", getBitrate(bitRate),
+			"--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
+			videoURL,
+		}, commonArgs...)
+	} else {
+		formatStr := buildVideoFormatString(format, quality)
+		// Use progressive format for better stdout streaming
+		args = append([]string{
+			"--format", formatStr,
+			"--output", fmt.Sprintf("/tmp/yt-downloads/%s_%s.%%(ext)s", videoTitle, videoId),
+			videoURL,
+		}, commonArgs...)
+	}
 
 	cmd, err := buildYtDlpCmd(args...)
 	if err != nil {
@@ -279,9 +278,6 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
 	}
 
 	go session.runYtDlp(cmd, progressCallback, videoId, videoTitle, format)
-	if err != nil {
-		return nil, err // already includes stderr
-	}
 
 	return session, nil
 }
@@ -317,7 +313,7 @@ func GetStreamMimeType(format string) string {
 
 func buildVideoFormatString(format, quality string) string {
 	logger.Printf("🎬 buildVideoFormatString called: format=%s, quality=%s", format, quality)
-	
+
 	// Default to best if quality not specified
 	if quality == "" || quality == "best" {
 		quality = "best"
@@ -382,6 +378,77 @@ func buildVideoFormatString(format, quality string) string {
 
 	logger.Printf("✅ Built format string: %s (height=%s)", formatStr, height)
 	return formatStr
+}
+
+// StreamYoutubeVideoToStdout streams video directly to stdout without saving to disk
+func StreamYoutubeVideoToStdout(videoLink string, videoId string, format string, quality string, progressCallback ProgressCallback) (*exec.Cmd, error) {
+	// Prefer explicit videoLink when provided, otherwise construct from videoId
+	videoURL := videoLink
+	if videoURL == "" {
+		videoURL = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
+	}
+
+	logger.Printf("Streaming video %s in format %s, quality %s to stdout", videoId, format, quality)
+
+	var args []string
+	// Common args optimized for streaming
+	commonArgs := []string{
+		"--no-playlist",
+		"--newline",
+		"--no-mtime",
+		"--force-ipv4",
+		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+		"-o", "-", // Output to stdout
+	}
+
+	if format == "mp3" {
+		args = append([]string{
+			"--extract-audio",
+			"--audio-format", "mp3",
+			"--audio-quality", "192K",
+			videoURL,
+		}, commonArgs...)
+	} else {
+		formatStr := buildVideoFormatString(format, quality)
+		args = append([]string{
+			"--format", formatStr,
+			videoURL,
+		}, commonArgs...)
+	}
+
+	cmd, err := buildYtDlpCmd(args...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Setup stderr for progress monitoring
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stderr pipe error: %w", err)
+	}
+
+	// Monitor stderr in background for progress updates
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			logger.Printf("YT-DLP: %s", line)
+
+			// Extract progress percentage
+			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 1 {
+				if percent, err := strconv.ParseFloat(matches[1], 64); err == nil {
+					scaledProgress := 25 + (percent * 0.7)
+					if progressCallback != nil {
+						progressCallback(scaledProgress)
+					}
+				}
+			}
+		}
+	}()
+
+	logger.Printf("Running streaming command: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
+
+	return cmd, nil
 }
 
 // buildStreamFormatString creates format string optimized for streaming

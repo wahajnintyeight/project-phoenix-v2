@@ -442,14 +442,14 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, youtubeURL, for
 
 	// Send completion message with download URL
 	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
-		"downloadId":   downloadId,
-		"type":         "download_complete",
-		"status":       "completed",
-		"progress":     100,
-		"message":      "Download completed!",
-		"filename":     filename,
-		"fileSize":     fileSize,
-		"downloadUrl":  presignedUrl,
+		"downloadId":  downloadId,
+		"type":        "download_complete",
+		"status":      "completed",
+		"progress":    100,
+		"message":     "Download completed!",
+		"filename":    filename,
+		"fileSize":    fileSize,
+		"downloadUrl": presignedUrl,
 	})
 
 	log.Printf("File uploaded to S3: %s", s3Key)
@@ -474,7 +474,6 @@ func (sse *SSEService) processVideoDownload(downloadId, videoId, youtubeURL, for
 	})
 }
 
-
 func (ls *SSEService) InitServiceConfig() {
 	serviceConfig, er := internal.ReturnServiceConfig("sse-service")
 	if er != nil {
@@ -494,7 +493,8 @@ func NewSSEService(serviceObj micro.Service, serviceName string) service.Service
 }
 
 func (s *SSEService) registerRoutes() {
-
+	// Direct streaming endpoint for large file downloads (with full format/quality control)
+	s.router.HandleFunc("/stream/{downloadId}", s.handleDirectStream).Methods("GET")
 }
 
 func (sse *SSEService) Start(port string) error {
@@ -512,6 +512,9 @@ func (sse *SSEService) Start(port string) error {
 
 	// Route-specific endpoints for different projects
 	sse.router.HandleFunc("/events/{route}", sse.handleRouteSpecificSSE)
+
+	// Register additional routes (including streaming endpoint)
+	sse.registerRoutes()
 
 	sse.server = &http.Server{
 		Addr:    ":" + port,
@@ -567,6 +570,137 @@ func (sse *SSEService) handleRouteSpecificSSE(w http.ResponseWriter, r *http.Req
 			return
 		}
 	}
+}
+
+// handleDirectStream streams video directly from yt-dlp to HTTP response
+func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	downloadId := vars["downloadId"]
+
+	// Get download params from query
+	videoId := r.URL.Query().Get("videoId")
+	format := r.URL.Query().Get("format")
+	quality := r.URL.Query().Get("quality")
+	videoTitle := r.URL.Query().Get("videoTitle")
+	youtubeURL := r.URL.Query().Get("youtubeURL")
+
+	log.Printf("Direct stream request: downloadId=%s, videoId=%s, format=%s, quality=%s",
+		downloadId, videoId, format, quality)
+
+	// Validate required parameters
+	if videoId == "" {
+		http.Error(w, "videoId is required", http.StatusBadRequest)
+		return
+	}
+	if format == "" {
+		format = "mp4" // Default to mp4
+	}
+
+	// Sanitize title for logging
+	sanitizedTitle := sanitizeFilename(videoTitle)
+	if sanitizedTitle == "" {
+		sanitizedTitle = videoId
+	}
+
+	routeKey := fmt.Sprintf("download-%s", downloadId)
+
+	// Send initial progress via SSE
+	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+		"downloadId": downloadId,
+		"progress":   5,
+		"status":     "starting",
+		"message":    "Initializing stream...",
+		"type":       "download_progress",
+	})
+
+	// Create progress callback that sends updates via SSE
+	progressCallback := func(progress float64) {
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"progress":   int(progress),
+			"status":     "downloading",
+			"type":       "download_progress",
+		})
+	}
+
+	// Start yt-dlp streaming to stdout
+	cmd, err := google.StreamYoutubeVideoToStdout(
+		youtubeURL,
+		videoId,
+		format,
+		quality,
+		progressCallback,
+	)
+
+	if err != nil {
+		log.Printf("Failed to start stream for %s: %v", downloadId, err)
+		http.Error(w, fmt.Sprintf("Failed to start stream: %v", err), http.StatusInternalServerError)
+
+		// Send error via SSE
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "error",
+			"message":    fmt.Sprintf("Failed to start stream: %v", err),
+			"type":       "download_error",
+		})
+		return
+	}
+
+	// Set response headers for streaming
+	mimeType := google.GetStreamMimeType(format)
+	filename := fmt.Sprintf("%s.%s", sanitizedTitle, format)
+
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Transfer-Encoding", "chunked")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-cache")
+
+	log.Printf("Starting stream for %s (%s)", filename, mimeType)
+
+	// Pipe yt-dlp stdout directly to HTTP response
+	cmd.Stdout = w
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		log.Printf("Failed to start yt-dlp for %s: %v", downloadId, err)
+		http.Error(w, fmt.Sprintf("Failed to start download: %v", err), http.StatusInternalServerError)
+
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "error",
+			"message":    fmt.Sprintf("Failed to start download: %v", err),
+			"type":       "download_error",
+		})
+		return
+	}
+
+	// Wait for yt-dlp to complete
+	if err := cmd.Wait(); err != nil {
+		log.Printf("Stream error for %s: %v", downloadId, err)
+
+		// Send error via SSE (client may have already disconnected)
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "error",
+			"message":    fmt.Sprintf("Stream interrupted: %v", err),
+			"type":       "download_error",
+		})
+		return
+	}
+
+	log.Printf("Stream completed successfully for %s", downloadId)
+
+	// Send completion notification via SSE
+	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+		"downloadId": downloadId,
+		"progress":   100,
+		"status":     "completed",
+		"message":    "Download completed successfully",
+		"type":       "download_complete",
+		"filename":   filename,
+	})
 }
 
 func (sse *SSEService) Stop() error {
