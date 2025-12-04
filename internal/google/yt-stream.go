@@ -461,6 +461,7 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		err := ytdlpCmd.Wait()
 		if err != nil {
 			logger.Printf("yt-dlp exited with error: %v", err)
+			return
 		}
 		if progressCallback != nil {
 			progressCallback(100)

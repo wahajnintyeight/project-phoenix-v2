@@ -663,18 +663,19 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 
 		log.Printf("Starting direct audio stream for %s", filename)
 
-		if _, err := io.Copy(w, stdout); err != nil {
-			log.Printf("Audio stream error for %s: %v", downloadId, err)
+		bytesWritten, err := io.Copy(w, stdout)
+		if err != nil || bytesWritten == 0 {
+			log.Printf("Audio stream error for %s: %v (bytes=%d)", downloadId, err, bytesWritten)
 			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 				"downloadId": downloadId,
 				"status":     "error",
-				"message":    fmt.Sprintf("Stream interrupted: %v", err),
+				"message":    fmt.Sprintf("Stream failed or produced no data: %v", err),
 				"type":       "download_error",
 			})
 			return
 		}
 
-		log.Printf("Audio stream completed successfully for %s", downloadId)
+		log.Printf("Audio stream completed successfully for %s (bytes=%d)", downloadId, bytesWritten)
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
 			"progress":   100,
