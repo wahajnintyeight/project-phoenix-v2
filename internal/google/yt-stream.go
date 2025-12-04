@@ -392,8 +392,9 @@ func StreamYoutubeAudioAsMP3(videoURL string, bitrate string, progressCallback P
 	normalizedBitrate := getBitrate(bitrate)
 
 	// yt-dlp command: stream best audio to stdout
+	// Use flexible format selector with fallback chain for HLS/m3u8 compatibility
 	ytdlpArgs := []string{
-		"-f", "bestaudio",
+		"-f", "bestaudio/bestaudio*/best",
 		"--no-playlist",
 		"--newline",
 		"--no-mtime",
