@@ -37,7 +37,7 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 	}
 
 	// Always enable verbose logging and update check for better diagnostics
-	args = append([]string{"-vU"}, args...)
+	// args = append([]string{"-vU"}, args...)
 
 	binstr := strings.TrimSpace(os.Getenv("YT_DLP_BIN"))
 	if binstr != "" {
