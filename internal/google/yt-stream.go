@@ -407,6 +407,9 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		return nil, nil, err
 	}
 
+	// Log the exact yt-dlp command for debugging
+	logger.Printf("YT-DLP CMD (audio): %s %s", ytdlpCmd.Path, strings.Join(ytdlpCmd.Args[1:], " "))
+
 	// Get stdout for direct streaming
 	stdout, err := ytdlpCmd.StdoutPipe()
 	if err != nil {
