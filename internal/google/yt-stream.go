@@ -52,12 +52,12 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 	}
 
 	// // Prefer python module so that Node/JS runtimes from the system PATH are visible
-	// for _, py := range []string{"python3", "python"} {
-	// 	if path, err := exec.LookPath(py); err == nil {
-	// 		all := append([]string{"-m", "yt_dlp"}, args...)
-	// 		return exec.Command(path, all...), nil
-	// 	}
-	// }
+	for _, py := range []string{"python3", "python"} {
+		if path, err := exec.LookPath(py); err == nil {
+			all := append([]string{"-m", "yt_dlp"}, args...)
+			return exec.Command(path, all...), nil
+		}
+	}
 
 	// Fallback: compiled yt-dlp binary in common install location
 	if cmd, err := validateAndBuild("/usr/local/bin/yt-dlp", args); err == nil {
