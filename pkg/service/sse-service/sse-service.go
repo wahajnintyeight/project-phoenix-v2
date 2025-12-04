@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -646,7 +647,88 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Set response headers for streaming
+	// Handle audio (mp3) streaming via ffmpeg pipeline
+	if format == "mp3" || format == "audio" {
+		bitrate := quality
+		if bitrate == "" {
+			bitrate = "192k"
+		}
+
+		videoURL := youtubeURL
+		if videoURL == "" {
+			videoURL = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
+		}
+
+		ffmpegCmd, stdout, err := google.StreamYoutubeAudioAsMP3(videoURL, bitrate, progressCallback)
+		if err != nil {
+			log.Printf("Failed to start MP3 stream for %s: %v", downloadId, err)
+			http.Error(w, fmt.Sprintf("Failed to start MP3 stream: %v", err), http.StatusInternalServerError)
+
+			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+				"downloadId": downloadId,
+				"status":     "error",
+				"message":    fmt.Sprintf("Failed to start MP3 stream: %v", err),
+				"type":       "download_error",
+			})
+			return
+		}
+		defer stdout.Close()
+
+		filename := fmt.Sprintf("%s.mp3", sanitizedTitle)
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		w.Header().Set("Transfer-Encoding", "chunked")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Cache-Control", "no-cache")
+
+		log.Printf("Starting MP3 stream for %s", filename)
+
+		if _, err := io.Copy(w, stdout); err != nil {
+			log.Printf("MP3 stream error for %s: %v", downloadId, err)
+			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+				"downloadId": downloadId,
+				"status":     "error",
+				"message":    fmt.Sprintf("Stream interrupted: %v", err),
+				"type":       "download_error",
+			})
+			return
+		}
+
+		log.Printf("MP3 stream completed successfully for %s", downloadId)
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"progress":   100,
+			"status":     "completed",
+			"message":    "Download completed successfully",
+			"type":       "download_complete",
+			"filename":   filename,
+		})
+		return
+	}
+
+	// Default: video or non-MP3 formats via direct yt-dlp stdout
+	cmd, err := google.StreamYoutubeVideoToStdout(
+		youtubeURL,
+		videoId,
+		format,
+		quality,
+		progressCallback,
+	)
+
+	if err != nil {
+		log.Printf("Failed to start stream for %s: %v", downloadId, err)
+		http.Error(w, fmt.Sprintf("Failed to start stream: %v", err), http.StatusInternalServerError)
+
+		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+			"downloadId": downloadId,
+			"status":     "error",
+			"message":    fmt.Sprintf("Failed to start stream: %v", err),
+			"type":       "download_error",
+		})
+		return
+	}
+
 	mimeType := google.GetStreamMimeType(format)
 	filename := fmt.Sprintf("%s.%s", sanitizedTitle, format)
 
@@ -659,10 +741,8 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 
 	log.Printf("Starting stream for %s (%s)", filename, mimeType)
 
-	// Pipe yt-dlp stdout directly to HTTP response
 	cmd.Stdout = w
 
-	// Start the command
 	if err := cmd.Start(); err != nil {
 		log.Printf("Failed to start yt-dlp for %s: %v", downloadId, err)
 		http.Error(w, fmt.Sprintf("Failed to start download: %v", err), http.StatusInternalServerError)
@@ -676,11 +756,8 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Wait for yt-dlp to complete
 	if err := cmd.Wait(); err != nil {
 		log.Printf("Stream error for %s: %v", downloadId, err)
-
-		// Send error via SSE (client may have already disconnected)
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
 			"status":     "error",
@@ -691,8 +768,6 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 	}
 
 	log.Printf("Stream completed successfully for %s", downloadId)
-
-	// Send completion notification via SSE
 	sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 		"downloadId": downloadId,
 		"progress":   100,

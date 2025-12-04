@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -378,6 +379,126 @@ func buildVideoFormatString(format, quality string) string {
 
 	logger.Printf("✅ Built format string: %s (height=%s)", formatStr, height)
 	return formatStr
+}
+
+// StreamYoutubeAudioAsMP3 streams YouTube audio as MP3 using a yt-dlp -> ffmpeg pipeline.
+// It returns the running ffmpeg command and a ReadCloser for the MP3 stdout stream.
+func StreamYoutubeAudioAsMP3(videoURL string, bitrate string, progressCallback ProgressCallback) (*exec.Cmd, io.ReadCloser, error) {
+	if videoURL == "" {
+		return nil, nil, fmt.Errorf("videoURL is required")
+	}
+
+	// Normalize bitrate using existing helper (falls back to 192K)
+	normalizedBitrate := getBitrate(bitrate)
+
+	// yt-dlp command: stream best audio to stdout
+	ytdlpArgs := []string{
+		"-f", "bestaudio",
+		"--no-playlist",
+		"--newline",
+		"--no-mtime",
+		"--force-ipv4",
+		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+		"-o", "-",
+		videoURL,
+	}
+
+	ytdlpCmd, err := buildYtDlpCmd(ytdlpArgs...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// ffmpeg command: read from stdin and output MP3 to stdout
+	ffmpegCmd := exec.Command(
+		"ffmpeg",
+		"-i", "pipe:0",
+		"-vn",
+		"-acodec", "libmp3lame",
+		"-ab", normalizedBitrate,
+		"-f", "mp3",
+		"pipe:1",
+	)
+
+	// Connect yt-dlp stdout -> ffmpeg stdin
+	ytdlpStdout, err := ytdlpCmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("yt-dlp stdout pipe: %w", err)
+	}
+	ffmpegCmd.Stdin = ytdlpStdout
+
+	// Capture yt-dlp stderr for logging and basic progress callbacks
+	ytdlpStderr, err := ytdlpCmd.StderrPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("yt-dlp stderr pipe: %w", err)
+	}
+
+	// Capture ffmpeg stdout (MP3 stream)
+	ffmpegStdout, err := ffmpegCmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("ffmpeg stdout pipe: %w", err)
+	}
+
+	// Capture ffmpeg stderr for logging
+	ffmpegStderr, err := ffmpegCmd.StderrPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("ffmpeg stderr pipe: %w", err)
+	}
+
+	// Start yt-dlp first so ffmpeg has incoming data
+	if err := ytdlpCmd.Start(); err != nil {
+		return nil, nil, fmt.Errorf("yt-dlp start: %w", err)
+	}
+
+	// Optional initial progress signal
+	if progressCallback != nil {
+		progressCallback(10)
+	}
+
+	// Start ffmpeg
+	if err := ffmpegCmd.Start(); err != nil {
+		_ = ytdlpCmd.Process.Kill()
+		return nil, nil, fmt.Errorf("ffmpeg start: %w", err)
+	}
+
+	// Log yt-dlp stderr and emit coarse progress events
+	go func() {
+		scanner := bufio.NewScanner(ytdlpStderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			logger.Printf("YT-DLP STDERR: %s", line)
+
+			// Reuse existing progress regex if available
+			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 1 {
+				if percent, err := strconv.ParseFloat(matches[1], 64); err == nil {
+					if progressCallback != nil {
+						progressCallback(25 + (percent * 0.6))
+					}
+				}
+			}
+		}
+	}()
+
+	// Log ffmpeg stderr
+	go func() {
+		scanner := bufio.NewScanner(ffmpegStderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			logger.Printf("FFMPEG STDERR: %s", line)
+		}
+	}()
+
+	// Cleanup goroutine
+	go func() {
+		_ = ytdlpCmd.Wait()
+		_ = ffmpegCmd.Wait()
+		if progressCallback != nil {
+			progressCallback(100)
+		}
+	}()
+
+	logger.Printf("Started yt-dlp -> ffmpeg MP3 pipeline for %s with bitrate %s", videoURL, normalizedBitrate)
+
+	return ffmpegCmd, ffmpegStdout, nil
 }
 
 // StreamYoutubeVideoToStdout streams video directly to stdout without saving to disk
