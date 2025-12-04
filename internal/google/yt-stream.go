@@ -394,7 +394,7 @@ func StreamYoutubeAudioAsMP3(videoURL string, bitrate string, progressCallback P
 	// yt-dlp command: stream best audio to stdout
 	// Use flexible format selector with fallback chain for HLS/m3u8 compatibility
 	ytdlpArgs := []string{
-		"-f", "bestaudio/bestaudio*/best",
+		"-f", "bestaudio",
 		"--no-playlist",
 		"--newline",
 		"--no-mtime",
@@ -466,7 +466,6 @@ func StreamYoutubeAudioAsMP3(videoURL string, bitrate string, progressCallback P
 		scanner := bufio.NewScanner(ytdlpStderr)
 		for scanner.Scan() {
 			line := scanner.Text()
-			logger.Printf("YT-DLP STDERR: %s", line)
 
 			// Reuse existing progress regex if available
 			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 1 {
