@@ -390,11 +390,12 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		"-f", formatSelector,
 		"--no-playlist",
 		"--no-mtime",
+		"--extractor-args", "youtube:player_client=web",
 		"--force-ipv4",
 		"--socket-timeout", "30",
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-		"-o", "-",
 		videoURL,
+		"-o", "-",
 	}
 
 	ytdlpCmd, err := buildYtDlpCmd(ytdlpArgs...)
