@@ -27,18 +27,14 @@ type StreamSession struct {
 
 // buildYtDlpCmd resolves yt-dlp binary and builds command
 func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
-	// Try environment variable first
-
 	if cookieFile := strings.TrimSpace(os.Getenv("YT_DLP_COOKIES")); cookieFile != "" {
 		if _, err := os.Stat(cookieFile); err == nil {
 			args = append([]string{"--cookies", cookieFile}, args...)
-		} else {
-			logger.Printf("YT_DLP_COOKIES set but unreadable: %v", err)
 		}
 	}
 
-	// Always enable verbose logging and update check for better diagnostics
-	// args = append([]string{"-vU"}, args...)
+	// Explicitly use Deno for JavaScript runtime
+	args = append([]string{"--js-runtime", "deno"}, args...)
 
 	binstr := strings.TrimSpace(os.Getenv("YT_DLP_BIN"))
 	if binstr != "" {
@@ -47,33 +43,31 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 			all := append(parts[1:], args...)
 			if cmd, err := validateAndBuild(parts[0], all); err == nil {
 				return cmd, nil
-			} else {
-				logger.Printf("YT_DLP_BIN invalid (%s), falling back: %v", parts[0], err)
 			}
 		}
 	}
 
-	// // Prefer python module so that Node/JS runtimes from the system PATH are visible
-	for _, py := range []string{"python3", "python"} {
-		if path, err := exec.LookPath(py); err == nil {
-			all := append([]string{"-m", "yt_dlp"}, args...)
-			return exec.Command(path, all...), nil
-		}
-	}
-
-	// Fallback: compiled yt-dlp binary in common install location
-	if cmd, err := validateAndBuild("/usr/local/bin/yt-dlp", args); err == nil {
-		return cmd, nil
-	}
-
-	// Last resort: yt-dlp from PATH
+	// TRY BINARY FIRST (before Python module)
 	if path, err := exec.LookPath("yt-dlp"); err == nil {
 		return exec.Command(path, args...), nil
 	}
 
+	// Fallback: compiled binary in common location
+	if cmd, err := validateAndBuild("/usr/local/bin/yt-dlp", args); err == nil {
+		return cmd, nil
+	}
+
+	// Last resort: Python module
+	for _, py := range []string{"python3", "python"} {
+		if path, err := exec.LookPath(py); err == nil {
+			// Add back the -m yt_dlp for module execution
+			moduleArgs := append([]string{"-m", "yt_dlp"}, args...)
+			return exec.Command(path, moduleArgs...), nil
+		}
+	}
+
 	return nil, fmt.Errorf("yt-dlp not found in PATH or as python module")
 }
-
 // runYtDlp executes yt-dlp command and captures output
 func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallback, videoId string, videoTitle string, videoFormat string) {
 
