@@ -384,11 +384,6 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 
 	// Build format selector with bitrate preference
 	formatSelector := "bestaudio"
-	if bitrate != "" {
-		normalizedBitrate := getBitrate(bitrate)
-		// Try to get audio stream close to requested bitrate, fallback to best
-		formatSelector = fmt.Sprintf("bestaudio[abr<=%s]/bestaudio", strings.TrimSuffix(normalizedBitrate, "k"))
-	}
 
 	// Direct yt-dlp streaming - no ffmpeg transcoding
 	ytdlpArgs := []string{
