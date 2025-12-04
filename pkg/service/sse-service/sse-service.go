@@ -630,40 +630,41 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		videoURL = fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
 	}
 
-	// Handle audio (mp3) streaming via ffmpeg pipeline - check BEFORE starting any command
+	// Handle audio streaming via direct yt-dlp (no transcoding) - check BEFORE starting any command
 	if format == "mp3" || format == "audio" {
 		bitrate := quality
 		if bitrate == "" {
 			bitrate = "192k"
 		}
 
-		_, stdout, err := google.StreamYoutubeAudioAsMP3(videoURL, bitrate, progressCallback)
+		_, stdout, err := google.StreamYoutubeAudioDirect(videoURL, bitrate, progressCallback)
 		if err != nil {
-			log.Printf("Failed to start MP3 stream for %s: %v", downloadId, err)
-			http.Error(w, fmt.Sprintf("Failed to start MP3 stream: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to start audio stream for %s: %v", downloadId, err)
+			http.Error(w, fmt.Sprintf("Failed to start audio stream: %v", err), http.StatusInternalServerError)
 
 			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 				"downloadId": downloadId,
 				"status":     "error",
-				"message":    fmt.Sprintf("Failed to start MP3 stream: %v", err),
+				"message":    fmt.Sprintf("Failed to start audio stream: %v", err),
 				"type":       "download_error",
 			})
 			return
 		}
 		defer stdout.Close()
 
-		filename := fmt.Sprintf("%s.mp3", sanitizedTitle)
-		w.Header().Set("Content-Type", "audio/mpeg")
+		// Serve as m4a (native YouTube audio format - usually AAC)
+		filename := fmt.Sprintf("%s.m4a", sanitizedTitle)
+		w.Header().Set("Content-Type", "audio/mp4")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 		w.Header().Set("Transfer-Encoding", "chunked")
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Cache-Control", "no-cache")
 
-		log.Printf("Starting MP3 stream for %s", filename)
+		log.Printf("Starting direct audio stream for %s", filename)
 
 		if _, err := io.Copy(w, stdout); err != nil {
-			log.Printf("MP3 stream error for %s: %v", downloadId, err)
+			log.Printf("Audio stream error for %s: %v", downloadId, err)
 			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 				"downloadId": downloadId,
 				"status":     "error",
@@ -673,7 +674,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		log.Printf("MP3 stream completed successfully for %s", downloadId)
+		log.Printf("Audio stream completed successfully for %s", downloadId)
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
 			"progress":   100,

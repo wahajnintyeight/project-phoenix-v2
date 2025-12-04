@@ -19,10 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main .
 # Final stage
 FROM alpine:3.19
 
-# Install runtime dependencies
+# Install runtime dependencies (removed ffmpeg - no longer needed for direct streaming)
 RUN apk --no-cache add \
     ca-certificates \
-    ffmpeg \
     aria2 \
     python3 \
     py3-pip \
