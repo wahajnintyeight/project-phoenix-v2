@@ -393,12 +393,12 @@ func StreamYoutubeVideoToStdout(videoLink string, videoId string, format string,
 	var args []string
 	// Common args optimized for streaming
 	commonArgs := []string{
+		"-o", "-", // Output to stdout
 		"--no-playlist",
 		"--newline",
 		"--no-mtime",
 		"--force-ipv4",
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-		"-o", "-", // Output to stdout
 	}
 
 	if format == "mp3" {
@@ -406,6 +406,7 @@ func StreamYoutubeVideoToStdout(videoLink string, videoId string, format string,
 		// If ffmpeg is not available, yt-dlp will fall back to downloading best audio stream
 		bitrate := getBitrate(quality) // quality parameter used as bitrate for audio
 		args = append([]string{
+			"-f", "bestaudio",
 			"--extract-audio",
 			"--audio-format", "mp3",
 			"--audio-quality", bitrate,
