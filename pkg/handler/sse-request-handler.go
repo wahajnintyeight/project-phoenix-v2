@@ -123,10 +123,10 @@ func (handler *SSERequestHandler) Run() {
 
 			// Check if message has routing info
 			routeKey, hasRoute := msg["routeKey"].(string)
-			log.Printf("HANDLER CLIENTS", handler.clients)
+			// log.Printf("HANDLER CLIENTS", handler.clients)
 			for client := range handler.clients {
 				shouldSend := true
-				log.Printf("HAS ROUTE", hasRoute)
+				// log.Printf("HAS ROUTE", hasRoute)
 				// If message has routing, check if client subscribed to this route
 				if hasRoute {
 					if routes, exists := handler.clientRoutes[client]; exists {
@@ -136,7 +136,7 @@ func (handler *SSERequestHandler) Run() {
 					}
 				}
 				// If no routing info, broadcast to all (backward compatibility)
-				log.Printf("SHOULD SEND", shouldSend)
+				// log.Printf("SHOULD SEND", shouldSend)
 				// if shouldSend {
 				// 	select {
 				// 	case client <- msg:
