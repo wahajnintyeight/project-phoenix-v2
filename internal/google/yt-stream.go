@@ -432,7 +432,7 @@ func StreamYoutubeVideoToStdout(videoLink string, videoId string, format string,
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			line := scanner.Text()
-			logger.Printf("YT-DLP: %s", line)
+			// logger.Printf("YT-DLP: %s", line)
 
 			// Extract progress percentage
 			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 1 {

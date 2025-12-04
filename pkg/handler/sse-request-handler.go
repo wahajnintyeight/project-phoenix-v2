@@ -118,7 +118,7 @@ func (handler *SSERequestHandler) Run() {
 			}
 			handler.mutex.Unlock()
 		case msg := <-handler.broadcast:
-			log.Printf("Broadcast message received: type=%s, progress=%v", msg["type"], msg["progress"])
+			// log.Printf("Broadcast message received: type=%s, progress=%v", msg["type"], msg["progress"])
 			handler.mutex.Lock()
 
 			// Check if message has routing info
