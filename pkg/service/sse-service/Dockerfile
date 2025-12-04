@@ -26,16 +26,16 @@ RUN apk --no-cache add \
     aria2 \
     python3 \
     py3-pip \
-    nodejs \
+    deno \
     curl
 
 # Install latest yt-dlp binary (faster updates than distro/pip)
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp
 
-# Install JS runtime for yt-dlp EJS signature solving
-RUN apk --no-cache add npm && \
-    npm install -g phantomjs-prebuilt
+# Pre-cache JavaScript challenge solvers for YouTube signature decryption
+RUN /usr/local/bin/yt-dlp --version && \
+    /usr/local/bin/yt-dlp --remote-components ejs:github --version || true
 
 # Install yt-dlp and crypto deps for python module usage
 RUN pip3 install --break-system-packages --upgrade yt-dlp pycryptodome
