@@ -708,7 +708,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 	}
 
 	// Default: video or non-MP3 formats via direct yt-dlp stdout
-	cmd, err := google.StreamYoutubeVideoToStdout(
+	cmd2, e := google.StreamYoutubeVideoToStdout(
 		youtubeURL,
 		videoId,
 		format,
@@ -716,9 +716,9 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		progressCallback,
 	)
 
-	if err != nil {
-		log.Printf("Failed to start stream for %s: %v", downloadId, err)
-		http.Error(w, fmt.Sprintf("Failed to start stream: %v", err), http.StatusInternalServerError)
+	if e != nil {
+		log.Printf("Failed to start stream for %s: %v", downloadId, e)
+		http.Error(w, fmt.Sprintf("Failed to start stream: %v", e), http.StatusInternalServerError)
 
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
@@ -741,16 +741,16 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 
 	log.Printf("Starting stream for %s (%s)", filename, mimeType)
 
-	cmd.Stdout = w
+	cmd2.Stdout = w
 
-	if err := cmd.Start(); err != nil {
-		log.Printf("Failed to start yt-dlp for %s: %v", downloadId, err)
-		http.Error(w, fmt.Sprintf("Failed to start download: %v", err), http.StatusInternalServerError)
+	if er := cmd2.Start(); er != nil {
+		log.Printf("Failed to start yt-dlp for %s: %v", downloadId, er)
+		http.Error(w, fmt.Sprintf("Failed to start download: %v", er), http.StatusInternalServerError)
 
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
 			"status":     "error",
-			"message":    fmt.Sprintf("Failed to start download: %v", err),
+			"message":    fmt.Sprintf("Failed to start download: %v", er),
 			"type":       "download_error",
 		})
 		return
