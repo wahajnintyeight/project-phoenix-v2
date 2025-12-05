@@ -32,8 +32,8 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 	// 	}
 	// }
 
-	// Explicitly use Deno for JavaScript runtime
-	args = append([]string{"--js-runtime", "deno"}, args...)
+	// Explicitly use Node for JavaScript runtime
+	args = append([]string{"--js-runtime", "node:/usr/bin/node"}, args...)
 
 	binstr := strings.TrimSpace(os.Getenv("YT_DLP_BIN"))
 	if binstr != "" {
@@ -235,12 +235,7 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 	}
 
-	// // If a local deno binary exists in the service-configs utils directory, tell yt-dlp to use it
-	denoPath := "/app/internal/service-configs/sse-service/utils/deno"
-	if info, err := os.Stat(denoPath); err == nil && info.Mode()&0111 != 0 {
-		commonArgs = append(commonArgs, "--js-runtimes", fmt.Sprintf("deno:%s", denoPath))
-	}
-
+	
 	if format == "mp3" {
 		args = append([]string{
 			"--extract-audio",
@@ -390,7 +385,7 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		"-f", formatSelector,
 		"--no-playlist",
 		"--no-mtime",
-		"--extractor-args", "youtube:player_client=web",
+		"--extractor-args", "youtube:player_client=default,web",
 		"--force-ipv4",
 		"--socket-timeout", "30",
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
