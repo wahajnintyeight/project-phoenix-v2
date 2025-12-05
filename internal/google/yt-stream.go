@@ -389,6 +389,7 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		"--audio-format", "mp3",
 		"--extractor-args", "youtube:player_client=default,web",
 		"--force-ipv4",
+		"--postprocessor-args", "ffmpeg:-b:a "+ extractedBitrate,
 		"--socket-timeout", "30",
 		"--audio-quality", extractedBitrate,
 		"--remote-components", "ejs:github",
