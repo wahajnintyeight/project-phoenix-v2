@@ -26,11 +26,11 @@ type StreamSession struct {
 
 // buildYtDlpCmd resolves yt-dlp binary and builds command
 func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
-	// if cookieFile := strings.TrimSpace(os.Getenv("YT_DLP_COOKIES")); cookieFile != "" {
-	// 	if _, err := os.Stat(cookieFile); err == nil {
-	// 		args = append([]string{"--cookies", cookieFile}, args...)
-	// 	}
-	// }
+	if cookieFile := strings.TrimSpace(os.Getenv("YT_DLP_COOKIES")); cookieFile != "" {
+		if _, err := os.Stat(cookieFile); err == nil {
+			args = append([]string{"--cookies", cookieFile}, args...)
+		}
+	}
 
 	// Explicitly use Node for JavaScript runtime
 	args = append([]string{"--js-runtime", "node:/usr/bin/node"}, args...)
