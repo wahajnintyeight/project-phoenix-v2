@@ -583,6 +583,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 	format := r.URL.Query().Get("format")
 	quality := r.URL.Query().Get("quality")
 	videoTitle := r.URL.Query().Get("videoTitle")
+	bitRate := r.URL.Query().Get("bitRate")
 	youtubeURL := r.URL.Query().Get("youtubeURL")
 
 	log.Printf("Direct stream request: downloadId=%s, videoId=%s, format=%s, quality=%s",
@@ -632,7 +633,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 
 	// Handle audio streaming via direct yt-dlp (no transcoding) - check BEFORE starting any command
 	if format == "mp3" || format == "audio" {
-		bitrate := quality
+		bitrate := bitRate
 		if bitrate == "" {
 			bitrate = "192k"
 		}
