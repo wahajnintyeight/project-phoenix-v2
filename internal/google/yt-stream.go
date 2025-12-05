@@ -394,8 +394,8 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		"--audio-quality", extractedBitrate,
 		"--remote-components", "ejs:github",
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-		videoURL,
 		"-o", "-",
+		videoURL,
 	}
 
 	ytdlpCmd, err := buildYtDlpCmd(ytdlpArgs...)
