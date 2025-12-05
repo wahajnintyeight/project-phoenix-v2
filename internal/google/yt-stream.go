@@ -379,6 +379,7 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 
 	// Build format selector with bitrate preference
 	formatSelector := "bestaudio"
+	extractedBitrate := getBitrate(bitrate) // quality parameter used as bitrate for audio
 
 	// Direct yt-dlp streaming - no ffmpeg transcoding
 	ytdlpArgs := []string{
@@ -388,6 +389,7 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		"--extractor-args", "youtube:player_client=default,web",
 		"--force-ipv4",
 		"--socket-timeout", "30",
+		"--audio-quality", extractedBitrate,
 		"--remote-components", "ejs:github",
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 		videoURL,
