@@ -383,7 +383,7 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 
 	// Direct yt-dlp streaming - no ffmpeg transcoding
 	ytdlpArgs := []string{
-		// "-f", formatSelector,
+		"-f", formatSelector,
 		"--no-playlist",
 		"--no-mtime",
 		"--extractor-args", "youtube:player_client=default,web",
