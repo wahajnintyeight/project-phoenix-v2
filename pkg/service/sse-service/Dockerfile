@@ -26,7 +26,7 @@ RUN apk --no-cache add \
     python3 \
     py3-pip \
     deno \
-    node \
+    nodejs \
     curl
 
 # Install latest yt-dlp binary (faster updates than distro/pip)
