@@ -26,11 +26,11 @@ type StreamSession struct {
 
 // buildYtDlpCmd resolves yt-dlp binary and builds command
 func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
-	if cookieFile := strings.TrimSpace(os.Getenv("YT_DLP_COOKIES")); cookieFile != "" {
-		if _, err := os.Stat(cookieFile); err == nil {
-			args = append([]string{"--cookies", cookieFile}, args...)
-		}
-	}
+	// if cookieFile := strings.TrimSpace(os.Getenv("YT_DLP_COOKIES")); cookieFile != "" {
+	// 	if _, err := os.Stat(cookieFile); err == nil {
+	// 		args = append([]string{"--cookies", cookieFile}, args...)
+	// 	}
+	// }
 
 	// Explicitly use Deno for JavaScript runtime
 	args = append([]string{"--js-runtime", "deno"}, args...)
@@ -236,10 +236,10 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
 	}
 
 	// // If a local deno binary exists in the service-configs utils directory, tell yt-dlp to use it
-	// denoPath := "/app/internal/service-configs/sse-service/utils/deno"
-	// if info, err := os.Stat(denoPath); err == nil && info.Mode()&0111 != 0 {
-	// 	commonArgs = append(commonArgs, "--js-runtimes", fmt.Sprintf("deno:%s", denoPath))
-	// }
+	denoPath := "/app/internal/service-configs/sse-service/utils/deno"
+	if info, err := os.Stat(denoPath); err == nil && info.Mode()&0111 != 0 {
+		commonArgs = append(commonArgs, "--js-runtimes", fmt.Sprintf("deno:%s", denoPath))
+	}
 
 	if format == "mp3" {
 		args = append([]string{
