@@ -3,15 +3,18 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"project-phoenix/v2/internal/aws"
@@ -56,6 +59,38 @@ func sanitizeFilename(name string) string {
 		name = name[:100]
 	}
 	return name
+}
+
+// isBrokenPipeError checks if an error is a broken pipe error (client disconnected)
+func isBrokenPipeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	
+	// Check for syscall.EPIPE (broken pipe)
+	var sysErr syscall.Errno
+	if errors.As(err, &sysErr) {
+		return sysErr == syscall.EPIPE
+	}
+	
+	// Check for "broken pipe" in error message (common in network errors)
+	errStr := strings.ToLower(err.Error())
+	if strings.Contains(errStr, "broken pipe") || strings.Contains(errStr, "write: broken pipe") {
+		return true
+	}
+	
+	// Check for net.OpError with broken pipe
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		if opErr.Err != nil {
+			errStr := strings.ToLower(opErr.Err.Error())
+			if strings.Contains(errStr, "broken pipe") {
+				return true
+			}
+		}
+	}
+	
+	return false
 }
 
 var once sync.Once
@@ -638,7 +673,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 			bitrate = "192k"
 		}
 
-		_, stdout, err := google.StreamYoutubeAudioDirect(videoURL, bitrate, progressCallback)
+		cmd, stdout, err := google.StreamYoutubeAudioDirect(videoURL, bitrate, progressCallback)
 		if err != nil {
 			log.Printf("Failed to start audio stream for %s: %v", downloadId, err)
 			http.Error(w, fmt.Sprintf("Failed to start audio stream: %v", err), http.StatusInternalServerError)
@@ -653,6 +688,15 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		}
 		defer stdout.Close()
 
+		// Kill process when client disconnects
+		go func() {
+			<-r.Context().Done()
+			if cmd.Process != nil {
+				log.Printf("Client disconnected for %s, killing yt-dlp process (PID: %d)", downloadId, cmd.Process.Pid)
+				cmd.Process.Kill()
+			}
+		}()
+
 		// Serve as m4a (native YouTube audio format - usually AAC)
 		filename := fmt.Sprintf("%s.m4a", sanitizedTitle)
 		w.Header().Set("Content-Type", "audio/mp4")
@@ -665,12 +709,20 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		log.Printf("Starting direct audio stream for %s", filename)
 
 		bytesWritten, err := io.Copy(w, stdout)
-		if err != nil || bytesWritten == 0 {
+		
+		// Handle errors - broken pipe is normal when client disconnects
+		if err != nil {
+			if isBrokenPipeError(err) {
+				log.Printf("Client disconnected during audio stream for %s (bytes written: %d)", downloadId, bytesWritten)
+				// Don't broadcast error for client disconnects - it's normal behavior
+				return
+			}
+			// Real error - log and report
 			log.Printf("Audio stream error for %s: %v (bytes=%d)", downloadId, err, bytesWritten)
 			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 				"downloadId": downloadId,
 				"status":     "error",
-				"message":    fmt.Sprintf("Stream failed or produced no data: %v", err),
+				"message":    fmt.Sprintf("Stream failed: %v", err),
 				"type":       "download_error",
 			})
 			return
@@ -737,7 +789,39 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Track if we killed the process due to client disconnect
+	var clientDisconnected sync.Mutex
+	disconnected := false
+	
+	// Kill process when client disconnects
+	go func() {
+		<-r.Context().Done()
+		clientDisconnected.Lock()
+		disconnected = true
+		clientDisconnected.Unlock()
+		if cmd.Process != nil {
+			log.Printf("Client disconnected for %s, killing yt-dlp process (PID: %d)", downloadId, cmd.Process.Pid)
+			cmd.Process.Kill()
+		}
+	}()
+
 	if err := cmd.Wait(); err != nil {
+		// If client disconnected, don't treat as error
+		clientDisconnected.Lock()
+		isDisconnected := disconnected
+		clientDisconnected.Unlock()
+		
+		if isDisconnected {
+			log.Printf("Client disconnected during video stream for %s", downloadId)
+			return
+		}
+		// Check if error is due to broken pipe (client disconnect)
+		if isBrokenPipeError(err) {
+			log.Printf("Client disconnected during video stream for %s", downloadId)
+			// Don't broadcast error for client disconnects - it's normal behavior
+			return
+		}
+		// Real error - log and report
 		log.Printf("Stream error for %s: %v", downloadId, err)
 		sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
 			"downloadId": downloadId,
