@@ -24,7 +24,9 @@ func (sc *UserTripController) GetCollectionName() string {
 	return "usertrips"
 }
 
+
 func (sc *UserTripController) StopTracking(w http.ResponseWriter, r *http.Request) (int, string, interface{}, error) {
+	
 	log.Println("Stop Tracking Func Called")
 	stopTrackingModel := model.StopTrackingModel{}
 	decodeErr := json.NewDecoder(r.Body).Decode(&stopTrackingModel)
