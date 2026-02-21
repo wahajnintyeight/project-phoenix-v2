@@ -44,7 +44,9 @@ RUN pip3 install --break-system-packages --upgrade yt-dlp pycryptodome bgutil-yt
 WORKDIR /app
 
 # Explicitly point app to yt-dlp location
-ENV YT_DLP_BIN="/usr/local/bin/yt-dlp"
+# ENV YT_DLP_BIN="/usr/local/bin/yt-dlp"
+
+ENV YT_DLP_BIN="python3 -m yt_dlp"
 
 COPY --from=builder /build/main .
 
