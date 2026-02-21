@@ -39,7 +39,7 @@ RUN /usr/local/bin/yt-dlp --version && \
     /usr/local/bin/yt-dlp --remote-components ejs:github --version || true
 
 # Install yt-dlp and crypto deps for python module usage
-RUN pip3 install --break-system-packages --upgrade yt-dlp pycryptodome
+RUN pip3 install --break-system-packages --upgrade yt-dlp pycryptodome bgutil-ytdlp-pot-provider
 
 WORKDIR /app
 

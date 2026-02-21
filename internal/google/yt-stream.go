@@ -67,6 +67,7 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 
 	return nil, fmt.Errorf("yt-dlp not found in PATH or as python module")
 }
+
 // runYtDlp executes yt-dlp command and captures output
 func (yt *StreamSession) runYtDlp(cmd *exec.Cmd, progressCallback ProgressCallback, videoId string, videoTitle string, videoFormat string) {
 
@@ -235,7 +236,6 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 	}
 
-	
 	if format == "mp3" {
 		args = append([]string{
 			"--extract-audio",
@@ -253,6 +253,10 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
 			videoURL,
 		}, commonArgs...)
 	}
+
+	// args = append([]string{
+	// 	"--extractor-args", "youtube:player_client=default,mweb",
+	// }, args...)
 
 	cmd, err := buildYtDlpCmd(args...)
 	if err != nil {
@@ -387,9 +391,9 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		"--no-mtime",
 		"--extract-audio",
 		"--audio-format", "mp3",
-		"--extractor-args", "youtube:player_client=default,web",
+		"--extractor-args", "youtube:player_client=default,mweb",
 		"--force-ipv4",
-		"--postprocessor-args", "ffmpeg:-b:a "+ extractedBitrate,
+		"--postprocessor-args", "ffmpeg:-b:a " + extractedBitrate,
 		"--socket-timeout", "30",
 		"--audio-quality", extractedBitrate,
 		"--remote-components", "ejs:github",
@@ -433,7 +437,7 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			line := scanner.Text()
-			
+
 			// Log errors prominently
 			if strings.Contains(line, "ERROR") || strings.Contains(line, "not available") || strings.Contains(line, "Requested format") {
 				logger.Printf("YT-DLP ERROR: %s", line)
