@@ -254,10 +254,12 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
 		}, commonArgs...)
 	}
 
-	// args = append([]string{
-	// 	"--extractor-args", "youtube:player_client=default,mweb",
-	// }, args...)
-
+	if potURL := os.Getenv("YT_DLP_POT_URL"); potURL != "" {
+		args = append([]string{
+			"--extractor-args", "youtubepot-bgutilhttp:base_url=" + potURL,
+		}, args...)
+	}
+	
 	cmd, err := buildYtDlpCmd(args...)
 	if err != nil {
 		return nil, err

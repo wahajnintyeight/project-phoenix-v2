@@ -1,4 +1,9 @@
 services:
+  bgutil:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    container_name: ppv2-bgutil
+    restart: unless-stopped
+
   api-gateway:
     image: ghcr.io/wahajnintyeight/apigateway:latest
     container_name: ppv2-api-gateway
@@ -24,6 +29,8 @@ services:
       - /var/www/project-phoenix-v2/internal/service-configs/sse-service/utils/deno:/app/internal/service-configs/sse-service/utils/deno:ro
     env_file:
       - .env
+    environment:
+      - YT_DLP_POT_URL=http://bgutil:4416
     ports:
       - "8885:8885"
     command: ["./main", "--service-name", "sse-service", "--port", "8885"]
