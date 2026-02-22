@@ -3,6 +3,8 @@ services:
     image: brainicism/bgutil-ytdlp-pot-provider:latest
     container_name: ppv2-bgutil
     restart: unless-stopped
+    networks:
+      - ppv2-net
 
   api-gateway:
     image: ghcr.io/wahajnintyeight/apigateway:latest
@@ -34,6 +36,8 @@ services:
     ports:
       - "8885:8885"
     command: ["./main", "--service-name", "sse-service", "--port", "8885"]
+    networks:
+      - ppv2-net
 
   api-gateway-grpc:
     image: ghcr.io/wahajnintyeight/apigateway-grpc:latest
@@ -43,3 +47,6 @@ services:
     ports:
       - "8886:8886"
     command: ["./main", "--service-name", "api-gateway-grpc", "--port", "8886"]
+networks:
+  ppv2-net:
+    driver: bridge
