@@ -1,3 +1,4 @@
+# Netscape HTTP Cookie File
 .youtube.com	TRUE	/	TRUE	0	PREF	f4=4000000&f6=40000000&tz=Asia.Karachi
 .youtube.com	TRUE	/	TRUE	0	APISID	TNCyH-YYLi-j5-vC/AFv_dVWMlv3cVp1zi
 .youtube.com	TRUE	/	TRUE	0	SAPISID	u0VkVeN9Y5Vkmz2T/AoRGXpo5I0ff9JHSQ
