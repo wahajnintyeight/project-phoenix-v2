@@ -404,6 +404,7 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		"-o", "-",
 		videoURL,
 	}
+	
 
 	logger.Printf("YT-DLP POT URL: %s", os.Getenv("YT_DLP_POT_URL"))
 	if potURL := os.Getenv("YT_DLP_POT_URL"); potURL != "" {
