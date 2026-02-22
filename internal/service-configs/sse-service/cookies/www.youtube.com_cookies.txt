@@ -1,17 +1,7 @@
-__Secure-3PSID	g.a0007AivA14mTzabuGnWmMDQaXbTfMGCnqLF3Kfumo3FTQ9OTytdVF3URN3e8HI2c-t-DzXSjAACgYKAesSARASFQHGX2MiPCinDTq992IvZLe1HtO1YxoVAUF8yKpnWPbPSN2MSiAiBsRX7xoR0076	.youtube.com	/	2026-08-20T13:13:29.495Z	167	✓	✓	None			High	
-__Secure-3PSIDCC	AKEyXzWzmcZMbsN-4fjAR6CoHjaN8Cv02uFPm83UHNR6IDQ2dAaBTc8ZQ63GTQFlY2MHi9zHCA	.youtube.com	/	2026-08-20T13:13:39.369Z	90	✓	✓	None			High	
-__Secure-3PSIDTS	sidts-CjQBBj1CYpt9haIrkEcBQfNvm3b5FvQ-8V_tSw7h5SyhkIyaY7Lm1XHmKn-GSH1YNMgb4voYEAA	.youtube.com	/	2026-08-20T13:13:23.549Z	97	✓	✓	None			High	
-__Secure-ROLLOUT_TOKEN	CKvWrp7bm9HJZBDcyevE1OqSAxjopb3F1OqSAw%3D%3D	.youtube.com	/	2026-08-20T13:12:02.656Z	66	✓	✓	None	https://youtube.com		Medium	
-APISID	CCjuRp6IY7ha5CLP/AegX1ZMRB0U7p6Xx7	.youtube.com	/	2026-08-20T13:13:29.494Z	40						High	
-GPS	1	.youtube.com	/	2026-02-21T13:42:01.330Z	4	✓	✓				Medium	
-HSID	AzgPFxKt4HBm2wUgX	.youtube.com	/	2026-08-20T13:13:29.494Z	21	✓					High	
-LOGIN_INFO	AFmmF2swRAIgJWyQBlnOjoKsiho4HrRiFf8OO42irCuegXcudjyPpxUCIFznBxHrnJohTfq0oHN5uCYGJqwQQe08Gmpx8z65_sow:QUQ3MjNmeTdlRUZFaGF1Y2VHMEFuMmFiaGxWNjN2QmxsU3g1ajZkdnhuV0hjWERkeklRMWJ6Tl93WEhHMDhkRm4xbW9CTkhrSXVadmRtN2M1czRzUkZEMU5BVkE0T0JtVm9iSURxZXZ0eWg0RTFmSWRBRVhWc2hmR3UtUktjNzhkVV8zMjdvOFVxMl9HM3RXSnVTMHlpdGNsbkYzOC05NVhB	.youtube.com	/	2026-08-20T13:13:26.356Z	327	✓	✓	None			Medium	
-PREF	f4=4000000&f6=40000000&tz=Asia.Karachi	.youtube.com	/	2026-08-20T13:13:27.910Z	42		✓				Medium	
-SAPISID	EENjge8bya2KCrnh/AkaKL-NyA7Hrofalz	.youtube.com	/	2026-08-20T13:13:29.494Z	41		✓				High	
-SID	g.a0007AivA14mTzabuGnWmMDQaXbTfMGCnqLF3Kfumo3FTQ9OTytdXLkEzS_AMW7rRdvC3yGSpAACgYKAcsSARASFQHGX2Miv2hFtciQiMXsL_OODOdmwRoVAUF8yKoBe6Q8x0CGQNGGGLhc_Z-Y0076	.youtube.com	/	2026-08-20T13:13:29.495Z	156						High	
-SIDCC	AKEyXzXMGk2CojG2oy3FUK3myUEshh6PYP0o4jbLsBfj-eElqnWPxPTR-JX1Ta0CSc5GrcICJQ	.youtube.com	/	2026-08-20T13:13:39.369Z	79						High	
-SSID	Ao8miot113GZ6U0yj	.youtube.com	/	2026-08-20T13:13:29.494Z	21	✓	✓				High	
-VISITOR_INFO1_LIVE	a1wl5AcS57Y	.youtube.com	/	2026-08-20T13:13:30.816Z	29	✓	✓	None	https://youtube.com		Medium	
-VISITOR_PRIVACY_METADATA	CgJQSxIEGgAgJQ%3D%3D	.youtube.com	/	2026-08-20T13:13:30.816Z	44	✓	✓	None	https://youtube.com		Medium	
-YSC	0OWjkBSKUdk	.youtube.com	/	Session	14	✓	✓	None	https://youtube.com		Medium	
-YTSESSION-1supwba	ANPz9KiPIazLLxD/2TyGTvYlr+3aJBCkTY37YA1u5rF4GhHSi5Vl0+vonmJM0j8cXp9cS2J7RkSX8vpmf+oYVyNzUbVdyH3P4mANPIk=	.youtube.com	/	2026-02-21T13:15:26.357Z	121	✓	✓				Medium	
+.youtube.com	TRUE	/	TRUE	0	PREF	f4=4000000&f6=40000000&tz=Asia.Karachi
+.youtube.com	TRUE	/	TRUE	0	APISID	TNCyH-YYLi-j5-vC/AFv_dVWMlv3cVp1zi
+.youtube.com	TRUE	/	TRUE	0	SAPISID	u0VkVeN9Y5Vkmz2T/AoRGXpo5I0ff9JHSQ
+.youtube.com	TRUE	/	TRUE	0	__Secure-1PAPISID	u0VkVeN9Y5Vkmz2T/AoRGXpo5I0ff9JHSQ
+.youtube.com	TRUE	/	TRUE	0	__Secure-3PAPISID	u0VkVeN9Y5Vkmz2T/AoRGXpo5I0ff9JHSQ
+.youtube.com	TRUE	/	TRUE	0	SID	g.a0007AivA8G3WxZU0a9G4qaYbyDurA_Vj3oXnFHGgO1unxyHntzpjOtmCqr0f7RIIvlQDLZBwAACgYKAVQSARASFQHGX2Mi497LPVdV9oUsTZcc__RErhoVAUF8yKpjbSFgW9293UQMfpAAQmKe0076
+.youtube.com	TRUE	/	TRUE	0	SIDCC	AKEyXzVQas3BKXAOM6OlDeR6r39yu308e9KTf1Q0CYOPcK4O94PI_tZfKLK2lwOB_z2lZT_5Xw
