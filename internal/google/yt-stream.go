@@ -405,6 +405,12 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		videoURL,
 	}
 
+	if potURL := os.Getenv("YT_DLP_POT_URL"); potURL != "" {
+		ytdlpArgs = append([]string{
+			"--extractor-args", "youtubepot-bgutilhttp:base_url=" + potURL,
+		}, ytdlpArgs...)
+	}
+
 	ytdlpCmd, err := buildYtDlpCmd(ytdlpArgs...)
 	if err != nil {
 		return nil, nil, err
