@@ -152,6 +152,8 @@ jobs:
             if [ ${#deploy_targets[@]} -gt 0 ]; then
                echo "Starting zero-downtime rolling update for: ${deploy_targets[*]}"
                
+               docker compose -p ppv2 pull bgutil
+               docker compose -p ppv2 up -d bgutil
                # Pull fresh images (other services keep running)
                docker compose pull "${deploy_targets[@]}"
                
