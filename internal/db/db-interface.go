@@ -29,7 +29,7 @@ type DBInterface interface {
 	//FindOneAndUpdate finds a single document and updates it, returning either the original or the updated document.
 	UpdateOrCreate(interface{}, interface{}, string) interface{}
 	ValidateIndexing(string, interface{}) error
-	ValidateIndexingTTL(string,bson.D,int) error
+	ValidateIndexingTTL(string, bson.D, int) error
 	//Fetches the single most recent document from the collection based on the query.
 	FindRecentDocument(query interface{}, collectionName string) (interface{}, error)
 	FindAllWithPagination(interface{}, int, string) (int64, int, []bson.M, error)
@@ -39,6 +39,9 @@ type DBInterface interface {
 func GetDBInstance(dbType enum.DBType) (DBInterface, error) {
 	switch dbType {
 	case enum.MONGODB:
+		if mongoInstance == nil {
+			mongoInstance = &MongoDB{}
+		}
 		instance, err := mongoInstance.GetInstance()
 		log.Println("DBInterface | GetDBInstance | DB Instance: ", instance, err)
 		if err != nil || (err == nil && instance == nil) {
@@ -48,6 +51,9 @@ func GetDBInstance(dbType enum.DBType) (DBInterface, error) {
 			return instance, nil
 		}
 	case enum.POSTGRE:
+		if postgreInstance == nil {
+			postgreInstance = &PostgreDB{}
+		}
 		instance, err := postgreInstance.GetInstance()
 		log.Println("DBInterface | GetDBInstance | DB Instance: ", instance, err)
 		if err != nil || (err == nil && instance == nil) {

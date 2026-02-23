@@ -3,6 +3,7 @@ package controllers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net/http"
 	"project-phoenix/v2/internal/cache"
@@ -25,6 +26,11 @@ func (sc *SessionController) GetCollectionName() string {
 }
 
 func (sc *SessionController) PerformIndexing() error {
+	if sc.DB == nil {
+		log.Println("Warning: DB instance is nil, skipping indexing")
+		return nil
+	}
+
 	// indexes := []interface{}{"sessionId", "createdAt"}
 	indexes := []bson.D{
 		{{Key: "sessionId", Value: 1}},
@@ -42,10 +48,16 @@ func (sc *SessionController) PerformIndexing() error {
 
 }
 func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Request) (string, error) {
+	// Check if DB is initialized
+	if sc.DB == nil {
+		log.Println("Error: DB instance is nil in SessionController")
+		return "", fmt.Errorf("database not initialized")
+	}
+
 	// Add mutex lock to prevent concurrent session creation
 	sc.SessionMutex.Lock()
 	defer sc.SessionMutex.Unlock()
- 
+
 	filter := bson.M{
 		"createdAt": bson.M{
 			"$gte": time.Now().Add(-20 * time.Second),

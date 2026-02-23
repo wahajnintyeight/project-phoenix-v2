@@ -17,7 +17,6 @@ import (
 
 	// "sync"
 
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"go-micro.dev/v4"
@@ -105,6 +104,15 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/return-device-name",
 		s.serviceConfig.EndpointPrefix + "/search-yt-videos",
 		s.serviceConfig.EndpointPrefix + "/download-yt-videos",
+		s.serviceConfig.EndpointPrefix + "/llm-api-configs",
+		s.serviceConfig.EndpointPrefix + "/llm-api-config",
+		s.serviceConfig.EndpointPrefix + "/gollm/test-connection",
+		s.serviceConfig.EndpointPrefix + "/gollm/fetch-models",
+		s.serviceConfig.EndpointPrefix + "/gollm/ats/scan",
+		s.serviceConfig.EndpointPrefix + "/gollm/ats/analyze-resume",
+		s.serviceConfig.EndpointPrefix + "/gollm/ats/enhance-description",
+		s.serviceConfig.EndpointPrefix + "/gollm/ats/regenerate-item",
+		s.serviceConfig.EndpointPrefix + "/gollm/ats/regenerate-skills",
 	}
 	customMiddlewareWrapper := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -151,18 +159,47 @@ func (s *APIGatewayService) registerRoutes() {
 		})
 	}
 
-	allowedOrigins := []string{"http://localhost:5173","http://localhost:5173/", "electron://altair", "http://localhost:8081"}
+	// Custom CORS middleware to handle browser extensions and job sites
+	customCORSMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
 
-    // Set up CORS middleware
-    corsMiddleware := handlers.CORS(
-        handlers.AllowedOrigins(allowedOrigins),
-        handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"}), // Adjust methods as needed
-        handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}), // Adjust headers as needed
-		handlers.AllowCredentials(),
-    )
+			// Allow specific origins
+			allowedOrigins := map[string]bool{
+				"http://localhost:5173":     true,
+				"http://localhost:8081":     true,
+				"electron://altair":         true,
+				"https://www.linkedin.com":  true,
+				"https://linkedin.com":      true,
+				"https://www.indeed.com":    true,
+				"https://indeed.com":        true,
+				"https://www.glassdoor.com": true,
+				"https://glassdoor.com":     true,
+				"https://www.wellfound.com": true,
+				"https://wellfound.com":     true,
+			}
 
-    // Apply CORS middleware to the router
-    s.router.Use(corsMiddleware)
+			// Check if origin is allowed or is a chrome extension
+			if allowedOrigins[origin] || strings.HasPrefix(origin, "chrome-extension://") || strings.HasPrefix(origin, "moz-extension://") {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, sessionId")
+				w.Header().Set("Access-Control-Max-Age", "3600")
+			}
+
+			// Handle preflight requests
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	// Apply custom CORS middleware to the router
+	s.router.Use(customCORSMiddleware)
 
 	s.router.Use(s.ConfigureSentry().Handle)
 	s.router.Use(customMiddlewareWrapper)
@@ -170,12 +207,11 @@ func (s *APIGatewayService) registerRoutes() {
 	s.router.PathPrefix(s.serviceConfig.EndpointPrefix).Handler(apiRequestHandler)
 }
 
-
 func (s *APIGatewayService) ConfigureSentry() *sentryhttp.Handler {
 
 	sentryDsn := os.Getenv("SENTRY_DSN")
 	if err := sentry.Init(sentry.ClientOptions{
-		Dsn: sentryDsn,
+		Dsn:              sentryDsn,
 		TracesSampleRate: 1.0,
 		EnableTracing:    true,
 		Debug:            true,

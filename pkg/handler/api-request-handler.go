@@ -9,6 +9,7 @@ import (
 	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/controllers/middleware"
 	"project-phoenix/v2/internal/enum"
+	"project-phoenix/v2/internal/model"
 	"project-phoenix/v2/internal/response"
 	internal "project-phoenix/v2/internal/service-configs"
 
@@ -79,6 +80,17 @@ func (apiHandler APIRequestHandler) DELETERoutes(w http.ResponseWriter, r *http.
 		}
 		response.SendResponse(w, code, nil)
 		return
+	case apiRequestHandlerObj.Endpoint + "/llm-api-config":
+		log.Println("Delete LLM API Config")
+		controller := controllers.GetControllerInstance(enum.LLMAPIConfigController, enum.MONGODB)
+		configController := controller.(*controllers.LLMAPIConfigController)
+		code, err := configController.DeleteAPIConfig(w, r)
+		if err != nil {
+			response.SendErrorResponse(w, code, err)
+			return
+		}
+		response.SendResponse(w, code, nil)
+		return
 	default:
 		http.NotFound(w, r)
 	}
@@ -110,6 +122,18 @@ func (apiHandler APIRequestHandler) PUTRoutes(w http.ResponseWriter, r *http.Req
 			return
 		}
 		break
+	case apiRequestHandlerObj.Endpoint + "/llm-api-config":
+		log.Println("Update LLM API Config")
+		controller := controllers.GetControllerInstance(enum.LLMAPIConfigController, enum.MONGODB)
+		configController := controller.(*controllers.LLMAPIConfigController)
+		code, res, e := configController.UpdateAPIConfig(w, r)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}
@@ -321,6 +345,126 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, int(enum.DATA_FETCHED), res)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/gollm/chat/completions":
+		log.Println("GoLLM Chat Completion")
+		controller := controllers.GetControllerInstance(enum.GoLLMController, enum.MONGODB)
+		gollmController := controller.(*controllers.GoLLMController)
+		code, res, e := gollmController.ChatCompletion(w, r)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/gollm/completions":
+		log.Println("GoLLM Text Completion")
+		controller := controllers.GetControllerInstance(enum.GoLLMController, enum.MONGODB)
+		gollmController := controller.(*controllers.GoLLMController)
+		code, res, e := gollmController.TextCompletion(w, r)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/gollm/ats/analyze-resume":
+		log.Println("GoLLM ATS Analyze Resume")
+		controller := controllers.GetControllerInstance(enum.GoLLMController, enum.MONGODB)
+		gollmController := controller.(*controllers.GoLLMController)
+		code, res, e := gollmController.ChatCompletionWithPrompt(w, r, model.ANALYZE_RESUME)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/gollm/ats/enhance-description":
+		log.Println("GoLLM ATS Enhance Description")
+		controller := controllers.GetControllerInstance(enum.GoLLMController, enum.MONGODB)
+		gollmController := controller.(*controllers.GoLLMController)
+		code, res, e := gollmController.ChatCompletionWithPrompt(w, r, model.ENHANCE_DESCRIPTION)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/gollm/ats/regenerate-item":
+		log.Println("GoLLM ATS Regenerate Item")
+		controller := controllers.GetControllerInstance(enum.GoLLMController, enum.MONGODB)
+		gollmController := controller.(*controllers.GoLLMController)
+		code, res, e := gollmController.ChatCompletionWithPrompt(w, r, model.REGENERATE_ITEM)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/gollm/ats/regenerate-skills":
+		log.Println("GoLLM ATS Regenerate Skills")
+		controller := controllers.GetControllerInstance(enum.GoLLMController, enum.MONGODB)
+		gollmController := controller.(*controllers.GoLLMController)
+		code, res, e := gollmController.ChatCompletionWithPrompt(w, r, model.REGENERATE_SKILLS)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/gollm/ats/scan":
+		log.Println("GoLLM ATS Scan Resume")
+		controller := controllers.GetControllerInstance(enum.GoLLMController, enum.MONGODB)
+		gollmController := controller.(*controllers.GoLLMController)
+		code, res, e := gollmController.ScanResumeATS(w, r)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/gollm/test-connection":
+		log.Println("GoLLM Test Connection")
+		controller := controllers.GetControllerInstance(enum.GoLLMController, enum.MONGODB)
+		gollmController := controller.(*controllers.GoLLMController)
+		code, res, e := gollmController.TestConnection(w, r)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/gollm/fetch-models":
+		log.Println("GoLLM Fetch Models")
+		controller := controllers.GetControllerInstance(enum.GoLLMController, enum.MONGODB)
+		gollmController := controller.(*controllers.GoLLMController)
+		code, res, e := gollmController.FetchOpenRouterModels(w, r)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
+	case apiRequestHandlerObj.Endpoint + "/llm-api-config":
+		log.Println("Create LLM API Config")
+		controller := controllers.GetControllerInstance(enum.LLMAPIConfigController, enum.MONGODB)
+		configController := controller.(*controllers.LLMAPIConfigController)
+		code, res, e := configController.CreateAPIConfig(w, r)
+		if e != nil {
+			response.SendResponse(w, code, res)
+			return
+		} else {
+			response.SendResponse(w, code, res)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 	}
@@ -405,6 +549,28 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendErrorResponse(w, code, e)
 		} else {
 			response.SendResponse(w, code, d)
+		}
+		break
+	case apiRequestHandlerObj.Endpoint + "/llm-api-configs":
+		log.Println("List LLM API Configs")
+		controller := controllers.GetControllerInstance(enum.LLMAPIConfigController, enum.MONGODB)
+		configController := controller.(*controllers.LLMAPIConfigController)
+		code, data, e := configController.ListAPIConfigs(w, r)
+		if e != nil {
+			response.SendResponse(w, code, e)
+		} else {
+			response.SendResponse(w, code, data)
+		}
+		break
+	case apiRequestHandlerObj.Endpoint + "/llm-api-config":
+		log.Println("Get LLM API Config")
+		controller := controllers.GetControllerInstance(enum.LLMAPIConfigController, enum.MONGODB)
+		configController := controller.(*controllers.LLMAPIConfigController)
+		code, data, e := configController.GetAPIConfig(w, r)
+		if e != nil {
+			response.SendResponse(w, code, e)
+		} else {
+			response.SendResponse(w, code, data)
 		}
 		break
 	case apiRequestHandlerObj.Endpoint + "/room/messages":

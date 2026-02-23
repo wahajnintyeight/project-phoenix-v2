@@ -151,7 +151,7 @@ func JSONStringToStruct(data interface{}, target interface{}) error {
 
 func StringToInterface(data string) (interface{}, error) {
 	var result interface{}
-	
+
 	// Try to unmarshal the string as JSON
 	err := json.Unmarshal([]byte(data), &result)
 	if err != nil {
@@ -159,7 +159,7 @@ func StringToInterface(data string) (interface{}, error) {
 		fmt.Println("Warning: Input is not valid JSON, returning as string in interface{}")
 		return interface{}(data), nil
 	}
-	
+
 	return result, nil
 }
 
@@ -201,4 +201,11 @@ func StringToObjectId(s string) primitive.ObjectID {
 
 func FloatToString(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
+// StringToObjectID converts a string to MongoDB ObjectID
+func StringToObjectID(id string) interface{} {
+	// For MongoDB, we can use the string directly in queries
+	// The MongoDB driver will handle the conversion
+	return id
 }

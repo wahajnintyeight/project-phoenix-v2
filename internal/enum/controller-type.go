@@ -13,5 +13,6 @@ const (
 	CaptureScreenController
 	ClipboardRoomController
 	GoogleController
-
+	GoLLMController
+	LLMAPIConfigController
 )

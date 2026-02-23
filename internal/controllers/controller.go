@@ -28,7 +28,9 @@ var (
 	loginActivityControllerInstance   *LoginActivityController
 	captureScreenControllerInstance   *CaptureScreenController
 	clipboardRoomControllerInstance   *ClipboardRoomController
-	googleControllerInstance   		  *GoogleController
+	googleControllerInstance          *GoogleController
+	gollmControllerInstance           *GoLLMController
+	llmAPIConfigControllerInstance    *LLMAPIConfigController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
@@ -58,13 +60,13 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 
 	switch controllerType {
 	case enum.SessionController:
-
-		once.Do(func() {
+		if sessionControllerInstance == nil {
+			log.Println("Initialize Session Controller")
 			dbInstance, err := db.GetDBInstance(dbType)
 			log.Println("DB Instance: ", dbInstance, err)
 			if err != nil {
 				log.Println("Error while getting DB Instance: ", err)
-				return
+				return nil
 			}
 			sessionControllerInstance = &SessionController{
 				DB: dbInstance,
@@ -74,7 +76,7 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			if e != nil {
 				log.Println("Error while indexing: ", e)
 			}
-		})
+		}
 		return sessionControllerInstance
 	case enum.UserController:
 		if userControllerInstance == nil {
@@ -194,6 +196,33 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			}
 		}
 		return googleControllerInstance
+	case enum.GoLLMController:
+		if gollmControllerInstance == nil {
+			log.Println("Initialize GoLLM Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+				return nil
+			}
+			gollmControllerInstance = &GoLLMController{
+				DB:         dbInstance,
+				LLMService: nil, // Will be initialized on first use
+			}
+		}
+		return gollmControllerInstance
+	case enum.LLMAPIConfigController:
+		if llmAPIConfigControllerInstance == nil {
+			log.Println("Initialize LLM API Config Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+				return nil
+			}
+			llmAPIConfigControllerInstance = &LLMAPIConfigController{
+				DB: dbInstance,
+			}
+		}
+		return llmAPIConfigControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil
