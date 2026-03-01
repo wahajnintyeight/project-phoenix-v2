@@ -47,6 +47,18 @@ services:
     ports:
       - "8886:8886"
     command: ["./main", "--service-name", "api-gateway-grpc", "--port", "8886"]
+
+  worker-service:
+    image: ghcr.io/wahajnintyeight/worker-service:latest
+    container_name: ppv2-worker-service
+    env_file:
+      - .env
+    ports:
+      - "8887:8887"
+    command: ["./main", "--service-name", "worker-service", "--port", "8887"]
+    networks:
+      - ppv2-net
+
 networks:
   ppv2-net:
     driver: bridge

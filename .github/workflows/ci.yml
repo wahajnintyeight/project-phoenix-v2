@@ -51,6 +51,11 @@ jobs:
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
+            worker_service:
+              - 'pkg/service/worker-service/**'
+              - 'pkg/**'
+              - 'internal/**'
+              - 'go.mod'
 
       - name: Set up QEMU & Buildx
         uses: docker/setup-buildx-action@v3
@@ -86,6 +91,7 @@ jobs:
           # [ "${{ steps.changes.outputs.locationservice }}" = "true" ] && changed+=("pkg/service/locationservice")
           [ "${{ steps.changes.outputs.socketservice }}" = "true" ] && changed+=("pkg/service/socketservice")
           [ "${{ steps.changes.outputs.sse_service }}" = "true" ] && changed+=("pkg/service/sse-service")
+          [ "${{ steps.changes.outputs.worker_service }}" = "true" ] && changed+=("pkg/service/worker-service")
           
           if [ ${#changed[@]} -eq 0 ]; then
              echo "none=true" >> $GITHUB_OUTPUT
@@ -146,6 +152,7 @@ jobs:
                 apigateway-grpc)  deploy_targets+=("api-gateway-grpc") ;;
                 socketservice)    deploy_targets+=("socket-service") ;;
                 sse-service)      deploy_targets+=("sse-service") ;;
+                worker-service)   deploy_targets+=("worker-service") ;;
               esac
             done
 

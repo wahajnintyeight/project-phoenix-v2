@@ -104,8 +104,9 @@ func (l *LLMAPIConfigController) ListAPIConfigs(w http.ResponseWriter, r *http.R
 		query["isActive"] = true
 	}
 
-	// Use pagination (get all by setting high page size)
-	_, _, results, err := l.DB.FindAllWithPagination(query, 1000, l.GetCollectionName())
+	// Use pagination - page 1 to get first 10 results
+	// Note: FindAllWithPagination uses hardcoded pageSize=10
+	_, _, results, err := l.DB.FindAllWithPagination(query, 1, l.GetCollectionName())
 	if err != nil {
 		log.Println("Error fetching API configs:", err)
 		return int(enum.ERROR), "Failed to fetch API configurations", err

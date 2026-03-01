@@ -179,14 +179,22 @@ func (s *APIGatewayService) registerRoutes() {
 				"https://wellfound.com":     true,
 			}
 
-			// Check if origin is allowed or is a chrome extension
-			if allowedOrigins[origin] || strings.HasPrefix(origin, "chrome-extension://") || strings.HasPrefix(origin, "moz-extension://") {
+			isChromeExtension := strings.HasPrefix(origin, "chrome-extension://") || strings.HasPrefix(origin, "moz-extension://")
+			isAllowedOrigin := allowedOrigins[origin]
+
+			// Set CORS headers if origin is allowed or is a browser extension
+			if isAllowedOrigin || isChromeExtension {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, sessionId")
-				w.Header().Set("Access-Control-Max-Age", "3600")
+			} else if origin != "" {
+				// Allow any other origin for development or if origin is present
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
 			}
+
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, sessionId")
+			w.Header().Set("Access-Control-Max-Age", "3600")
 
 			// Handle preflight requests
 			if r.Method == "OPTIONS" {

@@ -1,0 +1,19 @@
+{
+  "serviceName": "worker-service",
+  "port": "8885",
+  "serviceExchange": "worker-service-exchange",
+  "serviceQueue": "worker-service-queue",
+  "subscribedServices": [
+    {
+      "name": "activity-tracker",
+      "exchange": "worker-service-exchange",
+      "queue": "worker-service-queue",
+      "subscribedTopics": [
+        {
+          "topicName": "process-screenshot",
+          "topicHandler": "HandleScreenshotProcessing"
+        }
+      ]
+    }
+  ]
+}
