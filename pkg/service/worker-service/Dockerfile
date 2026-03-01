@@ -1,28 +1,39 @@
 # Builder stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /build
 
-# Copy the go mod and sum files to download dependencies
-COPY go.mod .
-COPY go.sum .
-RUN go mod download
+# Install git required for fetching dependencies
+RUN apk add --no-cache git
 
-# Copy the source code into the container
+# Copy module files and vendor directory prepared by CI
+COPY go.mod go.sum ./
+COPY vendor ./vendor
+
+# Copy the source code
 COPY . .
 
+# Ensure vendored build (no network, no checksum resolution)
+ENV GOFLAGS="-mod=vendor"
+
 # Build the application
+# -ldflags="-w -s" reduces binary size by stripping debug information
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main .
+
 # Final stage
-FROM alpine:latest  
+FROM alpine:3.19
+
+# Install CA certificates and curl for healthcheck
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
 
-# Copy the pre-built binary file from the previous stage
-COPY --from=builder /build .
+# Copy only the compiled binary from builder
+COPY --from=builder /build/main .
+
+# Copy runtime configs
+COPY --from=builder /build/internal/service-configs ./internal/service-configs
 
 EXPOSE 8887
 
-# Command to run the executable
-CMD ["./main","--service-name", "worker-service", "--port", "8887"]
+CMD ["./main", "--service-name", "worker-service", "--port", "8887"]
