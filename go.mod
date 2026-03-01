@@ -1,6 +1,6 @@
 module project-phoenix/v2
 
-go 1.25
+go 1.24
 
 require (
 	firebase.google.com/go v3.13.0+incompatible
