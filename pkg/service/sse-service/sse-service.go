@@ -66,19 +66,19 @@ func isBrokenPipeError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	// Check for syscall.EPIPE (broken pipe)
 	var sysErr syscall.Errno
 	if errors.As(err, &sysErr) {
 		return sysErr == syscall.EPIPE
 	}
-	
+
 	// Check for "broken pipe" in error message (common in network errors)
 	errStr := strings.ToLower(err.Error())
 	if strings.Contains(errStr, "broken pipe") || strings.Contains(errStr, "write: broken pipe") {
 		return true
 	}
-	
+
 	// Check for net.OpError with broken pipe
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
@@ -89,7 +89,7 @@ func isBrokenPipeError(err error) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -211,10 +211,32 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 		return fmt.Errorf("error unmarshalling data: %v", err)
 	}
 
+	// Log the received data for debugging
+	log.Printf("Received message data: %+v", data)
+
+	// Check if messageType exists and is not nil
+	messageTypeRaw, ok := data["messageType"]
+	if !ok || messageTypeRaw == nil {
+		return fmt.Errorf("messageType field is missing or nil in message")
+	}
+
+	// Safely convert messageType to float64
+	messageTypeFloat, ok := messageTypeRaw.(float64)
+	if !ok {
+		return fmt.Errorf("messageType is not a valid number, got type: %T", messageTypeRaw)
+	}
+
 	deviceData := model.Device{}
-	messageType := int32(data["messageType"].(float64))
+	messageType := int32(messageTypeFloat)
 	log.Println("Message Type is", messageType)
-	if err := helper.InterfaceToStruct(data["data"], &deviceData); err != nil {
+
+	// Check if data field exists
+	dataField, ok := data["data"]
+	if !ok || dataField == nil {
+		return fmt.Errorf("data field is missing or nil in message")
+	}
+
+	if err := helper.InterfaceToStruct(dataField, &deviceData); err != nil {
 		return fmt.Errorf("error decoding data map: %v", err)
 	}
 
@@ -709,7 +731,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		log.Printf("Starting direct audio stream for %s", filename)
 
 		bytesWritten, err := io.Copy(w, stdout)
-		
+
 		// Handle errors - broken pipe is normal when client disconnects
 		if err != nil {
 			if isBrokenPipeError(err) {
@@ -792,7 +814,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 	// Track if we killed the process due to client disconnect
 	var clientDisconnected sync.Mutex
 	disconnected := false
-	
+
 	// Kill process when client disconnects
 	go func() {
 		<-r.Context().Done()
@@ -810,7 +832,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		clientDisconnected.Lock()
 		isDisconnected := disconnected
 		clientDisconnected.Unlock()
-		
+
 		if isDisconnected {
 			log.Printf("Client disconnected during video stream for %s", downloadId)
 			return
