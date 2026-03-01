@@ -414,6 +414,7 @@ func (h *ScreenshotHandler) storeInVectorDB(
 	return nil
 }
 
+
 // generateEmbedding generates a vector embedding for the text
 // TODO: Replace with actual embedding service (OpenAI, Ollama, etc.)
 func (h *ScreenshotHandler) generateEmbedding(text string) ([]float32, error) {
