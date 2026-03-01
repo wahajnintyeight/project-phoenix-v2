@@ -183,7 +183,7 @@ func (h *ScreenshotHandler) analyzeScreenshot(metadata *ScreenshotMetadata, imag
 
 // buildAnalysisPrompt creates the analysis prompt
 func (h *ScreenshotHandler) buildAnalysisPrompt(metadata *ScreenshotMetadata, imageData string) string {
-	prompt := fmt.Sprintf(`Analyze this screenshot activity:
+	prompt := fmt.Sprintf(`Analyze this screenshot activity based on the visual content and metadata.
 
 Device: %s
 Timestamp: %s
@@ -193,35 +193,45 @@ Window Title: %s
 `, metadata.DeviceName, metadata.Timestamp, metadata.ActiveProcessName, metadata.ActiveWindowTitle)
 
 	if imageData != "" {
-		prompt += "Image data is available for analysis.\n\n"
+		prompt += "Image data is available. Use visual analysis to answer the following based on the context.\n\n"
 	}
 
-	prompt += `Please provide a comprehensive analysis:
+	prompt += `Determine the context and strictly follow the relevant criteria:
 
-1. **Summary** (50-80 words): Describe what's happening in the screenshot. What is the user doing? What content is visible? What's the context?
+1. **GAMING**:
+   - **Activity**: What is the player doing? (e.g., combat, questing, inventory management)
+   - **HUD/Stats**: List health, ammo, resources, level, and active effects.
+   - **World**: Describe enemies, NPCs, dialogue options, and the environment.
+   - **Identity**: Identify the game genre and character details.
 
-2. **Application**: What application is the user using?
+2. **CODING & TECH**:
+   - **Work**: What is the user writing or viewing? (e.g., implementing a class, debugging error logs)
+   - **Code**: Identify the programming language, file extension, and code quality/complexity.
+   - **Tools**: What IDE/Editor is used? Are terminal/debug/file-explorer panels visible?
 
-3. **Activity**: What specific activity is the user performing?
+3. **WEB BROWSING**:
+   - **Page**: What is the specific content? (e.g., documentation, social feed, checkout page)
+   - **Tabs**: List visible tabs and infer the browsing session goal.
+   - **Action**: Is the user reading, typing, watching, or scrolling?
 
-4. **Time**: What time is shown (if visible in the screenshot)?
+4. **VIDEO & ENTERTAINMENT**:
+   - **Content**: What is being watched? Describe the scene or topic.
+   - **Platform**: Layout (YouTube, Netflix, Twitch).
+   - **Context**: How many videos/thumbnails are visible? Is the user engaging (comments/chat)?
 
-5. **User State**: Assess the user's focus level (focused, distracted, idle, multitasking, etc.)
+5. **GENERAL**:
+   - Describe the desktop state, open windows, and overall focus.
 
-6. **Productivity Category**: Categorize as work, entertainment, communication, learning, etc.
-
-7. **Notable Observations**: Any important details or patterns
-
-Respond in JSON format with these exact fields:
+Output JSON:
 {
-  "summary": "80-150 word description here",
-  "application": "app name",
-  "activity": "what they're doing, what is going on in the screen.",
-  "time_visible": "time if shown",
-  "user_state": "focus level",
-  "productivity_level": "high/medium/low",
-  "category": "category name",
-  "observations": "notable details"
+  "summary": "Comprehensive 80-150 word description covering the specific criteria above.",
+  "application": "Exact application name",
+  "activity": "Specific action (e.g., 'Debugging main.go', 'Fighting boss in Elden Ring')",
+  "time_visible": "Time on screen (or null)",
+  "user_state": "Focused / Distracted / Multitasking / Idle",
+  "productivity_level": "High / Medium / Low",
+  "category": "Development / Browsing / Gaming / Entertainment / Communication / Other",
+  "observations": "Key details (e.g., 'HP: 100/100', 'File: api.ts', 'Video: Rust Tutorial')"
 }`
 
 	return prompt
@@ -270,6 +280,7 @@ func (h *ScreenshotHandler) parseAnalysisResponse(content string, metadata *Scre
 		Category:          llmResponse.Category,
 		TimeVisible:       llmResponse.TimeVisible,
 		Summary:           llmResponse.Summary,
+		Observations:      llmResponse.Observations,
 		RawLLMResponse:    content,
 		ConfidenceScore:   0.95,
 	}
@@ -321,6 +332,7 @@ func (h *ScreenshotHandler) logAnalysis(metadata *ScreenshotMetadata, analysis *
 	log.Printf("Category: %s", analysis.Category)
 	log.Printf("Productivity: %s", analysis.ProductivityLevel)
 	log.Printf("Summary: %s", analysis.Summary)
+	log.Printf("Observations: %s", analysis.Observations)
 	log.Printf("Confidence: %.2f", analysis.ConfidenceScore)
 	log.Printf("==========================")
 }
@@ -357,12 +369,13 @@ func (h *ScreenshotHandler) storeInVectorDB(
 
 	// Create text for embedding
 	textToEmbed := fmt.Sprintf(
-		"%s. Application: %s. Activity: %s. Category: %s. User State: %s.",
+		"%s. Application: %s. Activity: %s. Category: %s. User State: %s. Observations: %s.",
 		analysis.Summary,
 		analysis.Application,
 		analysis.Activity,
 		analysis.Category,
 		analysis.UserState,
+		analysis.Observations,
 	)
 
 	// Generate embedding
@@ -387,6 +400,7 @@ func (h *ScreenshotHandler) storeInVectorDB(
 			"active_window":      metadata.ActiveWindowTitle,
 			"confidence_score":   analysis.ConfidenceScore,
 			"timestamp":          metadata.Timestamp,
+			"observations":       analysis.Observations,
 		},
 		Timestamp: time.Now(),
 	}
@@ -441,6 +455,7 @@ type ScreenshotAnalysis struct {
 	Category          string
 	TimeVisible       string
 	Summary           string // 50-80 word description of what's happening
+	Observations      string
 	RawLLMResponse    string
 	ConfidenceScore   float64
 }
