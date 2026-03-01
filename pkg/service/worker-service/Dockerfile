@@ -12,8 +12,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o main .
-
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main .
 # Final stage
 FROM alpine:latest  
 RUN apk --no-cache add ca-certificates
