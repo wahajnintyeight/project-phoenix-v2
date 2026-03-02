@@ -14,6 +14,17 @@
           "topicHandler": "HandleScreenshotProcessing"
         }
       ]
+    },
+    {
+      "name": "cricket-tracker",
+      "exchange": "worker-service-exchange",
+      "queue": "cricket-tracker-queue",
+      "subscribedTopics": [
+        {
+          "topicName": "cricket-event",
+          "topicHandler": "HandleCricketEvent"
+        }
+      ]
     }
   ]
 }

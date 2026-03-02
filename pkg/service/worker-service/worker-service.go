@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"reflect"
 	"sync"
 	"time"
 
+	"project-phoenix/v2/internal/notifier"
 	internal "project-phoenix/v2/internal/service-configs"
 	"project-phoenix/v2/pkg/service"
+
 	"project-phoenix/v2/pkg/service/worker-service/handlers"
 
 	"github.com/go-micro/plugins/v4/broker/rabbitmq"
@@ -28,6 +31,7 @@ type WorkerService struct {
 	subscribedServices []internal.SubscribedServices
 	brokerObj          microBroker.Broker
 	screenshotHandler  *handlers.ScreenshotHandler
+	cricketHandler     *handlers.CricketHandler
 }
 
 var once sync.Once
@@ -60,8 +64,17 @@ func (qc *WorkerService) InitializeService(serviceObj micro.Service, serviceName
 		serviceConfig, _ := internal.ReturnServiceConfig(servicePath)
 		qc.serviceConfig = serviceConfig.(internal.ServiceConfig)
 
+		// Initialize Discord Notifier
+		webhookURL := os.Getenv("DISCORD_WEBHOOK_URL")
+		if webhookURL == "" {
+			// Default to the provided URL if not in env
+			webhookURL = "https://discord.com/api/webhooks/1478082369977323532/9y-KGcM7JhG4XuM6bFOw_ASga2mVsP4PirFtMc33QY_v1NgOoUkpNcg8VH3ckj2HqiwP"
+		}
+		discordNotifier := notifier.NewDiscordNotifier(webhookURL)
+
 		// Initialize handlers
 		qc.screenshotHandler = handlers.NewScreenshotHandler()
+		qc.cricketHandler = handlers.NewCricketHandler(discordNotifier)
 
 		log.Println("Worker Service initialized")
 	})
@@ -219,4 +232,17 @@ func (qc *WorkerService) Stop() error {
 		return qc.server.Close()
 	}
 	return nil
+}
+
+// HandleCricketEvent processes cricket game events
+func (qc *WorkerService) HandleCricketEvent(p microBroker.Event) error {
+	log.Println("HandleCricketEvent called")
+
+	data := make(map[string]interface{})
+	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
+		return fmt.Errorf("error unmarshalling cricket event data: %v", err)
+	}
+
+	// Delegate to cricket handler
+	return qc.cricketHandler.Process(data)
 }

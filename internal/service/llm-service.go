@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"project-phoenix/v2/internal/model"
 	"strings"
 	"time"
@@ -269,4 +270,47 @@ func (s *LLMService) FetchOpenRouterModels(apiKey string) ([]model.OpenRouterMod
 
 	log.Printf("Successfully fetched %d models from OpenRouter", len(modelsResp.Data))
 	return modelsResp.Data, nil
+}
+
+// GenerateText generates text using the default LLM configuration
+// This is a simplified method for quick text generation without full configuration
+func (s *LLMService) GenerateText(prompt string) (string, error) {
+	ctx := context.Background()
+
+	// Use default configuration (can be made configurable via env vars)
+	provider := getEnvOrDefault("LLM_PROVIDER", "openrouter")
+	model := getEnvOrDefault("OPENROUTER_MODEL", "llama-3.3-70b-versatile")
+	apiKey := getEnvOrDefault("OPENROUTER_API_KEY", "")
+
+	if apiKey == "" {
+		return "", fmt.Errorf("LLM_API_KEY not configured")
+	}
+
+	// Create LLM instance
+	llm, err := gollm.NewLLM(
+		gollm.SetProvider(provider),
+		gollm.SetModel(model),
+		gollm.SetAPIKey(apiKey),
+		gollm.SetMaxTokens(150),
+		gollm.SetTemperature(0.8),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to create LLM instance: %w", err)
+	}
+
+	// Generate response
+	response, err := llm.Generate(ctx, gollm.NewPrompt(prompt))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate text: %w", err)
+	}
+
+	return response, nil
+}
+
+// getEnvOrDefault retrieves environment variable or returns default value
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }

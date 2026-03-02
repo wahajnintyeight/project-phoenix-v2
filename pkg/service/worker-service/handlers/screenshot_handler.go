@@ -286,27 +286,6 @@ func (h *ScreenshotHandler) parseAnalysisResponse(content string, metadata *Scre
 	}
 }
 
-func extractJSON(text string) string {
-
-	text = strings.TrimSpace(text)
-
-	// Check for ```json ... ``` pattern
-	if strings.HasPrefix(text, "```json") {
-		text = strings.TrimPrefix(text, "```json")
-		text = strings.TrimPrefix(text, "```")
-		if idx := strings.LastIndex(text, "```"); idx != -1 {
-			text = text[:idx]
-		}
-	} else if strings.HasPrefix(text, "```") {
-		text = strings.TrimPrefix(text, "```")
-		if idx := strings.LastIndex(text, "```"); idx != -1 {
-			text = text[:idx]
-		}
-	}
-
-	return strings.TrimSpace(text)
-}
-
 func generateFallbackSummary(metadata *ScreenshotMetadata) string {
 
 	if metadata.ActiveProcessName == "" {
@@ -413,7 +392,6 @@ func (h *ScreenshotHandler) storeInVectorDB(
 	log.Printf("✓ Successfully stored in Qdrant: %s", memory.ID)
 	return nil
 }
-
 
 // generateEmbedding generates a vector embedding for the text
 // TODO: Replace with actual embedding service (OpenAI, Ollama, etc.)
@@ -523,11 +501,4 @@ func toLower(s string) string {
 
 func containsSubstr(s, substr string) bool {
 	return strings.Contains(s, substr)
-}
-
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }
