@@ -189,7 +189,10 @@ func (n *DiscordNotifier) SendCricketEvent(eventType, commentary string, matchDa
 					avg, _ := matchData["career_average"].(float64)
 					careerInfo = fmt.Sprintf("\n\n**Career Stats:** %d matches • %d wickets • avg %.2f", int(matches), int(wickets), avg)
 				}
-				description = fmt.Sprintf("**%s** comes into the attack%s", bowlerName, careerInfo)
+				// Only override if commentary is empty or generic
+				if commentary == "" {
+					description = fmt.Sprintf("**%s** comes into the attack%s", bowlerName, careerInfo)
+				}
 			}
 		}
 
@@ -202,7 +205,10 @@ func (n *DiscordNotifier) SendCricketEvent(eventType, commentary string, matchDa
 					avg, _ := matchData["career_average"].(float64)
 					careerInfo = fmt.Sprintf("\n\n**Career Stats:** %d matches • %d runs • avg %.2f", int(matches), int(runs), avg)
 				}
-				description = fmt.Sprintf("**%s** walks to the crease%s", batsmanName, careerInfo)
+				// Only override if commentary is empty or generic
+				if commentary == "" {
+					description = fmt.Sprintf("**%s** walks to the crease%s", batsmanName, careerInfo)
+				}
 			}
 		}
 
@@ -216,49 +222,56 @@ func (n *DiscordNotifier) SendCricketEvent(eventType, commentary string, matchDa
 			dismissalType, _ := matchData["dismissal_type"].(string)
 			fielderName, _ := matchData["dismissal_fielder"].(string)
 
-			if bowlerName != "" {
-				description = fmt.Sprintf("**%s** strikes! 🎯\n\n", bowlerName)
-			} else {
-				description = ""
-			}
-
-			if batsmanName != "" {
-				description += fmt.Sprintf("**%s** departs", batsmanName)
-				if runs > 0 || balls > 0 {
-					description += fmt.Sprintf(" - %d(%d)", int(runs), int(balls))
-					if strikeRate > 0 {
-						description += fmt.Sprintf(" SR: %.1f", strikeRate)
-					}
-				}
-				description += "\n"
-			}
-
-			if dismissalType != "" {
-				dismissalText := dismissalType
-				if fielderName != "" && dismissalType == "caught" {
-					dismissalText = fmt.Sprintf("caught by %s", fielderName)
-				}
+			// Only override if commentary is empty
+			if commentary == "" {
 				if bowlerName != "" {
-					dismissalText += fmt.Sprintf(", bowled by %s", bowlerName)
+					description = fmt.Sprintf("**%s** strikes! 🎯\n\n", bowlerName)
+				} else {
+					description = ""
 				}
-				description += fmt.Sprintf("\n*%s*", dismissalText)
+
+				if batsmanName != "" {
+					description += fmt.Sprintf("**%s** departs", batsmanName)
+					if runs > 0 || balls > 0 {
+						description += fmt.Sprintf(" - %d(%d)", int(runs), int(balls))
+						if strikeRate > 0 {
+							description += fmt.Sprintf(" SR: %.1f", strikeRate)
+						}
+					}
+					description += "\n"
+				}
+
+				if dismissalType != "" {
+					dismissalText := dismissalType
+					if fielderName != "" && dismissalType == "caught" {
+						dismissalText = fmt.Sprintf("caught by %s", fielderName)
+					}
+					if bowlerName != "" {
+						dismissalText += fmt.Sprintf(", bowled by %s", bowlerName)
+					}
+					description += fmt.Sprintf("\n*%s*", dismissalText)
+				}
 			}
 		}
 
-		// For MILESTONE - highlight the achievement
+		// For MILESTONE - keep the full commentary
 		if eventType == "MILESTONE" {
-			batsmanName, _ := matchData["batsman_name"].(string)
-			milestoneType, _ := matchData["milestone_type"].(string)
-			runs, _ := matchData["milestone_runs"].(float64)
-			balls, _ := matchData["batsman_balls"].(float64)
-			strikeRate, _ := matchData["batsman_strike_rate"].(float64)
+			// Commentary is already the full text from LLM, keep it as is
+			// Just ensure we have the basic info if commentary is empty
+			if commentary == "" {
+				batsmanName, _ := matchData["batsman_name"].(string)
+				milestoneType, _ := matchData["milestone_type"].(string)
+				runs, _ := matchData["milestone_runs"].(float64)
+				balls, _ := matchData["batsman_balls"].(float64)
+				strikeRate, _ := matchData["batsman_strike_rate"].(float64)
 
-			if batsmanName != "" && milestoneType != "" {
-				description = fmt.Sprintf("🎉 **%s** reaches his **%s**! 🎉\n\n", batsmanName, milestoneType)
-				if runs > 0 && balls > 0 {
-					description += fmt.Sprintf("%d* runs off %d balls", int(runs), int(balls))
-					if strikeRate > 0 {
-						description += fmt.Sprintf(" (SR: %.1f)", strikeRate)
+				if batsmanName != "" && milestoneType != "" {
+					description = fmt.Sprintf("🎉 **%s** reaches his **%s**! 🎉\n\n", batsmanName, milestoneType)
+					if runs > 0 && balls > 0 {
+						description += fmt.Sprintf("%d* runs off %d balls", int(runs), int(balls))
+						if strikeRate > 0 {
+							description += fmt.Sprintf(" (SR: %.1f)", strikeRate)
+						}
 					}
 				}
 			}
