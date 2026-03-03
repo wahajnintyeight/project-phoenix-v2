@@ -11,6 +11,7 @@ import (
 	"project-phoenix/v2/internal/model"
 	"project-phoenix/v2/internal/notifier"
 	"project-phoenix/v2/internal/service"
+	"strings"
 )
 
 type CricketHandler struct {
@@ -42,6 +43,16 @@ func NewCricketHandler(notifier *notifier.DiscordNotifier) *CricketHandler {
 func (h *CricketHandler) Process(data map[string]interface{}) error {
 	log.Println("Processing cricket event:", data)
 
+	// Beautify names in match data if present
+	if matchData, ok := data["match_data"].(map[string]interface{}); ok {
+		nameFields := []string{"batsman_name", "bowler_name", "batsman_left", "batsman_right", "dismissal_bowler", "dismissal_fielder"}
+		for _, field := range nameFields {
+			if val, ok := matchData[field].(string); ok && val != "" {
+				matchData[field] = beautifyName(val)
+			}
+		}
+	}
+
 	// Parse event type
 	eventType, ok := data["type"].(string)
 	if !ok {
@@ -54,14 +65,12 @@ func (h *CricketHandler) Process(data map[string]interface{}) error {
 	}
 
 	// Handle regular cricket events (from local OCR)
-	payload, _ := data["payload"].(string)
-	raw, _ := data["raw"].(string)
-
 	// Generate colorful commentary using LLM
-	commentary, err := h.generateCommentary(eventType, payload, raw)
+	commentary, err := h.generateCommentary(eventType, data)
 	if err != nil {
 		log.Printf("Failed to generate commentary: %v", err)
 		// Fallback to basic message
+		payload, _ := data["payload"].(string)
 		commentary = payload
 	}
 
@@ -195,24 +204,34 @@ Extract all visible information. If any field is not visible, use null.`
 }
 
 // generateCommentary uses LLM to create engaging cricket commentary
-func (h *CricketHandler) generateCommentary(eventType, payload, raw string) (string, error) {
+func (h *CricketHandler) generateCommentary(eventType string, data map[string]interface{}) (string, error) {
 	var prompt string
+	payload, _ := data["payload"].(string)
+	raw, _ := data["raw"].(string)
+	matchData, _ := data["match_data"].(map[string]interface{})
+
+	batsmanName := ""
+	bowlerName := ""
+	if matchData != nil {
+		batsmanName, _ = matchData["batsman_name"].(string)
+		bowlerName, _ = matchData["bowler_name"].(string)
+	}
 
 	switch eventType {
 	case "BOUNDARY_SIX":
-		prompt = fmt.Sprintf("You are a professional cricket commentator. A batsman just hit a SIX. Score info: %s. Generate an exciting 1-2 sentence commentary.", raw)
+		prompt = fmt.Sprintf("You are a professional cricket commentator. Batsman %s just hit a SIX! Score info: %s. Raw data: %s. Generate an exciting 1-2 sentence commentary. ALWAYS highlight the batsman's name in bold (e.g., **%s**) to glorify them. Do not highlight the bowler.", batsmanName, payload, raw, batsmanName)
 	case "BOUNDARY_FOUR":
-		prompt = fmt.Sprintf("You are a professional cricket commentator. A batsman just hit a FOUR. Score info: %s. Generate an exciting 1-2 sentence commentary.", raw)
+		prompt = fmt.Sprintf("You are a professional cricket commentator. Batsman %s just hit a FOUR! Score info: %s. Raw data: %s. Generate an exciting 1-2 sentence commentary. ALWAYS highlight the batsman's name in bold (e.g., **%s**) to glorify them. Do not highlight the bowler.", batsmanName, payload, raw, batsmanName)
 	case "WICKET":
-		prompt = fmt.Sprintf("You are a professional cricket commentator. A wicket just fell! Score info: %s. Generate a dramatic 1-2 sentence commentary.", raw)
+		prompt = fmt.Sprintf("You are a professional cricket commentator. A wicket just fell! Batsman: %s, Bowler: %s. Score info: %s. Generate a dramatic 1-2 sentence commentary.", batsmanName, bowlerName, payload)
 	case "BATSMAN_DEPART":
-		prompt = fmt.Sprintf("You are a professional cricket commentator. A batsman has been dismissed! Details: %s. Generate an exciting commentary that CELEBRATES the bowler's success and describes the dismissal. Focus on the bowler's achievement. Keep it to 2-3 sentences.", payload)
+		prompt = fmt.Sprintf("You are a professional cricket commentator. Batsman %s has been dismissed! Details: %s. Generate an exciting commentary that CELEBRATES the bowler %s's success and describes the dismissal. Keep it to 2-3 sentences.", batsmanName, payload, bowlerName)
 	case "BATSMAN_ARRIVE":
-		prompt = fmt.Sprintf("You are a professional cricket commentator. A new batsman is walking to the crease. Details: %s. Generate a welcoming commentary introducing the batsman with their career stats. Keep it to 2-3 sentences.", payload)
+		prompt = fmt.Sprintf("You are a professional cricket commentator. A new batsman %s is walking to the crease. Details: %s. Generate a welcoming commentary introducing the batsman with their career stats if available. Keep it to 2-3 sentences.", batsmanName, payload)
 	case "BOWLER_ARRIVE":
-		prompt = fmt.Sprintf("You are a professional cricket commentator. A new bowler is coming into the attack. Details: %s. Generate an exciting commentary introducing the bowler with their career stats and bowling style. Keep it to 2-3 sentences.", payload)
+		prompt = fmt.Sprintf("You are a professional cricket commentator. A new bowler %s is coming into the attack. Details: %s. Generate an exciting commentary introducing the bowler with their career stats and bowling style if available. Keep it to 2-3 sentences.", bowlerName, payload)
 	case "MILESTONE":
-		prompt = fmt.Sprintf("You are a professional cricket commentator. A batsman has reached a major milestone! Details: %s. Generate an exciting, celebratory commentary praising the batsman's achievement. Keep it to 2-3 sentences.", payload)
+		prompt = fmt.Sprintf("You are a professional cricket commentator. Batsman %s has reached a major milestone! Details: %s. Generate an exciting, celebratory commentary praising the batsman's achievement. Keep it to 2-3 sentences.", batsmanName, payload)
 	case "RUNS":
 		prompt = fmt.Sprintf("You are a professional cricket commentator. %s. Generate a brief commentary.", payload)
 	default:
@@ -239,3 +258,17 @@ func (h *CricketHandler) publishToDiscord(eventType, commentary string, data map
 }
 
 // Helper functions
+
+func beautifyName(name string) string {
+	if name == "" {
+		return ""
+	}
+	// Replace underscores and dashes with space
+	name = strings.ReplaceAll(name, "_", " ")
+	name = strings.ReplaceAll(name, "-", " ")
+
+	// Trim multiple spaces and leading/trailing spaces
+	name = strings.Join(strings.Fields(name), " ")
+
+	return name
+}
