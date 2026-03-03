@@ -296,7 +296,7 @@ func (n *DiscordNotifier) SendCricketEvent(eventType, commentary string, matchDa
 	}
 
 	payload := DiscordWebhookPayload{
-		Username: "Phoenix Cricket Tracker",
+		Username: "Cricket24 Bot",
 		Embeds: []DiscordEmbed{
 			{
 				Title:       fmt.Sprintf("%s %s", emoji, title),

@@ -68,10 +68,13 @@ func (h *CricketHandler) Process(data map[string]interface{}) error {
 	// Generate colorful commentary using LLM
 	commentary, err := h.generateCommentary(eventType, data)
 	if err != nil {
-		log.Printf("Failed to generate commentary: %v", err)
-		// Fallback to basic message
-		payload, _ := data["payload"].(string)
-		commentary = payload
+		errStr := err.Error()
+		if strings.Contains(errStr, "status 429") || strings.Contains(errStr, "Rate limit") {
+			log.Printf("LLM rate-limited; using fallback commentary")
+		} else {
+			log.Printf("Failed to generate commentary: %v", err)
+		}
+		commentary = formatFallbackCommentary(eventType, data)
 	}
 
 	// Publish to Discord
@@ -271,4 +274,178 @@ func beautifyName(name string) string {
 	name = strings.Join(strings.Fields(name), " ")
 
 	return name
+}
+
+func formatFallbackCommentary(eventType string, data map[string]interface{}) string {
+	payload, _ := data["payload"].(string)
+	matchData, _ := data["match_data"].(map[string]interface{})
+
+	getString := func(key string) string {
+		if matchData == nil {
+			return ""
+		}
+		if v, ok := matchData[key].(string); ok {
+			return v
+		}
+		return ""
+	}
+	getInt := func(key string) int {
+		if matchData == nil {
+			return 0
+		}
+		switch v := matchData[key].(type) {
+		case int:
+			return v
+		case int32:
+			return int(v)
+		case int64:
+			return int(v)
+		case float64:
+			return int(v)
+		default:
+			return 0
+		}
+	}
+	getFloat := func(key string) float64 {
+		if matchData == nil {
+			return 0
+		}
+		switch v := matchData[key].(type) {
+		case float32:
+			return float64(v)
+		case float64:
+			return v
+		case int:
+			return float64(v)
+		case int64:
+			return float64(v)
+		default:
+			return 0
+		}
+	}
+
+	batsmanName := getString("batsman_name")
+	batsmanLeft := getString("batsman_left")
+	batsmanRight := getString("batsman_right")
+	bowlerName := getString("bowler_name")
+	dismissalBowler := getString("dismissal_bowler")
+	dismissalFielder := getString("dismissal_fielder")
+	dismissalType := getString("dismissal_type")
+	totalRuns := getInt("total_runs")
+	wickets := getInt("wickets")
+	overs := getFloat("overs")
+	deliverySpeed := getString("delivery_speed")
+
+	scoreSuffix := ""
+	if totalRuns != 0 || wickets != 0 {
+		scoreSuffix = fmt.Sprintf(" (%d/%d", totalRuns, wickets)
+		if overs != 0 {
+			scoreSuffix += fmt.Sprintf(", %.1f ov", overs)
+		}
+		scoreSuffix += ")"
+	}
+	if deliverySpeed != "" {
+		scoreSuffix += fmt.Sprintf(" [%s]", deliverySpeed)
+	}
+
+	switch eventType {
+	case "BOUNDARY_SIX":
+		if batsmanName != "" {
+			return fmt.Sprintf("SIX! **%s** launches it into the stands%s", batsmanName, scoreSuffix)
+		}
+		return fmt.Sprintf("SIX!%s", scoreSuffix)
+	case "BOUNDARY_FOUR":
+		if batsmanName != "" {
+			return fmt.Sprintf("FOUR! **%s** finds the boundary%s", batsmanName, scoreSuffix)
+		}
+		return fmt.Sprintf("FOUR!%s", scoreSuffix)
+	case "WICKET":
+		if batsmanName != "" && bowlerName != "" {
+			return fmt.Sprintf("WICKET! %s is out, %s strikes%s", batsmanName, bowlerName, scoreSuffix)
+		}
+		if batsmanName != "" {
+			return fmt.Sprintf("WICKET! %s is out%s", batsmanName, scoreSuffix)
+		}
+		return payload
+	case "BATSMAN_DEPART":
+		name := batsmanName
+		if name == "" {
+			name = payload
+		}
+		detail := ""
+		if dismissalType != "" {
+			detail = dismissalType
+		}
+		if dismissalBowler != "" {
+			if detail != "" {
+				detail += " "
+			}
+			detail += fmt.Sprintf("(b %s", dismissalBowler)
+			if dismissalFielder != "" {
+				detail += fmt.Sprintf(", f %s", dismissalFielder)
+			}
+			detail += ")"
+		}
+		if detail != "" {
+			return fmt.Sprintf("Wicket! %s departs %s%s", name, detail, scoreSuffix)
+		}
+		if strings.TrimSpace(payload) != "" {
+			return payload
+		}
+		return fmt.Sprintf("Wicket! %s is dismissed%s", name, scoreSuffix)
+	case "BATSMAN_ARRIVE":
+		name := batsmanName
+		if name == "" {
+			if batsmanLeft != "" && batsmanRight == "" {
+				name = batsmanLeft
+			} else if batsmanRight != "" && batsmanLeft == "" {
+				name = batsmanRight
+			}
+		}
+		careerMatches := getInt("career_matches")
+		careerRuns := getInt("career_runs")
+		careerAvg := getFloat("career_average")
+		if name != "" {
+			if careerMatches != 0 || careerRuns != 0 || careerAvg != 0 {
+				avgStr := ""
+				if careerAvg != 0 {
+					avgStr = fmt.Sprintf(", avg %.2f", careerAvg)
+				}
+				return fmt.Sprintf("New batter: **%s** (%d matches, %d runs%s)%s", name, careerMatches, careerRuns, avgStr, scoreSuffix)
+			}
+			return fmt.Sprintf("New batter: **%s** walks in%s", name, scoreSuffix)
+		}
+		return payload
+	case "BOWLER_ARRIVE":
+		name := bowlerName
+		careerMatches := getInt("career_matches")
+		bowlerWickets := getInt("bowler_wickets")
+		if name != "" {
+			if careerMatches != 0 || bowlerWickets != 0 {
+				return fmt.Sprintf("Bowling change: %s into the attack (%d wickets in %d matches)%s", name, bowlerWickets, careerMatches, scoreSuffix)
+			}
+			return fmt.Sprintf("Bowling change: %s into the attack%s", name, scoreSuffix)
+		}
+		return payload
+	case "MILESTONE":
+		mType := getString("milestone_type")
+		mRuns := getInt("milestone_runs")
+		if batsmanName != "" {
+			if mType != "" && mRuns != 0 {
+				return fmt.Sprintf("Milestone! **%s** brings up %d (%s)%s", batsmanName, mRuns, mType, scoreSuffix)
+			}
+			return fmt.Sprintf("Milestone! **%s** reaches a landmark%s", batsmanName, scoreSuffix)
+		}
+		return payload
+	case "RUNS":
+		if strings.TrimSpace(payload) != "" {
+			return payload
+		}
+		return fmt.Sprintf("Update%s", scoreSuffix)
+	default:
+		if strings.TrimSpace(payload) != "" {
+			return payload
+		}
+		return eventType
+	}
 }
