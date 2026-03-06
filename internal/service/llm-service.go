@@ -24,6 +24,9 @@ var llmCreditExhaustedIndicators = []string{
 	"exceeded your current quota",
 	"out of credits",
 	"credit balance",
+	"rate limit exceeded",
+	"free-models-per-day",
+	"status code 429",
 	"payment required",
 	"billing",
 	"402",
@@ -114,8 +117,19 @@ func (s *LLMService) SendChatCompletion(req model.ChatCompletionRequest) (*model
 	log.Printf("Sending request to %s with model %s", req.Provider, req.Model)
 	response, err := llm.Generate(ctx, gollm.NewPrompt(prompt))
 	if err != nil {
-		log.Printf("Error generating response: %v", err)
-		return nil, fmt.Errorf("failed to generate response: %w", err)
+		if strings.EqualFold(req.Provider, "openrouter") && s.IsCreditExhaustedError(err) {
+			log.Printf("OpenRouter credit/rate-limit detected, falling back to Scaleway: %v", err)
+			scalewayResp, fallbackErr := s.generateTextWithScaleway(ctx, prompt)
+			if fallbackErr == nil {
+				response = scalewayResp
+			} else {
+				log.Printf("Scaleway fallback failed: %v", fallbackErr)
+				return nil, fmt.Errorf("failed to generate response (openrouter and scaleway fallback failed): openrouter=%v, scaleway=%w", err, fallbackErr)
+			}
+		} else {
+			log.Printf("Error generating response: %v", err)
+			return nil, fmt.Errorf("failed to generate response: %w", err)
+		}
 	}
 
 	// Parse usage information if available
@@ -361,6 +375,15 @@ func (s *LLMService) GenerateText(prompt string) (string, error) {
 	// Generate response
 	response, err := llm.Generate(ctx, gollm.NewPrompt(prompt))
 	if err != nil {
+		// OpenRouter credit/rate-limit failures should fallback to Scaleway.
+		if strings.EqualFold(provider, "openrouter") && s.IsCreditExhaustedError(err) {
+			log.Printf("OpenRouter credit/rate-limit detected, falling back to Scaleway: %v", err)
+			scalewayResp, fallbackErr := s.generateTextWithScaleway(ctx, prompt)
+			if fallbackErr == nil {
+				return scalewayResp, nil
+			}
+			return "", fmt.Errorf("failed to generate text (openrouter and scaleway fallback failed): openrouter=%v, scaleway=%w", err, fallbackErr)
+		}
 		return "", fmt.Errorf("failed to generate text: %w", err)
 	}
 
