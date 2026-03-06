@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
+
 type ScreenshotHandler struct {
 	processedCount int
 	failedCount    int
