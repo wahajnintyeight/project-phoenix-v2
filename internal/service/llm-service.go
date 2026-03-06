@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -117,7 +118,7 @@ func (s *LLMService) SendChatCompletion(req model.ChatCompletionRequest) (*model
 	log.Printf("Sending request to %s with model %s", req.Provider, req.Model)
 	response, err := llm.Generate(ctx, gollm.NewPrompt(prompt))
 	if err != nil {
-		if strings.EqualFold(req.Provider, "openrouter") && s.IsCreditExhaustedError(err) {
+		if strings.EqualFold(req.Provider, "openrouter") && s.shouldFallbackToScaleway(err) {
 			log.Printf("OpenRouter credit/rate-limit detected, falling back to Scaleway: %v", err)
 			scalewayResp, fallbackErr := s.generateTextWithScaleway(ctx, prompt)
 			if fallbackErr == nil {
@@ -171,7 +172,33 @@ func (s *LLMService) IsCreditExhaustedError(err error) bool {
 	return false
 }
 
-// GetCreditExhaustedFallbackMessages returns static fallback messages for quota exhaustion scenarios.
+// shouldFallbackToScaleway checks whether an OpenRouter error should use Scaleway fallback.
+func (s *LLMService) shouldFallbackToScaleway(err error) bool {
+	if s.IsCreditExhaustedError(err) {
+		return true
+	}
+
+	// gollm may return a wrapped retry error ("failed to generate after N attempts")
+	// that hides the original 429 text from top-level checks.
+	retryWrappedIndicators := []string{
+		"failed to generate after",
+		"generation attempt failed",
+		"too many requests",
+		"status 429",
+		"api error: status code 429",
+	}
+
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		errText := strings.ToLower(current.Error())
+		for _, indicator := range retryWrappedIndicators {
+			if strings.Contains(errText, indicator) {
+				return true
+			}
+		}
+	}
+
+	return false
+} // GetCreditExhaustedFallbackMessages returns static fallback messages for quota exhaustion scenarios.
 func (s *LLMService) GetCreditExhaustedFallbackMessages() []string {
 	msgs := make([]string, len(llmCreditFallbackMessages))
 	copy(msgs, llmCreditFallbackMessages)
@@ -376,7 +403,7 @@ func (s *LLMService) GenerateText(prompt string) (string, error) {
 	response, err := llm.Generate(ctx, gollm.NewPrompt(prompt))
 	if err != nil {
 		// OpenRouter credit/rate-limit failures should fallback to Scaleway.
-		if strings.EqualFold(provider, "openrouter") && s.IsCreditExhaustedError(err) {
+		if strings.EqualFold(provider, "openrouter") && s.shouldFallbackToScaleway(err) {
 			log.Printf("OpenRouter credit/rate-limit detected, falling back to Scaleway: %v", err)
 			scalewayResp, fallbackErr := s.generateTextWithScaleway(ctx, prompt)
 			if fallbackErr == nil {
