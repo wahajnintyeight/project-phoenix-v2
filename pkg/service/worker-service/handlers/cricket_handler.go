@@ -246,6 +246,8 @@ func (h *CricketHandler) generateCommentary(eventType string, data map[string]in
 		prompt = fmt.Sprintf("You are a professional cricket commentator. The batting team has reached a team-score milestone. Details: %s. Generate an energetic 1-2 sentence team-focused commentary mentioning momentum and scoreboard pressure.", payload)
 	case "CHASE_UPDATE":
 		prompt = fmt.Sprintf("You are a professional cricket commentator. This is a live run chase update: %s. Generate a concise 1-2 sentence pressure-focused commentary. If runs needed are less than balls or within 10%% gap, highlight that momentum.", payload)
+	case "MATCH_WON":
+		prompt = fmt.Sprintf("You are a professional cricket commentator. The match has finished with this result: %s. Generate a celebratory 1-2 sentence match summary mentioning the winning margin.", payload)
 	case "RUNS":
 		prompt = fmt.Sprintf("You are a professional cricket commentator. %s. Generate a brief commentary.", payload)
 	default:
@@ -327,6 +329,9 @@ func formatStaticTemplateFallbackCommentary(eventType string, data map[string]in
 	wickets := getInt("wickets")
 	needRuns := getInt("need_runs")
 	needBalls := getInt("need_balls")
+	matchWinner := getString("match_winner")
+	matchWinType := getString("match_win_type")
+	matchWinMargin := getInt("match_win_margin")
 
 	templates := map[string][]string{
 		"BOUNDARY_SIX": {
@@ -367,6 +372,11 @@ func formatStaticTemplateFallbackCommentary(eventType string, data map[string]in
 			"Run chase alive: **%d** to get from **%d** deliveries (%s).",
 			"Scoreboard says **%d** required in **%d** balls. %s.",
 			"Chase math: **%d** from **%d**. %s.",
+		},
+		"MATCH_WON": {
+			"Match result: **%s** won by **%d %s**.",
+			"Full-time: **%s** seal it by **%d %s**.",
+			"Game over. **%s** take the match by **%d %s**.",
 		},
 	}
 
@@ -422,6 +432,11 @@ func formatStaticTemplateFallbackCommentary(eventType string, data map[string]in
 			return ""
 		}
 		return fmt.Sprintf(chosen, needRuns, needBalls, getChasePressureTag(needRuns, needBalls))
+	case "MATCH_WON":
+		if matchWinner == "" || matchWinMargin <= 0 || matchWinType == "" {
+			return ""
+		}
+		return fmt.Sprintf(chosen, matchWinner, matchWinMargin, strings.ToLower(matchWinType))
 	}
 
 	if strings.TrimSpace(payload) != "" {
@@ -488,6 +503,9 @@ func formatFallbackCommentary(eventType string, data map[string]interface{}) str
 	wickets := getInt("wickets")
 	overs := getFloat("overs")
 	deliverySpeed := getString("delivery_speed")
+	matchWinner := getString("match_winner")
+	matchWinType := getString("match_win_type")
+	matchWinMargin := getInt("match_win_margin")
 
 	scoreSuffix := ""
 	if totalRuns != 0 || wickets != 0 {
@@ -602,6 +620,14 @@ func formatFallbackCommentary(eventType string, data map[string]interface{}) str
 			return payload
 		}
 		return fmt.Sprintf("Team milestone reached%s", scoreSuffix)
+	case "MATCH_WON":
+		if matchWinner != "" && matchWinMargin > 0 && matchWinType != "" {
+			return fmt.Sprintf("Match Result: **%s** won by **%d %s**%s", matchWinner, matchWinMargin, strings.ToLower(matchWinType), scoreSuffix)
+		}
+		if strings.TrimSpace(payload) != "" {
+			return payload
+		}
+		return fmt.Sprintf("Match completed%s", scoreSuffix)
 	case "RUNS":
 		if strings.TrimSpace(payload) != "" {
 			return payload

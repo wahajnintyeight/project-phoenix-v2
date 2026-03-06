@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -135,222 +137,227 @@ func (n *DiscordNotifier) SendScreenshotAnalysis(deviceName, appName, activity, 
 
 // SendCricketEvent sends a formatted cricket event alert
 func (n *DiscordNotifier) SendCricketEvent(eventType, commentary string, matchData map[string]interface{}) error {
-	color := 0xf1c40f // Yellow
-	emoji := "📊"
-	title := eventType
+	style := cricketEventStyleFor(eventType)
+	title := fmt.Sprintf("%s %s", style.Badge, style.Label)
 
-	// Format event type and set colors/emojis
-	switch eventType {
-	case "BOUNDARY_SIX":
-		color = 0xe74c3c // Red
-		emoji = "🚀"
-		title = "Six!"
-	case "BOUNDARY_FOUR":
-		color = 0x2ecc71 // Green
-		emoji = "🏏"
-		title = "Four!"
-	case "WICKET":
-		color = 0x34495e // Dark
-		emoji = "💥"
-		title = "Wicket!"
-	case "BATSMAN_ARRIVE":
-		color = 0x3498db // Blue
-		emoji = "🏃"
-		title = "New Batsman"
-	case "BOWLER_ARRIVE":
-		color = 0x1abc9c // Teal
-		emoji = "⚡"
-		title = "New Bowler"
-	case "BATSMAN_DEPART":
-		color = 0x9b59b6 // Purple
-		emoji = "🎯"
-		title = "Wicket!"
-	case "MILESTONE":
-		color = 0xf39c12 // Orange/Gold
-		emoji = "🎉"
-		title = "Milestone!"
-	case "TEAM_MILESTONE":
-		color = 0xf1c40f // Gold
-		emoji = "🏏"
-		title = "Team Milestone!"
-	case "CHASE_UPDATE":
-		color = 0x2980b9 // Blue
-		emoji = "??"
-		title = "Chase Update"
-	case "RUNS":
-		color = 0x95a5a6 // Gray
-		emoji = "✅"
-		title = "Runs"
+	scoreLine := buildScoreLine(matchData)
+	description := strings.TrimSpace(commentary)
+	if description == "" {
+		description = fallbackCricketDescription(eventType, matchData)
 	}
 
-	// Build description with proper formatting
-	description := commentary
-
-	// Extract key information for better formatting
-	if matchData != nil {
-		// For BOWLER_ARRIVE - highlight the bowler name
-		if eventType == "BOWLER_ARRIVE" {
-			if bowlerName, ok := matchData["bowler_name"].(string); ok && bowlerName != "" {
-				careerInfo := ""
-				if matches, ok := matchData["career_matches"].(float64); ok {
-					wickets, _ := matchData["bowler_wickets"].(float64)
-					avg, _ := matchData["career_average"].(float64)
-					careerInfo = fmt.Sprintf("\n\n**Career Stats:** %d matches • %d wickets • avg %.2f", int(matches), int(wickets), avg)
-				}
-				// Only override if commentary is empty or generic
-				if commentary == "" {
-					description = fmt.Sprintf("**%s** comes into the attack%s", bowlerName, careerInfo)
-				}
-			}
-		}
-
-		// For BATSMAN_ARRIVE - highlight the batsman name
-		if eventType == "BATSMAN_ARRIVE" {
-			if batsmanName, ok := matchData["batsman_name"].(string); ok && batsmanName != "" {
-				careerInfo := ""
-				if matches, ok := matchData["career_matches"].(float64); ok {
-					runs, _ := matchData["career_runs"].(float64)
-					avg, _ := matchData["career_average"].(float64)
-					careerInfo = fmt.Sprintf("\n\n**Career Stats:** %d matches • %d runs • avg %.2f", int(matches), int(runs), avg)
-				}
-				// Only override if commentary is empty or generic
-				if commentary == "" {
-					description = fmt.Sprintf("**%s** walks to the crease%s", batsmanName, careerInfo)
-				}
-			}
-		}
-
-		// For BATSMAN_DEPART - highlight bowler and batsman
-		if eventType == "BATSMAN_DEPART" {
-			batsmanName, _ := matchData["batsman_name"].(string)
-			bowlerName, _ := matchData["dismissal_bowler"].(string)
-			runs, _ := matchData["batsman_runs"].(float64)
-			balls, _ := matchData["batsman_balls"].(float64)
-			strikeRate, _ := matchData["batsman_strike_rate"].(float64)
-			dismissalType, _ := matchData["dismissal_type"].(string)
-			fielderName, _ := matchData["dismissal_fielder"].(string)
-
-			// Only override if commentary is empty
-			if commentary == "" {
-				if bowlerName != "" {
-					description = fmt.Sprintf("**%s** strikes! 🎯\n\n", bowlerName)
-				} else {
-					description = ""
-				}
-
-				if batsmanName != "" {
-					description += fmt.Sprintf("**%s** departs", batsmanName)
-					if runs > 0 || balls > 0 {
-						description += fmt.Sprintf(" - %d(%d)", int(runs), int(balls))
-						if strikeRate > 0 {
-							description += fmt.Sprintf(" SR: %.1f", strikeRate)
-						}
-					}
-					description += "\n"
-				}
-
-				if dismissalType != "" {
-					dismissalText := dismissalType
-					if fielderName != "" && dismissalType == "caught" {
-						dismissalText = fmt.Sprintf("caught by %s", fielderName)
-					}
-					if bowlerName != "" {
-						dismissalText += fmt.Sprintf(", bowled by %s", bowlerName)
-					}
-					description += fmt.Sprintf("\n*%s*", dismissalText)
-				}
-			}
-		}
-
-		// For MILESTONE - keep the full commentary
-		if eventType == "MILESTONE" {
-			// Commentary is already the full text from LLM, keep it as is
-			// Just ensure we have the basic info if commentary is empty
-			if commentary == "" {
-				batsmanName, _ := matchData["batsman_name"].(string)
-				milestoneType, _ := matchData["milestone_type"].(string)
-				runs, _ := matchData["milestone_runs"].(float64)
-				balls, _ := matchData["batsman_balls"].(float64)
-				strikeRate, _ := matchData["batsman_strike_rate"].(float64)
-
-				if batsmanName != "" && milestoneType != "" {
-					description = fmt.Sprintf("🎉 **%s** reaches his **%s**! 🎉\n\n", batsmanName, milestoneType)
-					if runs > 0 && balls > 0 {
-						description += fmt.Sprintf("%d* runs off %d balls", int(runs), int(balls))
-						if strikeRate > 0 {
-							description += fmt.Sprintf(" (SR: %.1f)", strikeRate)
-						}
-					}
-				}
-			}
-		}
-
-		if eventType == "TEAM_MILESTONE" && commentary == "" {
-			teamMilestone, _ := matchData["team_milestone_runs"].(float64)
-			totalRuns, _ := matchData["total_runs"].(float64)
-			wickets, _ := matchData["wickets"].(float64)
-			overs, _ := matchData["overs"].(float64)
-
-			if teamMilestone > 0 {
-				description = fmt.Sprintf("Team milestone reached: **%d**!\n\nScore: %d/%d", int(teamMilestone), int(wickets), int(totalRuns))
-				if overs > 0 {
-					description += fmt.Sprintf(" in %.1f overs", overs)
-				}
-			}
-		}
-
-		if eventType == "CHASE_UPDATE" && commentary == "" {
-			needRuns, _ := matchData["need_runs"].(float64)
-			needBalls, _ := matchData["need_balls"].(float64)
-			if needRuns > 0 && needBalls > 0 {
-				status := "behind the equation"
-				if needRuns <= needBalls {
-					status = "ahead of the equation"
-				} else {
-					gapPct := ((needRuns - needBalls) / needBalls) * 100
-					if gapPct <= 10 {
-						status = "within 10% gap"
-					}
-				}
-				description = fmt.Sprintf("Chase update: Need %d from %d balls (%s)", int(needRuns), int(needBalls), status)
-			}
-		}
+	if scoreLine != "" {
+		description = fmt.Sprintf("`%s`\n\n%s", scoreLine, description)
 	}
 
-	fields := []DiscordEmbedField{}
-
-	// Add match score if available
-	if matchData != nil {
-		wickets, hasWickets := matchData["wickets"].(float64)
-		totalRuns, hasRuns := matchData["total_runs"].(float64)
-		overs, hasOvers := matchData["overs"].(float64)
-
-		if hasWickets && hasRuns {
-			scoreStr := fmt.Sprintf("%d/%d", int(wickets), int(totalRuns))
-			if hasOvers && overs > 0 {
-				scoreStr += fmt.Sprintf(" (%v ov)", overs)
-			}
-			fields = append(fields, DiscordEmbedField{Name: "Score", Value: scoreStr, Inline: true})
-		}
-	}
+	fields := buildCricketFields(eventType, matchData)
 
 	payload := DiscordWebhookPayload{
 		Username: "Cricket24 Bot",
 		Embeds: []DiscordEmbed{
 			{
-				Title:       fmt.Sprintf("%s %s", emoji, title),
-				Description: description,
-				Color:       color,
+				Title:       title,
+				Description: strings.TrimSpace(description),
+				Color:       style.Color,
 				Timestamp:   time.Now().Format(time.RFC3339),
 				Fields:      fields,
 				Footer: &DiscordEmbedFooter{
-					Text: "Cricket 24 Live Tracker",
+					Text: "Cricket 24 Live Tracker | Phoenix",
 				},
 			},
 		},
 	}
 
 	return n.Send(payload)
+}
+
+type cricketEventStyle struct {
+	Color int
+	Label string
+	Badge string
+}
+
+func cricketEventStyleFor(eventType string) cricketEventStyle {
+	switch eventType {
+	case "BOUNDARY_SIX":
+		return cricketEventStyle{Color: 0xe74c3c, Label: "Six", Badge: "[SIX]"}
+	case "BOUNDARY_FOUR":
+		return cricketEventStyle{Color: 0x2ecc71, Label: "Four", Badge: "[FOUR]"}
+	case "WICKET", "BATSMAN_DEPART":
+		return cricketEventStyle{Color: 0x34495e, Label: "Wicket", Badge: "[OUT]"}
+	case "BATSMAN_ARRIVE":
+		return cricketEventStyle{Color: 0x3498db, Label: "New Batter", Badge: "[BAT]"}
+	case "BOWLER_ARRIVE":
+		return cricketEventStyle{Color: 0x1abc9c, Label: "New Bowler", Badge: "[BOWL]"}
+	case "MILESTONE":
+		return cricketEventStyle{Color: 0xf39c12, Label: "Milestone", Badge: "[MILESTONE]"}
+	case "TEAM_MILESTONE":
+		return cricketEventStyle{Color: 0xf1c40f, Label: "Team Milestone", Badge: "[TEAM]"}
+	case "CHASE_UPDATE":
+		return cricketEventStyle{Color: 0x2980b9, Label: "Chase Update", Badge: "[CHASE]"}
+	case "MATCH_WON":
+		return cricketEventStyle{Color: 0x27ae60, Label: "Match Result", Badge: "[WIN]"}
+	case "RUNS":
+		return cricketEventStyle{Color: 0x95a5a6, Label: "Runs", Badge: "[RUNS]"}
+	default:
+		return cricketEventStyle{Color: 0x95a5a6, Label: eventType, Badge: "[CRICKET]"}
+	}
+}
+
+func buildScoreLine(matchData map[string]interface{}) string {
+	if matchData == nil {
+		return ""
+	}
+
+	wickets, hasWickets := toInt(matchData["wickets"])
+	totalRuns, hasRuns := toInt(matchData["total_runs"])
+	overs, hasOvers := toFloat(matchData["overs"])
+
+	if !hasWickets || !hasRuns {
+		return ""
+	}
+
+	score := fmt.Sprintf("SCORE %d/%d", wickets, totalRuns)
+	if hasOvers {
+		score += fmt.Sprintf(" | %.1f ov", overs)
+	}
+	return score
+}
+
+func buildCricketFields(eventType string, matchData map[string]interface{}) []DiscordEmbedField {
+	if matchData == nil {
+		return nil
+	}
+
+	fields := make([]DiscordEmbedField, 0, 6)
+
+	if batsman := toStr(matchData["batsman_name"]); batsman != "" {
+		fields = append(fields, DiscordEmbedField{Name: "Batter", Value: batsman, Inline: true})
+	}
+	if bowler := firstNonEmpty(toStr(matchData["bowler_name"]), toStr(matchData["dismissal_bowler"])); bowler != "" {
+		fields = append(fields, DiscordEmbedField{Name: "Bowler", Value: bowler, Inline: true})
+	}
+	if speed := toStr(matchData["delivery_speed"]); speed != "" {
+		fields = append(fields, DiscordEmbedField{Name: "Speed", Value: speed, Inline: true})
+	}
+
+	if needRuns, okRuns := toInt(matchData["need_runs"]); okRuns {
+		if needBalls, okBalls := toInt(matchData["need_balls"]); okBalls && needRuns > 0 && needBalls > 0 {
+			fields = append(fields, DiscordEmbedField{
+				Name:   "Equation",
+				Value:  fmt.Sprintf("%d needed from %d balls", needRuns, needBalls),
+				Inline: true,
+			})
+		}
+	}
+
+	if eventType == "MATCH_WON" {
+		winner := toStr(matchData["match_winner"])
+		margin, hasMargin := toInt(matchData["match_win_margin"])
+		unit := toStr(matchData["match_win_type"])
+		if winner != "" && hasMargin && unit != "" {
+			fields = append(fields, DiscordEmbedField{
+				Name:   "Result",
+				Value:  fmt.Sprintf("%s won by %d %s", winner, margin, strings.ToLower(unit)),
+				Inline: false,
+			})
+		}
+	}
+
+	return fields
+}
+
+func fallbackCricketDescription(eventType string, matchData map[string]interface{}) string {
+	if matchData == nil {
+		return eventType
+	}
+
+	switch eventType {
+	case "MATCH_WON":
+		winner := toStr(matchData["match_winner"])
+		margin, hasMargin := toInt(matchData["match_win_margin"])
+		unit := toStr(matchData["match_win_type"])
+		if winner != "" && hasMargin && unit != "" {
+			return fmt.Sprintf("%s won by %d %s.", winner, margin, strings.ToLower(unit))
+		}
+	case "CHASE_UPDATE":
+		needRuns, hasRuns := toInt(matchData["need_runs"])
+		needBalls, hasBalls := toInt(matchData["need_balls"])
+		if hasRuns && hasBalls && needRuns > 0 && needBalls > 0 {
+			return fmt.Sprintf("Chase equation: %d required from %d balls.", needRuns, needBalls)
+		}
+	}
+
+	if payload := toStr(matchData["payload"]); payload != "" {
+		return payload
+	}
+	return eventType
+}
+
+func toStr(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return strings.TrimSpace(val)
+	default:
+		return ""
+	}
+}
+
+func toInt(v interface{}) (int, bool) {
+	switch val := v.(type) {
+	case int:
+		return val, true
+	case int32:
+		return int(val), true
+	case int64:
+		return int(val), true
+	case float32:
+		return int(val), true
+	case float64:
+		return int(val), true
+	case string:
+		if strings.TrimSpace(val) == "" {
+			return 0, false
+		}
+		parsed, err := strconv.Atoi(strings.TrimSpace(val))
+		if err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
+func toFloat(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float32:
+		return float64(val), true
+	case float64:
+		return val, true
+	case int:
+		return float64(val), true
+	case int32:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	case string:
+		if strings.TrimSpace(val) == "" {
+			return 0, false
+		}
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+		if err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 // SendSystemAlert sends a formatted system alert
