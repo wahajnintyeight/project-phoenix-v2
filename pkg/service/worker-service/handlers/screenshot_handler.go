@@ -16,7 +16,6 @@ import (
 	"github.com/google/uuid"
 )
 
-
 type ScreenshotHandler struct {
 	processedCount int
 	failedCount    int
@@ -173,6 +172,12 @@ func (h *ScreenshotHandler) analyzeScreenshot(metadata *ScreenshotMetadata, imag
 	// Send request to LLM
 	response, err := h.llmService.SendChatCompletion(req)
 	if err != nil {
+		if h.llmService.IsCreditExhaustedError(err) {
+			seed := fmt.Sprintf("%s|%s|%s|%s", metadata.DeviceName, metadata.Timestamp, metadata.ActiveProcessName, metadata.ActiveWindowTitle)
+			staticMessage := h.llmService.GetCreditExhaustedFallbackMessage(seed)
+			log.Printf("LLM credits exhausted, using static fallback message")
+			return h.buildCreditExhaustedFallbackAnalysis(metadata, staticMessage), nil
+		}
 		return nil, fmt.Errorf("LLM request failed: %w", err)
 	}
 
@@ -287,6 +292,21 @@ func (h *ScreenshotHandler) parseAnalysisResponse(content string, metadata *Scre
 	}
 }
 
+func (h *ScreenshotHandler) buildCreditExhaustedFallbackAnalysis(metadata *ScreenshotMetadata, staticMessage string) *ScreenshotAnalysis {
+	summary := fmt.Sprintf("%s %s", staticMessage, generateFallbackSummary(metadata))
+	return &ScreenshotAnalysis{
+		Application:       metadata.ActiveProcessName,
+		Activity:          inferActivity(metadata.ActiveProcessName, metadata.ActiveWindowTitle),
+		UserState:         "focused",
+		ProductivityLevel: "medium",
+		Category:          categorizeActivity(metadata.ActiveProcessName),
+		TimeVisible:       metadata.Timestamp,
+		Summary:           summary,
+		Observations:      staticMessage,
+		RawLLMResponse:    "static-fallback: llm-credits-exhausted",
+		ConfidenceScore:   0.45,
+	}
+}
 func generateFallbackSummary(metadata *ScreenshotMetadata) string {
 
 	if metadata.ActiveProcessName == "" {

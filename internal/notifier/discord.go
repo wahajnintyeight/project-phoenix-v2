@@ -169,6 +169,14 @@ func (n *DiscordNotifier) SendCricketEvent(eventType, commentary string, matchDa
 		color = 0xf39c12 // Orange/Gold
 		emoji = "🎉"
 		title = "Milestone!"
+	case "TEAM_MILESTONE":
+		color = 0xf1c40f // Gold
+		emoji = "🏏"
+		title = "Team Milestone!"
+	case "CHASE_UPDATE":
+		color = 0x2980b9 // Blue
+		emoji = "??"
+		title = "Chase Update"
 	case "RUNS":
 		color = 0x95a5a6 // Gray
 		emoji = "✅"
@@ -274,6 +282,37 @@ func (n *DiscordNotifier) SendCricketEvent(eventType, commentary string, matchDa
 						}
 					}
 				}
+			}
+		}
+
+		if eventType == "TEAM_MILESTONE" && commentary == "" {
+			teamMilestone, _ := matchData["team_milestone_runs"].(float64)
+			totalRuns, _ := matchData["total_runs"].(float64)
+			wickets, _ := matchData["wickets"].(float64)
+			overs, _ := matchData["overs"].(float64)
+
+			if teamMilestone > 0 {
+				description = fmt.Sprintf("Team milestone reached: **%d**!\n\nScore: %d/%d", int(teamMilestone), int(wickets), int(totalRuns))
+				if overs > 0 {
+					description += fmt.Sprintf(" in %.1f overs", overs)
+				}
+			}
+		}
+
+		if eventType == "CHASE_UPDATE" && commentary == "" {
+			needRuns, _ := matchData["need_runs"].(float64)
+			needBalls, _ := matchData["need_balls"].(float64)
+			if needRuns > 0 && needBalls > 0 {
+				status := "behind the equation"
+				if needRuns <= needBalls {
+					status = "ahead of the equation"
+				} else {
+					gapPct := ((needRuns - needBalls) / needBalls) * 100
+					if gapPct <= 10 {
+						status = "within 10% gap"
+					}
+				}
+				description = fmt.Sprintf("Chase update: Need %d from %d balls (%s)", int(needRuns), int(needBalls), status)
 			}
 		}
 	}

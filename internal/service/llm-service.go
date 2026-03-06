@@ -18,6 +18,25 @@ import (
 // LLMService handles interactions with LLM providers
 type LLMService struct{}
 
+var llmCreditExhaustedIndicators = []string{
+	"insufficient_quota",
+	"quota exceeded",
+	"exceeded your current quota",
+	"out of credits",
+	"credit balance",
+	"payment required",
+	"billing",
+	"402",
+}
+
+var llmCreditFallbackMessages = []string{
+	"AI analysis is temporarily unavailable due to exhausted credits. Falling back to metadata-based tracking.",
+	"LLM quota is exhausted right now. Logging this screenshot with static activity analysis.",
+	"No AI credits remaining for this cycle. Continuing with deterministic fallback insights.",
+	"Provider credits are depleted. Recording a safe default summary until credits are restored.",
+	"LLM billing limit reached. Using static analysis mode for this screenshot.",
+}
+
 // NewLLMService creates a new LLM service instance
 func NewLLMService() *LLMService {
 	return &LLMService{}
@@ -120,6 +139,47 @@ func (s *LLMService) SendChatCompletion(req model.ChatCompletionRequest) (*model
 
 	log.Printf("Successfully generated response from %s", req.Provider)
 	return chatResponse, nil
+}
+
+// IsCreditExhaustedError checks whether an LLM error indicates quota/credit exhaustion.
+func (s *LLMService) IsCreditExhaustedError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errText := strings.ToLower(err.Error())
+	for _, indicator := range llmCreditExhaustedIndicators {
+		if strings.Contains(errText, indicator) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetCreditExhaustedFallbackMessages returns static fallback messages for quota exhaustion scenarios.
+func (s *LLMService) GetCreditExhaustedFallbackMessages() []string {
+	msgs := make([]string, len(llmCreditFallbackMessages))
+	copy(msgs, llmCreditFallbackMessages)
+	return msgs
+}
+
+// GetCreditExhaustedFallbackMessage returns a deterministic fallback message based on seed context.
+func (s *LLMService) GetCreditExhaustedFallbackMessage(seed string) string {
+	msgs := s.GetCreditExhaustedFallbackMessages()
+	if len(msgs) == 0 {
+		return "AI analysis unavailable. Using metadata fallback."
+	}
+	if seed == "" {
+		return msgs[0]
+	}
+
+	hash := 0
+	for _, ch := range seed {
+		hash += int(ch)
+	}
+
+	return msgs[hash%len(msgs)]
 }
 
 // buildPromptFromMessages converts chat messages to a single prompt string

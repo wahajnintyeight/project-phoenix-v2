@@ -12,6 +12,7 @@ import (
 	"project-phoenix/v2/internal/notifier"
 	"project-phoenix/v2/internal/service"
 	"strings"
+	"time"
 )
 
 type CricketHandler struct {
@@ -68,13 +69,19 @@ func (h *CricketHandler) Process(data map[string]interface{}) error {
 	// Generate colorful commentary using LLM
 	commentary, err := h.generateCommentary(eventType, data)
 	if err != nil {
-		errStr := err.Error()
-		if strings.Contains(errStr, "status 429") || strings.Contains(errStr, "Rate limit") {
-			log.Printf("LLM rate-limited; using fallback commentary")
+		errStr := strings.ToLower(err.Error())
+		if h.llmService.IsCreditExhaustedError(err) {
+			log.Printf("LLM credits exhausted; using static template fallback commentary")
+		} else if strings.Contains(errStr, "status 429") || strings.Contains(errStr, "rate limit") {
+			log.Printf("LLM rate-limited; using static template fallback commentary")
 		} else {
 			log.Printf("Failed to generate commentary: %v", err)
 		}
-		commentary = formatFallbackCommentary(eventType, data)
+
+		commentary = formatStaticTemplateFallbackCommentary(eventType, data)
+		if strings.TrimSpace(commentary) == "" {
+			commentary = formatFallbackCommentary(eventType, data)
+		}
 	}
 
 	// Publish to Discord
@@ -235,6 +242,10 @@ func (h *CricketHandler) generateCommentary(eventType string, data map[string]in
 		prompt = fmt.Sprintf("You are a professional cricket commentator. A new bowler %s is coming into the attack. Details: %s. Generate an exciting commentary introducing the bowler with their career stats and bowling style if available. Keep it to 2-3 sentences.", bowlerName, payload)
 	case "MILESTONE":
 		prompt = fmt.Sprintf("You are a professional cricket commentator. Batsman %s has reached a major milestone! Details: %s. Generate an exciting, celebratory commentary praising the batsman's achievement. Keep it to 2-3 sentences.", batsmanName, payload)
+	case "TEAM_MILESTONE":
+		prompt = fmt.Sprintf("You are a professional cricket commentator. The batting team has reached a team-score milestone. Details: %s. Generate an energetic 1-2 sentence team-focused commentary mentioning momentum and scoreboard pressure.", payload)
+	case "CHASE_UPDATE":
+		prompt = fmt.Sprintf("You are a professional cricket commentator. This is a live run chase update: %s. Generate a concise 1-2 sentence pressure-focused commentary. If runs needed are less than balls or within 10%% gap, highlight that momentum.", payload)
 	case "RUNS":
 		prompt = fmt.Sprintf("You are a professional cricket commentator. %s. Generate a brief commentary.", payload)
 	default:
@@ -276,6 +287,148 @@ func beautifyName(name string) string {
 	return name
 }
 
+func formatStaticTemplateFallbackCommentary(eventType string, data map[string]interface{}) string {
+	payload, _ := data["payload"].(string)
+	matchData, _ := data["match_data"].(map[string]interface{})
+
+	getString := func(key string) string {
+		if matchData == nil {
+			return ""
+		}
+		if v, ok := matchData[key].(string); ok {
+			return v
+		}
+		return ""
+	}
+	getInt := func(key string) int {
+		if matchData == nil {
+			return 0
+		}
+		switch v := matchData[key].(type) {
+		case int:
+			return v
+		case int32:
+			return int(v)
+		case int64:
+			return int(v)
+		case float64:
+			return int(v)
+		default:
+			return 0
+		}
+	}
+
+	batsmanName := getString("batsman_name")
+	bowlerName := getString("bowler_name")
+	milestoneType := getString("milestone_type")
+	milestoneRuns := getInt("milestone_runs")
+	teamMilestoneRuns := getInt("team_milestone_runs")
+	totalRuns := getInt("total_runs")
+	wickets := getInt("wickets")
+	needRuns := getInt("need_runs")
+	needBalls := getInt("need_balls")
+
+	templates := map[string][]string{
+		"BOUNDARY_SIX": {
+			"SIX! **%s** clears the ropes with authority.",
+			"That is massive from **%s**. Six more.",
+			"Crowd erupts as **%s** sends it into the stands.",
+		},
+		"BOUNDARY_FOUR": {
+			"FOUR! **%s** times that beautifully.",
+			"Threaded through the gap by **%s** for four.",
+			"Classy boundary from **%s**.",
+		},
+		"WICKET": {
+			"WICKET! %s strikes and removes %s.",
+			"Breakthrough for %s. %s has to walk back.",
+			"Big moment. %s gets %s out.",
+		},
+		"MILESTONE": {
+			"Milestone moment. **%s** brings up %d (%s).",
+			"Outstanding batting by **%s**. %d up, and counting (%s).",
+			"Landmark alert for **%s**. %d reached (%s).",
+			"What a knock from **%s**. %d reached in style (%s).",
+			"Raise the bat for **%s**. %d completed (%s).",
+		},
+		"TEAM_MILESTONE": {
+			"Team milestone up: **%d** on the board (%d/%d).",
+			"Scoreboard pressure building, the batting side reaches **%d** (%d/%d).",
+			"Another landmark for the innings: **%d** reached (%d/%d).",
+			"Runs keep flowing. Team brings up **%d** at %d/%d.",
+			"Big team effort: **%d** posted at %d/%d.",
+			"Momentum with the batting side as they hit **%d** (%d/%d).",
+			"The innings touches **%d** with the board at %d/%d.",
+		},
+		"CHASE_UPDATE": {
+			"Chase update: **%d** needed from **%d** balls (%s).",
+			"Pressure check: **%d** from **%d**. Situation: %s.",
+			"Equation now **%d** off **%d** balls, %s.",
+			"Run chase alive: **%d** to get from **%d** deliveries (%s).",
+			"Scoreboard says **%d** required in **%d** balls. %s.",
+			"Chase math: **%d** from **%d**. %s.",
+		},
+	}
+
+	options := templates[eventType]
+	if len(options) == 0 {
+		return ""
+	}
+
+	idx := int(time.Now().UnixNano() % int64(len(options)))
+	if idx < 0 {
+		idx = -idx
+	}
+	chosen := options[idx]
+
+	switch eventType {
+	case "BOUNDARY_SIX", "BOUNDARY_FOUR":
+		if batsmanName == "" {
+			batsmanName = "the batter"
+		}
+		return fmt.Sprintf(chosen, batsmanName)
+	case "WICKET":
+		if bowlerName == "" {
+			bowlerName = "the bowler"
+		}
+		if batsmanName == "" {
+			batsmanName = "the batter"
+		}
+		return fmt.Sprintf(chosen, bowlerName, batsmanName)
+	case "MILESTONE":
+		if batsmanName == "" {
+			batsmanName = "the batter"
+		}
+		if milestoneType == "" {
+			milestoneType = "milestone"
+		}
+		if milestoneRuns == 0 {
+			milestoneRuns = getInt("batsman_runs")
+		}
+		if milestoneRuns == 0 {
+			milestoneRuns = 50
+		}
+		return fmt.Sprintf(chosen, batsmanName, milestoneRuns, milestoneType)
+	case "TEAM_MILESTONE":
+		if teamMilestoneRuns == 0 {
+			teamMilestoneRuns = getCrossedTeamMilestone(totalRuns)
+		}
+		if teamMilestoneRuns == 0 {
+			teamMilestoneRuns = 50
+		}
+		return fmt.Sprintf(chosen, teamMilestoneRuns, totalRuns, wickets)
+	case "CHASE_UPDATE":
+		if needRuns <= 0 || needBalls <= 0 {
+			return ""
+		}
+		return fmt.Sprintf(chosen, needRuns, needBalls, getChasePressureTag(needRuns, needBalls))
+	}
+
+	if strings.TrimSpace(payload) != "" {
+		return payload
+	}
+	return ""
+}
 func formatFallbackCommentary(eventType string, data map[string]interface{}) string {
 	payload, _ := data["payload"].(string)
 	matchData, _ := data["match_data"].(map[string]interface{})
@@ -437,6 +590,18 @@ func formatFallbackCommentary(eventType string, data map[string]interface{}) str
 			return fmt.Sprintf("Milestone! **%s** reaches a landmark%s", batsmanName, scoreSuffix)
 		}
 		return payload
+	case "TEAM_MILESTONE":
+		tRuns := getInt("team_milestone_runs")
+		if tRuns == 0 {
+			tRuns = getCrossedTeamMilestone(totalRuns)
+		}
+		if tRuns > 0 {
+			return fmt.Sprintf("Team milestone! %d reached%s", tRuns, scoreSuffix)
+		}
+		if strings.TrimSpace(payload) != "" {
+			return payload
+		}
+		return fmt.Sprintf("Team milestone reached%s", scoreSuffix)
 	case "RUNS":
 		if strings.TrimSpace(payload) != "" {
 			return payload
@@ -448,4 +613,25 @@ func formatFallbackCommentary(eventType string, data map[string]interface{}) str
 		}
 		return eventType
 	}
+}
+
+func getCrossedTeamMilestone(totalRuns int) int {
+	if totalRuns < 50 {
+		return 0
+	}
+	return (totalRuns / 50) * 50
+}
+
+func getChasePressureTag(needRuns, needBalls int) string {
+	if needBalls <= 0 {
+		return "no balls left"
+	}
+	if needRuns <= needBalls {
+		return "ahead of the equation"
+	}
+	gapPct := (float64(needRuns-needBalls) / float64(needBalls)) * 100
+	if gapPct <= 10 {
+		return "within 10% gap"
+	}
+	return "behind the equation"
 }
