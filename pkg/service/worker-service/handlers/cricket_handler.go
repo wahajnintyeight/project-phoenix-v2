@@ -255,7 +255,7 @@ func (h *CricketHandler) generateCommentary(eventType string, data map[string]in
 	}
 
 	//append a dummy text to prompt
-	prompt += " Throw in some humor and sarcasm as well. We need to entertain the users on discord, also with some hard hitting facts."
+	prompt += " Throw in some humor and sarcasm as well. We need to entertain the users on discord, also with some hard hitting facts. Keep it under 100 words."
 	
 	commentary, err := h.llmService.GenerateText(prompt)
 	if err != nil {
