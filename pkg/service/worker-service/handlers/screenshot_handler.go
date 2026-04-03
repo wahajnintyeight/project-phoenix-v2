@@ -490,6 +490,7 @@ func inferActivity(processName, windowTitle string) string {
 }
 
 func categorizeActivity(processName string) string {
+	
 	switch {
 	case contains(processName, "code", "visual studio", "intellij", "pycharm"):
 		return "development"
