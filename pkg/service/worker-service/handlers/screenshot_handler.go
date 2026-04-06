@@ -189,7 +189,7 @@ func (h *ScreenshotHandler) analyzeScreenshot(metadata *ScreenshotMetadata, imag
 
 // buildAnalysisPrompt creates the analysis prompt
 func (h *ScreenshotHandler) buildAnalysisPrompt(metadata *ScreenshotMetadata, imageData string) string {
-	prompt := fmt.Sprintf(`Analyze this screenshot activity based on the visual content and metadata.
+	prompt := fmt.Sprintf(`Analyze this screenshot activity based on the visual content and metadata. You need to be as detailed as possible. Analyzing each pixel of the screen.
 
 Device: %s
 Timestamp: %s
@@ -205,32 +205,41 @@ Window Title: %s
 	prompt += `Determine the context and strictly follow the relevant criteria:
 
 1. **GAMING**:
-   - **Activity**: What is the player doing? (e.g., combat, questing, inventory management)
+   - **Activity**: What is the player doing? (e.g., combat, questing, inventory management, cricket, sports)
    - **HUD/Stats**: List health, ammo, resources, level, and active effects.
    - **World**: Describe enemies, NPCs, dialogue options, and the environment.
    - **Identity**: Identify the game genre and character details.
+   - **Engagement**: Is the player exploring, fighting, socializing, or idle?
+   - **Cricket Specific**: If cricket is detected, specify the format (Test, ODI, T20), current score, overs, wickets, and key players involved.
+   - **FIFA Specific**: If FIFA is detected, specify the teams playing, current score, match time, and key players involved.
+   - **Story/Questing**: If RPG elements are detected, describe the current quest or story progression.
 
 2. **CODING & TECH**:
    - **Work**: What is the user writing or viewing? (e.g., implementing a class, debugging error logs)
    - **Code**: Identify the programming language, file extension, and code quality/complexity.
    - **Tools**: What IDE/Editor is used? Are terminal/debug/file-explorer panels visible?
+   - **Focus**: Is the user focused on coding, researching documentation, or multitasking with communication tools?
+   - **Documentation**: If documentation is detected, specify the technology and topic (e.g., React useState hook, Python datetime library).
 
 3. **WEB BROWSING**:
    - **Page**: What is the specific content? (e.g., documentation, social feed, checkout page)
    - **Tabs**: List visible tabs and infer the browsing session goal.
    - **Action**: Is the user reading, typing, watching, or scrolling?
+   - **Context**: Are there distractions (e.g., social media, news) or is this focused research?
 
 4. **VIDEO & ENTERTAINMENT**:
    - **Content**: What is being watched? Describe the scene or topic.
    - **Platform**: Layout (YouTube, Netflix, Twitch).
    - **Context**: How many videos/thumbnails are visible? Is the user engaging (comments/chat)?
+   - **Genre**: Identify the genre (e.g., tutorial, music, gaming stream, movie) and specific details (e.g., Rust programming tutorial, FIFA gameplay).
 
 5. **GENERAL**:
    - Describe the desktop state, open windows, and overall focus.
+   - Provide a summary of the user's activity, focus level, and categorize it into one of the following: Development, Browsing, Gaming, Entertainment, Communication, or Other.
 
 Output JSON:
 {
-  "summary": "Comprehensive 80-150 word description covering the specific criteria above.",
+  "summary": "Comprehensive 150-350 words description covering the specific criteria above.",
   "application": "Exact application name",
   "activity": "Specific action (e.g., 'Debugging main.go', 'Fighting boss in Elden Ring')",
   "time_visible": "Time on screen (or null)",
