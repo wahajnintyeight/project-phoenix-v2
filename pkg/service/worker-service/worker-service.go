@@ -264,7 +264,7 @@ func (qc *WorkerService) HandleCricketEvent(p microBroker.Event) error {
 
 // HandleKeyDiscovered processes key discovery events from scraper service
 func (qc *WorkerService) HandleKeyDiscovered(p microBroker.Event) error {
-	log.Println("HandleKeyDiscovered called")
+	// log.Println("HandleKeyDiscovered called")
 
 	data := make(map[string]interface{})
 	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
