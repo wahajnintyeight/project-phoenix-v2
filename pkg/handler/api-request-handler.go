@@ -99,9 +99,10 @@ func (apiHandler APIRequestHandler) DELETERoutes(w http.ResponseWriter, r *http.
 		if len(r.URL.Path) > len(apiRequestHandlerObj.Endpoint+"/config/queries/") &&
 			r.URL.Path[:len(apiRequestHandlerObj.Endpoint+"/config/queries/")] == apiRequestHandlerObj.Endpoint+"/config/queries/" {
 			log.Println("Delete Search Query")
-			if !ValidateSession(w, r) {
-				return
-			}
+			// TODO: Add authentication later
+			// if !ValidateSession(w, r) {
+			// 	return
+			// }
 
 			// Extract ID from path
 			idStr := r.URL.Path[len(apiRequestHandlerObj.Endpoint+"/config/queries/"):]
@@ -498,9 +499,10 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 	case apiRequestHandlerObj.Endpoint + "/config/queries":
 		log.Println("Create Search Query")
-		if !ValidateSession(w, r) {
-			return
-		}
+		// TODO: Add authentication later
+		// if !ValidateSession(w, r) {
+		// 	return
+		// }
 		controller := controllers.GetControllerInstance(enum.ScraperConfigController, enum.MONGODB)
 		configController := controller.(*controllers.ScraperConfigController)
 
@@ -639,9 +641,10 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		break
 	case apiRequestHandlerObj.Endpoint + "/keys":
 		log.Println("List API Keys")
-		if !ValidateSession(w, r) {
-			return
-		}
+		// TODO: Add authentication later
+		// if !ValidateSession(w, r) {
+		// 	return
+		// }
 		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
 		apiKeyController := controller.(*controllers.APIKeyController)
 
@@ -675,9 +678,10 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		break
 	case apiRequestHandlerObj.Endpoint + "/keys/valid":
 		log.Println("List Valid API Keys")
-		if !ValidateSession(w, r) {
-			return
-		}
+		// TODO: Add authentication later
+		// if !ValidateSession(w, r) {
+		// 	return
+		// }
 		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
 		apiKeyController := controller.(*controllers.APIKeyController)
 
@@ -693,9 +697,10 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		break
 	case apiRequestHandlerObj.Endpoint + "/stats":
 		log.Println("Get API Key Statistics")
-		if !ValidateSession(w, r) {
-			return
-		}
+		// TODO: Add authentication later
+		// if !ValidateSession(w, r) {
+		// 	return
+		// }
 		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
 		apiKeyController := controller.(*controllers.APIKeyController)
 
@@ -708,9 +713,10 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		break
 	case apiRequestHandlerObj.Endpoint + "/config/queries":
 		log.Println("List Search Queries")
-		if !ValidateSession(w, r) {
-			return
-		}
+		// TODO: Add authentication later
+		// if !ValidateSession(w, r) {
+		// 	return
+		// }
 		controller := controllers.GetControllerInstance(enum.ScraperConfigController, enum.MONGODB)
 		configController := controller.(*controllers.ScraperConfigController)
 
