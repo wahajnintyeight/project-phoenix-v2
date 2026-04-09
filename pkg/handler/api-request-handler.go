@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strconv"
 
 	"net/http"
 	"project-phoenix/v2/internal/controllers"
@@ -18,7 +17,6 @@ import (
 
 	// "github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	// "github.com/gorilla/mux"
 )
@@ -640,7 +638,7 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		break
 	case apiRequestHandlerObj.Endpoint + "/keys":
-		log.Println("List API Keys")
+		log.Println("List Valid API Keys")
 		// TODO: Add authentication later
 		// if !ValidateSession(w, r) {
 		// 	return
@@ -648,30 +646,14 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
 		apiKeyController := controller.(*controllers.APIKeyController)
 
-		// Parse query parameters
-		page := 1
-		if pageStr := r.URL.Query().Get("page"); pageStr != "" {
-			if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-				page = p
-			}
-		}
-
-		query := bson.M{}
-		if provider := r.URL.Query().Get("provider"); provider != "" {
-			query["provider"] = provider
-		}
-		if status := r.URL.Query().Get("status"); status != "" {
-			query["status"] = status
-		}
-
-		totalPages, currentPage, keys, e := apiKeyController.FindAllWithPagination(query, page)
+		// Only return valid keys with populated references
+		keys, e := apiKeyController.FindByStatusWithReferences(model.StatusValid)
 		if e != nil {
 			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
 		} else {
 			result := map[string]interface{}{
-				"total_pages":  totalPages,
-				"current_page": currentPage,
-				"keys":         keys,
+				"total": len(keys),
+				"keys":  keys,
 			}
 			response.SendResponse(w, int(enum.DATA_FETCHED), result)
 		}

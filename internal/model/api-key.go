@@ -34,3 +34,9 @@ type APIKey struct {
 	ErrorCount  int                  `bson:"error_count" json:"error_count"`
 	RepoRefs    []primitive.ObjectID `bson:"repo_refs" json:"repo_refs"`
 }
+
+// APIKeyWithReferences includes the API key and its populated repo references
+type APIKeyWithReferences struct {
+	APIKey
+	References []*RepoReference `json:"references"`
+}

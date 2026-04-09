@@ -97,7 +97,6 @@ func (c *APIKeyController) FindByKeyValue(keyValue string) (*model.APIKey, error
 	return c.FindOne(query)
 }
 
-
 // FindByStatus retrieves all API keys with a specific status
 func (c *APIKeyController) FindByStatus(status string) ([]*model.APIKey, error) {
 	query := bson.M{"status": status}
@@ -114,6 +113,49 @@ func (c *APIKeyController) FindByStatus(status string) ([]*model.APIKey, error) 
 			continue
 		}
 		apiKeys = append(apiKeys, &apiKey)
+	}
+
+	return apiKeys, nil
+}
+
+// FindByStatusWithReferences retrieves all API keys with a specific status and populates repo references
+func (c *APIKeyController) FindByStatusWithReferences(status string) ([]*model.APIKeyWithReferences, error) {
+	query := bson.M{"status": status}
+	_, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
+	if err != nil {
+		return nil, err
+	}
+
+	var apiKeys []*model.APIKeyWithReferences
+	for _, result := range results {
+		var apiKey model.APIKey
+		bsonBytes, _ := bson.Marshal(result)
+		if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
+			continue
+		}
+
+		// Populate repo references
+		var references []*model.RepoReference
+		for _, refID := range apiKey.RepoRefs {
+			refQuery := bson.M{"_id": refID}
+			refResult, err := c.DB.FindOne(refQuery, "repo_references")
+			if err != nil {
+				continue
+			}
+
+			var ref model.RepoReference
+			refBytes, _ := bson.Marshal(refResult)
+			if err := bson.Unmarshal(refBytes, &ref); err != nil {
+				continue
+			}
+			references = append(references, &ref)
+		}
+
+		apiKeyWithRefs := &model.APIKeyWithReferences{
+			APIKey:     apiKey,
+			References: references,
+		}
+		apiKeys = append(apiKeys, apiKeyWithRefs)
 	}
 
 	return apiKeys, nil
