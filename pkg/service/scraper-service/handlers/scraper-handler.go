@@ -161,16 +161,9 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 
 	helper.LogInfo(ctx, "Found %d results for query: %s", len(results), query.QueryPattern)
 
-	// Process results
-	keysFound := 0
-	for _, result := range results {
-		if err := h.processSearchResult(result, query.Provider, correlationID); err != nil {
-			helper.LogError(ctx, "Error processing search result", err)
-			h.incrementError()
-			continue
-		}
-		keysFound++
-	}
+	// OPTIMIZATION: Process results concurrently using worker pool pattern
+	// This allows multiple files to be fetched and processed simultaneously
+	keysFound := h.processResultsConcurrently(results, query.Provider, correlationID)
 
 	// Update query statistics
 	helper.LogInfo(ctx, "Updating query statistics in MongoDB")
@@ -181,7 +174,96 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 	return nil
 }
 
+// processResultsConcurrently processes search results using a worker pool
+// EXPLANATION: Instead of processing results one-by-one, we create multiple workers
+// that can process results in parallel. This is like having multiple cashiers
+// at a store instead of just one.
+func (h *ScraperHandler) processResultsConcurrently(results []*github.CodeResult, provider string, correlationID string) int {
+	if len(results) == 0 {
+		return 0
+	}
+
+	// CONCEPT: Channels are Go's way of communicating between goroutines
+	// Think of them as pipes where you can send and receive data
+
+	// resultsChan: sends work items (search results) to workers
+	resultsChan := make(chan *github.CodeResult, len(results))
+
+	// keysChan: workers send back the number of keys they found
+	keysChan := make(chan int, len(results))
+
+	// CONCEPT: WaitGroup tracks how many goroutines are still running
+	// It's like a counter that waits for all workers to finish
+	var wg sync.WaitGroup
+
+	// WORKER POOL: Create concurrent workers
+	// Each worker is a goroutine that processes results from the channel
+	// Default to 10 workers, but allow configuration via environment
+	numWorkers := 10
+	if envWorkers := os.Getenv("SCRAPER_WORKER_POOL_SIZE"); envWorkers != "" {
+		if parsed, err := fmt.Sscanf(envWorkers, "%d", &numWorkers); err == nil && parsed == 1 {
+			if numWorkers < 1 {
+				numWorkers = 1
+			} else if numWorkers > 50 {
+				numWorkers = 50 // Cap at 50 to avoid overwhelming GitHub API
+			}
+		}
+	}
+	if len(results) < numWorkers {
+		numWorkers = len(results) // Don't create more workers than results
+	}
+
+	// Start workers
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1) // Tell WaitGroup we're starting a new goroutine
+
+		// CONCEPT: "go func()" creates a new goroutine (lightweight thread)
+		// This function runs concurrently with the main code
+		go func(workerID int) {
+			defer wg.Done() // When this function exits, tell WaitGroup we're done
+
+			// CONCEPT: "range" on a channel keeps reading until the channel is closed
+			// Each worker continuously pulls results from the channel and processes them
+			for result := range resultsChan {
+				if err := h.processSearchResult(result, provider, correlationID); err != nil {
+					ctx := helper.LogContext{
+						ServiceName:   "scraper-service",
+						Operation:     "processResultsConcurrently",
+						CorrelationID: correlationID,
+					}
+					helper.LogError(ctx, "Error processing search result", err)
+					h.incrementError()
+					keysChan <- 0 // Send 0 keys found
+					continue
+				}
+				keysChan <- 1 // Send 1 key found
+			}
+		}(i)
+	}
+
+	// Send all results to the workers through the channel
+	// CONCEPT: This is like putting work items on a conveyor belt
+	// Workers will pick them up and process them
+	for _, result := range results {
+		resultsChan <- result
+	}
+	close(resultsChan) // Close channel to signal no more work is coming
+
+	// Wait for all workers to finish
+	wg.Wait()
+	close(keysChan) // Close the results channel
+
+	// Count total keys found
+	keysFound := 0
+	for count := range keysChan {
+		keysFound += count
+	}
+
+	return keysFound
+}
+
 // processSearchResult processes a single search result
+// OPTIMIZATION: This now runs concurrently in multiple goroutines
 func (h *ScraperHandler) processSearchResult(result *github.CodeResult, provider string, correlationID string) error {
 	ctx := helper.LogContext{
 		ServiceName:   "scraper-service",
@@ -203,6 +285,8 @@ func (h *ScraperHandler) processSearchResult(result *github.CodeResult, provider
 	}
 
 	// Get file content
+	// EXPLANATION: Multiple goroutines can fetch different files simultaneously
+	// This is much faster than waiting for each file one-by-one
 	helper.LogInfo(ctx, "Fetching file content from GitHub: %s", repoInfo.FilePath)
 	content, err := h.githubClient.GetFileContent(repoInfo.RepoOwner, repoInfo.RepoName, repoInfo.FilePath, correlationID)
 	if err != nil {
@@ -218,13 +302,20 @@ func (h *ScraperHandler) processSearchResult(result *github.CodeResult, provider
 
 	helper.LogInfo(ctx, "Extracted %d keys from %s", len(keys), repoInfo.FilePath)
 
-	// Store discovered keys
+	// OPTIMIZATION: Store keys concurrently
+	// If a file has multiple keys, we can store them in parallel
+	var wg sync.WaitGroup
 	for _, keyValue := range keys {
-		if err := h.StoreDiscoveredKey(keyValue, provider, repoInfo, correlationID); err != nil {
-			helper.LogError(ctx, "Failed to store key", err)
-			h.incrementError()
-		}
+		wg.Add(1)
+		go func(kv string) {
+			defer wg.Done()
+			if err := h.StoreDiscoveredKey(kv, provider, repoInfo, correlationID); err != nil {
+				helper.LogError(ctx, "Failed to store key", err)
+				h.incrementError()
+			}
+		}(keyValue)
 	}
+	wg.Wait() // Wait for all keys to be stored
 
 	return nil
 }

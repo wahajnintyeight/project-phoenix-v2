@@ -98,10 +98,10 @@ func (m *MongoDB) Create(data interface{}, collectionName string) (bson.M, error
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
 
-	log.Println("MongoDB | Create | Data: ", data, " | Collection: ", collectionName)
+	// log.Println("MongoDB | Create | Data: ", data, " | Collection: ", collectionName)
 	collection := conn.db.Collection(collectionName)
 	result, err := collection.InsertOne(context.Background(), data)
-	log.Println("Inserted Result", result)
+	// log.Println("Inserted Result", result)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -115,7 +115,7 @@ func (m *MongoDB) CreateWithTTL(data interface{}, collectionName string, ttlMinu
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
 
-	log.Println("MongoDB | Create With TTL | Data: ", data, " | Collection: ", collectionName)
+	// log.Println("MongoDB | Create With TTL | Data: ", data, " | Collection: ", collectionName)
 	collection := conn.db.Collection(collectionName)
 	index := mongo.IndexModel{
 		Keys:    bson.D{{Key: "createdAt", Value: 1}},
@@ -128,7 +128,7 @@ func (m *MongoDB) CreateWithTTL(data interface{}, collectionName string, ttlMinu
 	}
 	result, err := collection.InsertOne(context.Background(), data)
 
-	log.Println("Inserted Result", result)
+	// log.Println("Inserted Result", result)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -141,7 +141,7 @@ func (m *MongoDB) CreateWithTTL(data interface{}, collectionName string, ttlMinu
 func (m *MongoDB) FindOne(data interface{}, collectionName string) (bson.M, error) {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)
-	log.Println("MongoDB | FindOne | Data: ", data, " | Collection: ", collectionName)
+	// log.Println("MongoDB | FindOne | Data: ", data, " | Collection: ", collectionName)
 	collection := conn.db.Collection(collectionName)
 	filter := data
 	var result primitive.M
@@ -204,7 +204,7 @@ func (m *MongoDB) Update(query interface{}, update interface{}, collectionName s
 	if e != nil {
 		return "", e
 	}
-	log.Println("MongoDB | Update | Query: ", query, " | Collection: ", collectionName, " | Data: ", updateData)
+	// log.Println("MongoDB | Update | Query: ", query, " | Collection: ", collectionName, " | Data: ", updateData)
 	return strconv.Itoa(int(res.ModifiedCount)), nil
 }
 
@@ -214,7 +214,7 @@ func (m *MongoDB) UpdateAndIncrement(query interface{}, update bson.M, incMap in
 	collection := conn.db.Collection(collectionName)
 	updateData := bson.M{"$push": update, "$inc": incMap, "$set": setData}
 
-	log.Println("MongoDB | Update | Query: ", query, " | Collection: ", collectionName, " | Data: ", updateData)
+	// log.Println("MongoDB | Update | Query: ", query, " | Collection: ", collectionName, " | Data: ", updateData)
 	res, e := collection.UpdateOne(context.Background(), query, updateData)
 	if e != nil {
 		return "", e
@@ -238,7 +238,7 @@ func (m *MongoDB) UpdateOrCreate(query interface{}, update interface{}, collecti
 			return existingData["_id"]
 		}
 	}
-	log.Println("MongoDB | UpdateOrCreate | UpsertedID: ", res.UpsertedID)
+	// log.Println("MongoDB | UpdateOrCreate | UpsertedID: ", res.UpsertedID)
 	return res.UpsertedID
 
 }
@@ -262,7 +262,7 @@ func (m *MongoDB) FindRecentDocument(query interface{}, collectionName string) (
 	defer ReleaseConnectionToPool(conn)
 	collection := conn.db.Collection(collectionName)
 	resultInterface := map[string]interface{}{}
-	log.Println("Find Recent Document Query:", query, " | Collection: ", collectionName)
+	// log.Println("Find Recent Document Query:", query, " | Collection: ", collectionName)
 	result := collection.FindOne(
 		context.Background(),
 		query,
@@ -275,7 +275,7 @@ func (m *MongoDB) FindRecentDocument(query interface{}, collectionName string) (
 		log.Println("Error decoding result: ", err)
 		return nil, err
 	}
-	log.Println("Result: ", resultInterface)
+	// log.Println("Result: ", resultInterface)
 	return resultInterface, nil // Return the actual document found
 
 }
