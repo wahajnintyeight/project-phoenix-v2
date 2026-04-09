@@ -320,6 +320,7 @@ func (h *ScraperHandler) processSearchResult(result *github.CodeResult, provider
 	return nil
 }
 
+
 // ExtractKeys extracts API keys from content using provider-specific patterns
 func (h *ScraperHandler) ExtractKeys(content string, provider string) []string {
 	pattern, ok := KeyPatterns[provider]
