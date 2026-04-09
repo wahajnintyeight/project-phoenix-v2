@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"log"
+
 	"sync"
 	"time"
 )
