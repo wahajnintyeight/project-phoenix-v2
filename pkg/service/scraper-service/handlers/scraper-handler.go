@@ -58,11 +58,8 @@ func NewScraperHandler(brokerObj broker.Broker) *ScraperHandler {
 	// Initialize rate limiter with 5-second minimum delay
 	rateLimiter := NewRateLimiter(5 * time.Second)
 
-	// Get GitHub tokens from environment
+	// Get GitHub tokens from environment (already validated by config)
 	githubTokens := strings.Split(os.Getenv("GITHUB_API_TOKEN"), ",")
-	if len(githubTokens) == 0 || githubTokens[0] == "" {
-		log.Fatal("GITHUB_API_TOKEN must be set in environment")
-	}
 
 	// Initialize GitHub client
 	githubClient := NewGitHubClient(githubTokens, rateLimiter)
@@ -319,7 +316,6 @@ func (h *ScraperHandler) processSearchResult(result *github.CodeResult, provider
 
 	return nil
 }
-
 
 // ExtractKeys extracts API keys from content using provider-specific patterns
 func (h *ScraperHandler) ExtractKeys(content string, provider string) []string {

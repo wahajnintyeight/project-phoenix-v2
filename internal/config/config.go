@@ -14,7 +14,6 @@ import (
 type Config struct {
 	MongoURI           string
 	MongoDBName        string
-	RabbitMQURL        string
 	GitHubTokens       []string
 	ScraperPort        string
 	WorkerPort         string
@@ -29,7 +28,6 @@ func LoadConfig() (*Config, error) {
 	config := &Config{
 		MongoURI:    os.Getenv("MONGO_URI"),
 		MongoDBName: os.Getenv("MONGO_DB_NAME"),
-		RabbitMQURL: os.Getenv("RABBITMQ_URL"),
 		ScraperPort: os.Getenv("SCRAPER_SERVICE_PORT"),
 		WorkerPort:  os.Getenv("WORKER_SERVICE_PORT"),
 	}
@@ -96,9 +94,6 @@ func (c *Config) Validate() error {
 	if c.MongoDBName == "" {
 		return errors.New("MONGO_DB_NAME is required")
 	}
-	if c.RabbitMQURL == "" {
-		return errors.New("RABBITMQ_URL is required")
-	}
 	if len(c.GitHubTokens) == 0 || c.GitHubTokens[0] == "" {
 		return errors.New("GITHUB_API_TOKEN is required")
 	}
@@ -106,11 +101,6 @@ func (c *Config) Validate() error {
 	// Validate MongoDB URI format
 	if _, err := url.Parse(c.MongoURI); err != nil {
 		return fmt.Errorf("invalid MONGO_URI format: %w", err)
-	}
-
-	// Validate RabbitMQ URL format
-	if _, err := url.Parse(c.RabbitMQURL); err != nil {
-		return fmt.Errorf("invalid RABBITMQ_URL format: %w", err)
 	}
 
 	// Validate ports are numeric

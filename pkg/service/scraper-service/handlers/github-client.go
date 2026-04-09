@@ -24,9 +24,7 @@ type GitHubClient struct {
 
 // NewGitHubClient creates a new GitHub client with token rotation support
 func NewGitHubClient(tokens []string, rateLimiter *RateLimiter) *GitHubClient {
-	if len(tokens) == 0 {
-		log.Fatal("At least one GitHub token is required")
-	}
+	// Token validation is done by config, this should never be empty
 
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(
