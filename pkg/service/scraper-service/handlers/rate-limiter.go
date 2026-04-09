@@ -34,7 +34,7 @@ func (r *RateLimiter) Wait() {
 		elapsed := time.Since(r.lastRequest)
 		if elapsed < r.minDelay {
 			sleepDuration := r.minDelay - elapsed
-			log.Printf("Rate limiter: sleeping for %v", sleepDuration)
+			// log.Printf("Rate limiter: sleeping for %v", sleepDuration)
 			time.Sleep(sleepDuration)
 		}
 	}
@@ -50,7 +50,7 @@ func (r *RateLimiter) UpdateQuota(remaining int, resetTime time.Time) {
 	r.remainingQuota = remaining
 	r.quotaResetTime = resetTime
 
-	log.Printf("Rate limit updated: %d requests remaining, resets at %v", remaining, resetTime)
+	// log.Printf("Rate limit updated: %d requests remaining, resets at %v", remaining, resetTime)
 }
 
 // ShouldPause checks if the quota is below the threshold and we should pause scraping
