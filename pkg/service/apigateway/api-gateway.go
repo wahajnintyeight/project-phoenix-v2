@@ -142,6 +142,10 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/room/join",
 		s.serviceConfig.EndpointPrefix + "/room/update",
 		s.serviceConfig.EndpointPrefix + "/room/messages",
+
+		s.serviceConfig.EndpointPrefix + "/keys",
+		s.serviceConfig.EndpointPrefix + "/stats",
+
 	}
 	customMiddlewareWrapperWithSession := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
