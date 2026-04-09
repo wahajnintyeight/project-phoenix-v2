@@ -59,6 +59,24 @@ services:
     networks:
       - ppv2-net
 
+  scraper-service:
+    image: ghcr.io/wahajnintyeight/scraper-service:latest
+    container_name: ppv2-scraper-service
+    env_file:
+      - .env
+    ports:
+      - "8888:8888"
+    command: ["./main", "--service-name", "scraper-service", "--port", "8888"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8888/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - ppv2-net
+
 networks:
   ppv2-net:
     driver: bridge

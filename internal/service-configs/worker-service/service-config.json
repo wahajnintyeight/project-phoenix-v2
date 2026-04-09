@@ -25,6 +25,17 @@
           "topicHandler": "HandleCricketEvent"
         }
       ]
+    },
+    {
+      "name": "api-key-verifier",
+      "exchange": "scraper-service-exchange",
+      "queue": "verifier-queue",
+      "subscribedTopics": [
+        {
+          "topicName": "keys.discovered",
+          "topicHandler": "HandleKeyDiscovered"
+        }
+      ]
     }
   ]
 }

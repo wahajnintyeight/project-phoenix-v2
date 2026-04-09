@@ -31,6 +31,8 @@ var (
 	googleControllerInstance          *GoogleController
 	gollmControllerInstance           *GoLLMController
 	llmAPIConfigControllerInstance    *LLMAPIConfigController
+	apiKeyControllerInstance          *APIKeyController
+	scraperConfigControllerInstance   *ScraperConfigController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
@@ -223,6 +225,42 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			}
 		}
 		return llmAPIConfigControllerInstance
+	case enum.APIKeyController:
+		if apiKeyControllerInstance == nil {
+			log.Println("Initialize API Key Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+				return nil
+			}
+			apiKeyControllerInstance = &APIKeyController{
+				DB: dbInstance,
+			}
+
+			e := apiKeyControllerInstance.PerformIndexing()
+			if e != nil {
+				log.Println("Error while indexing: ", e)
+			}
+		}
+		return apiKeyControllerInstance
+	case enum.ScraperConfigController:
+		if scraperConfigControllerInstance == nil {
+			log.Println("Initialize Scraper Config Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+				return nil
+			}
+			scraperConfigControllerInstance = &ScraperConfigController{
+				DB: dbInstance,
+			}
+
+			e := scraperConfigControllerInstance.PerformIndexing()
+			if e != nil {
+				log.Println("Error while indexing: ", e)
+			}
+		}
+		return scraperConfigControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil

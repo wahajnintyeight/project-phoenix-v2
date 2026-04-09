@@ -11,6 +11,7 @@ const (
 	APIGatewayGRPC
 	SSEService
 	WorkerService
+	ScraperService
 )
 
 // String provides the string representation of the ServiceType for easier debugging and logging

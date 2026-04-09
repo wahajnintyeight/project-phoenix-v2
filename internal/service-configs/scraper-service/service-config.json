@@ -1,0 +1,7 @@
+{
+  "serviceName": "scraper-service",
+  "port": "8888",
+  "serviceExchange": "scraper-service-exchange",
+  "serviceQueue": "scraper-service-queue",
+  "subscribedServices": []
+}

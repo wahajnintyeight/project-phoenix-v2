@@ -21,7 +21,6 @@ import (
 	goMicroBroker "go-micro.dev/v4/broker"
 )
 
-
 func main() {
 
 	app := &cli.App{
@@ -80,8 +79,10 @@ func main() {
 				serviceType = enum.SSEService
 			case "worker-service":
 				serviceType = enum.WorkerService
+			case "scraper-service":
+				serviceType = enum.ScraperService
 			default:
-				fmt.Println("Error occurred: Invalid service type",serviceTypeFlag)
+				fmt.Println("Error occurred: Invalid service type", serviceTypeFlag)
 				os.Exit(1)
 			}
 

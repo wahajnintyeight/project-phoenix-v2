@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 
 	"net/http"
 	"project-phoenix/v2/internal/controllers"
@@ -17,6 +18,8 @@ import (
 
 	// "github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	// "github.com/gorilla/mux"
 )
 
@@ -92,6 +95,34 @@ func (apiHandler APIRequestHandler) DELETERoutes(w http.ResponseWriter, r *http.
 		response.SendResponse(w, code, nil)
 		return
 	default:
+		// Check if it's a config/queries/{id} route
+		if len(r.URL.Path) > len(apiRequestHandlerObj.Endpoint+"/config/queries/") &&
+			r.URL.Path[:len(apiRequestHandlerObj.Endpoint+"/config/queries/")] == apiRequestHandlerObj.Endpoint+"/config/queries/" {
+			log.Println("Delete Search Query")
+			if !ValidateSession(w, r) {
+				return
+			}
+
+			// Extract ID from path
+			idStr := r.URL.Path[len(apiRequestHandlerObj.Endpoint+"/config/queries/"):]
+			id, err := primitive.ObjectIDFromHex(idStr)
+			if err != nil {
+				response.SendErrorResponse(w, int(enum.ERROR), err)
+				return
+			}
+
+			controller := controllers.GetControllerInstance(enum.ScraperConfigController, enum.MONGODB)
+			configController := controller.(*controllers.ScraperConfigController)
+
+			e := configController.DeleteQuery(id)
+			if e != nil {
+				response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
+				return
+			}
+
+			response.SendResponse(w, int(enum.DATA_FETCHED), nil)
+			return
+		}
 		http.NotFound(w, r)
 	}
 }
@@ -465,6 +496,29 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, code, res)
 			return
 		}
+	case apiRequestHandlerObj.Endpoint + "/config/queries":
+		log.Println("Create Search Query")
+		if !ValidateSession(w, r) {
+			return
+		}
+		controller := controllers.GetControllerInstance(enum.ScraperConfigController, enum.MONGODB)
+		configController := controller.(*controllers.ScraperConfigController)
+
+		var query model.SearchQuery
+		if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
+			response.SendErrorResponse(w, int(enum.ERROR), err)
+			return
+		}
+
+		id, e := configController.CreateQuery(&query)
+		if e != nil {
+			response.SendErrorResponse(w, int(enum.INSERTION_FAILED), e)
+			return
+		}
+
+		query.ID = id
+		response.SendResponse(w, int(enum.INSERTION_SUCCESS), query)
+		return
 	default:
 		http.NotFound(w, r)
 	}
@@ -581,6 +635,93 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, code, e)
 		} else {
 			response.SendResponse(w, code, data)
+		}
+		break
+	case apiRequestHandlerObj.Endpoint + "/keys":
+		log.Println("List API Keys")
+		if !ValidateSession(w, r) {
+			return
+		}
+		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
+		apiKeyController := controller.(*controllers.APIKeyController)
+
+		// Parse query parameters
+		page := 1
+		if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+			if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+				page = p
+			}
+		}
+
+		query := bson.M{}
+		if provider := r.URL.Query().Get("provider"); provider != "" {
+			query["provider"] = provider
+		}
+		if status := r.URL.Query().Get("status"); status != "" {
+			query["status"] = status
+		}
+
+		totalPages, currentPage, keys, e := apiKeyController.FindAllWithPagination(query, page)
+		if e != nil {
+			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
+		} else {
+			result := map[string]interface{}{
+				"total_pages":  totalPages,
+				"current_page": currentPage,
+				"keys":         keys,
+			}
+			response.SendResponse(w, int(enum.DATA_FETCHED), result)
+		}
+		break
+	case apiRequestHandlerObj.Endpoint + "/keys/valid":
+		log.Println("List Valid API Keys")
+		if !ValidateSession(w, r) {
+			return
+		}
+		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
+		apiKeyController := controller.(*controllers.APIKeyController)
+
+		keys, e := apiKeyController.FindByStatus(model.StatusValid)
+		if e != nil {
+			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
+		} else {
+			result := map[string]interface{}{
+				"keys": keys,
+			}
+			response.SendResponse(w, int(enum.DATA_FETCHED), result)
+		}
+		break
+	case apiRequestHandlerObj.Endpoint + "/stats":
+		log.Println("Get API Key Statistics")
+		if !ValidateSession(w, r) {
+			return
+		}
+		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
+		apiKeyController := controller.(*controllers.APIKeyController)
+
+		stats, e := apiKeyController.GetStatistics()
+		if e != nil {
+			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
+		} else {
+			response.SendResponse(w, int(enum.DATA_FETCHED), stats)
+		}
+		break
+	case apiRequestHandlerObj.Endpoint + "/config/queries":
+		log.Println("List Search Queries")
+		if !ValidateSession(w, r) {
+			return
+		}
+		controller := controllers.GetControllerInstance(enum.ScraperConfigController, enum.MONGODB)
+		configController := controller.(*controllers.ScraperConfigController)
+
+		queries, e := configController.GetAllQueries()
+		if e != nil {
+			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
+		} else {
+			result := map[string]interface{}{
+				"queries": queries,
+			}
+			response.SendResponse(w, int(enum.DATA_FETCHED), result)
 		}
 		break
 	default:

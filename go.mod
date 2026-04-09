@@ -10,12 +10,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.7
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/golang-jwt/jwt/v4 v4.5.0
+	github.com/google/go-github/v60 v60.0.0
 	github.com/googollee/go-socket.io v1.7.0
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
 	github.com/gosimple/slug v1.14.0
 	github.com/joho/godotenv v1.5.1
+	github.com/leanovate/gopter v0.2.11
 	github.com/lib/pq v1.10.9
 	github.com/qdrant/go-client v1.17.1
 	github.com/rabbitmq/amqp091-go v1.9.0
@@ -65,6 +67,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/gomodule/redigo v1.8.4 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
@@ -139,7 +142,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.40.0 // indirect
 	go.opentelemetry.io/otel/trace v1.40.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/oauth2 v0.32.0 // indirect
+	golang.org/x/oauth2 v0.32.0
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect

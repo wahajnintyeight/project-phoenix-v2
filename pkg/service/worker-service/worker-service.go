@@ -32,6 +32,8 @@ type WorkerService struct {
 	brokerObj          microBroker.Broker
 	screenshotHandler  *handlers.ScreenshotHandler
 	cricketHandler     *handlers.CricketHandler
+	verifierHandler    *handlers.VerifierHandler
+	startTime          time.Time
 }
 
 var once sync.Once
@@ -75,6 +77,8 @@ func (qc *WorkerService) InitializeService(serviceObj micro.Service, serviceName
 		// Initialize handlers
 		qc.screenshotHandler = handlers.NewScreenshotHandler()
 		qc.cricketHandler = handlers.NewCricketHandler(discordNotifier)
+		qc.verifierHandler = handlers.NewVerifierHandler()
+		qc.startTime = time.Now()
 
 		log.Println("Worker Service initialized")
 	})
@@ -191,12 +195,20 @@ func (qc *WorkerService) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
+	uptime := time.Since(qc.startTime)
+	verifierStats := qc.verifierHandler.GetStats()
+
 	metrics := map[string]interface{}{
 		"service":         "worker-service",
-		"uptime":          time.Since(time.Now()).String(), // TODO: Track actual uptime
-		"processed_tasks": 0,                               // TODO: Add counter
-		"failed_tasks":    0,                               // TODO: Add counter
-		"active_handlers": 1,                               // Screenshot handler
+		"uptime":          uptime.String(),
+		"processed_tasks": 0, // TODO: Add counter
+		"failed_tasks":    0, // TODO: Add counter
+		"active_handlers": 3, // Screenshot, Cricket, Verifier handlers
+		"verifier": map[string]interface{}{
+			"processed": verifierStats["processed"],
+			"valid":     verifierStats["valid"],
+			"invalid":   verifierStats["invalid"],
+		},
 	}
 
 	json.NewEncoder(w).Encode(metrics)
@@ -211,6 +223,9 @@ func (qc *WorkerService) Start(port string) error {
 	// Register HTTP routes for health checks
 	qc.router = mux.NewRouter()
 	qc.registerRoutes()
+
+	// Start scheduled validation cycle (every hour)
+	go qc.startValidationScheduler()
 
 	qc.server = &http.Server{
 		Addr:    ":" + port,
@@ -245,4 +260,46 @@ func (qc *WorkerService) HandleCricketEvent(p microBroker.Event) error {
 
 	// Delegate to cricket handler
 	return qc.cricketHandler.Process(data)
+}
+
+// HandleKeyDiscovered processes key discovery events from scraper service
+func (qc *WorkerService) HandleKeyDiscovered(p microBroker.Event) error {
+	log.Println("HandleKeyDiscovered called")
+
+	data := make(map[string]interface{})
+	if err := json.Unmarshal(p.Message().Body, &data); err != nil {
+		return fmt.Errorf("error unmarshalling key discovery data: %v", err)
+	}
+
+	// Delegate to verifier handler
+	return qc.verifierHandler.Process(data)
+}
+
+// startValidationScheduler starts the scheduled validation cycle
+func (qc *WorkerService) startValidationScheduler() {
+	// Get validation interval from environment (default: 60 minutes)
+	intervalMinutes := 60
+	if envInterval := os.Getenv("VALIDATION_INTERVAL_MINUTES"); envInterval != "" {
+		if parsed, err := time.ParseDuration(envInterval + "m"); err == nil {
+			intervalMinutes = int(parsed.Minutes())
+		}
+	}
+
+	ticker := time.NewTicker(time.Duration(intervalMinutes) * time.Minute)
+	defer ticker.Stop()
+
+	log.Printf("Validation scheduler started (interval: %d minutes)", intervalMinutes)
+
+	// Run immediately on startup
+	if err := qc.verifierHandler.RunValidationCycle(qc.brokerObj); err != nil {
+		log.Printf("Initial validation cycle error: %v", err)
+	}
+
+	// Then run on schedule
+	for range ticker.C {
+		log.Println("Running scheduled validation cycle...")
+		if err := qc.verifierHandler.RunValidationCycle(qc.brokerObj); err != nil {
+			log.Printf("Scheduled validation cycle error: %v", err)
+		}
+	}
 }

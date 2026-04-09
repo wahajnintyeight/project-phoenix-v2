@@ -15,4 +15,6 @@ const (
 	GoogleController
 	GoLLMController
 	LLMAPIConfigController
+	APIKeyController
+	ScraperConfigController
 )
