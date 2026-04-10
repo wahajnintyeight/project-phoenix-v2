@@ -245,6 +245,7 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 		return fmt.Errorf("error converting device data to map: %v", err)
 	}
 
+	
 	controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
 	captureScreenController := controller.(*controllers.CaptureScreenController)
 
