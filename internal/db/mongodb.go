@@ -310,6 +310,52 @@ func (m *MongoDB) ValidateIndexing(collectionName string, indexKeys interface{})
 	return nil
 }
 
+func (m *MongoDB) ValidateUniqueIndexing(collectionName string, indexKeys interface{}) error {
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+	collection := conn.db.Collection(collectionName)
+	indexView, e := collection.Indexes().List(context.Background())
+	//first check if the index exist
+	if e != nil {
+		log.Println("Error while fetching indexes: ", e)
+		//if there is no index, create them with unique constraint
+		indexModel := mongo.IndexModel{
+			Keys:    indexKeys,
+			Options: options.Index().SetUnique(true),
+		}
+		_, err := collection.Indexes().CreateOne(context.Background(), indexModel)
+		if err != nil {
+			log.Println("Error while creating unique index: ", err)
+			return err
+		}
+		log.Println("Unique index created successfully")
+		return nil
+	}
+	for indexView.Next(context.Background()) {
+		var index bson.M
+		indexView.Decode(&index)
+		if index["key"] == indexKeys {
+			// Check if it's unique
+			if unique, ok := index["unique"].(bool); ok && unique {
+				log.Println("Unique index already exists")
+				return nil
+			}
+		}
+	}
+	// Index doesn't exist, create it
+	indexModel := mongo.IndexModel{
+		Keys:    indexKeys,
+		Options: options.Index().SetUnique(true),
+	}
+	_, err := collection.Indexes().CreateOne(context.Background(), indexModel)
+	if err != nil {
+		log.Println("Error while creating unique index: ", err)
+		return err
+	}
+	log.Println("Unique index created successfully")
+	return nil
+}
+
 func (m *MongoDB) ValidateIndexingTTL(collectionName string, indexKeys bson.D, ttlMinutes int) error {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)

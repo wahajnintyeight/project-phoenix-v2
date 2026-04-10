@@ -262,3 +262,9 @@ func (m *PostgreDB) ValidateIndexing(collectionName string, indexKeys interface{
 	// }
 	return nil
 }
+
+func (m *PostgreDB) ValidateUniqueIndexing(collectionName string, indexKeys interface{}) error {
+	// PostgreSQL unique index implementation would go here
+	// For now, return nil as this is primarily used with MongoDB
+	return nil
+}

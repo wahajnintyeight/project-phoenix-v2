@@ -29,6 +29,7 @@ type DBInterface interface {
 	//FindOneAndUpdate finds a single document and updates it, returning either the original or the updated document.
 	UpdateOrCreate(interface{}, interface{}, string) interface{}
 	ValidateIndexing(string, interface{}) error
+	ValidateUniqueIndexing(string, interface{}) error
 	ValidateIndexingTTL(string, bson.D, int) error
 	//Fetches the single most recent document from the collection based on the query.
 	FindRecentDocument(query interface{}, collectionName string) (interface{}, error)

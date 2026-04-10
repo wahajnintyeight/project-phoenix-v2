@@ -38,7 +38,7 @@ func (c *APIKeyController) PerformIndexing() error {
 
 	// Create unique index on key_value
 	uniqueIndex := bson.D{{Key: "key_value", Value: 1}}
-	if err := c.DB.ValidateIndexing(c.GetCollectionName(), uniqueIndex); err != nil {
+	if err := c.DB.ValidateUniqueIndexing(c.GetCollectionName(), uniqueIndex); err != nil {
 		log.Println("Error creating unique index on key_value:", err)
 		return err
 	}
