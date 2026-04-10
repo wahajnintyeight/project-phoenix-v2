@@ -8,6 +8,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type APIKeyController struct {
@@ -225,6 +226,41 @@ func (c *APIKeyController) UpdateLastSeen(keyValue string) error {
 	update := bson.M{"last_seen_at": time.Now()}
 	_, err := c.DB.Update(query, update, c.GetCollectionName())
 	return err
+}
+
+// UpsertByKeyValue creates a new API key or updates last_seen_at if it already exists
+// Returns the key ID and a boolean indicating if it was newly created
+func (c *APIKeyController) UpsertByKeyValue(key *model.APIKey) (primitive.ObjectID, bool, error) {
+	// First check if key exists
+	existingKey, err := c.FindByKeyValue(key.KeyValue)
+	isNew := err != nil // If error (not found), it's new
+
+	if isNew {
+		// Create new key
+		id, err := c.Create(key)
+		if err != nil {
+			// Check if it's a race condition duplicate
+			if mongo.IsDuplicateKeyError(err) {
+				// Another goroutine created it, fetch and return
+				existingKey, fetchErr := c.FindByKeyValue(key.KeyValue)
+				if fetchErr != nil {
+					return primitive.NilObjectID, false, fetchErr
+				}
+				// Update last_seen_at
+				_ = c.UpdateLastSeen(key.KeyValue)
+				return existingKey.ID, false, nil
+			}
+			return primitive.NilObjectID, false, err
+		}
+		return id, true, nil
+	}
+
+	// Update existing key's last_seen_at
+	if err := c.UpdateLastSeen(key.KeyValue); err != nil {
+		return primitive.NilObjectID, false, err
+	}
+
+	return existingKey.ID, false, nil
 }
 
 // AddRepoReference creates a repository reference and adds its ID to an API key's repo_refs array

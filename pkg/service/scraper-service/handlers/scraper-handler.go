@@ -18,7 +18,6 @@ import (
 	"github.com/google/go-github/v60/github"
 	"go-micro.dev/v4/broker"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // RepoInfo contains repository information for discovered keys
@@ -30,19 +29,22 @@ type RepoInfo struct {
 	FilePath  string
 }
 
-// ScraperHandler handles GitHub scraping operations
+// ScraperHandler handles GitHub and GitLab scraping operations
 type ScraperHandler struct {
-	githubClient     *GitHubClient
-	apiKeyController *controllers.APIKeyController
-	configController *controllers.ScraperConfigController
-	rateLimiter      *RateLimiter
-	broker           broker.Broker
-	processedCount   int
-	duplicateCount   int
-	errorCount       int
-	scrapingCycles   int
-	lastScrape       time.Time
-	mutex            sync.Mutex
+	githubClient      *GitHubClient
+	gitlabClient      *GitLabClient
+	apiKeyController  *controllers.APIKeyController
+	configController  *controllers.ScraperConfigController
+	rateLimiter       *RateLimiter
+	gitlabRateLimiter *RateLimiter
+	broker            broker.Broker
+	processedCount    int
+	duplicateCount    int
+	errorCount        int
+	scrapingCycles    int
+	lastScrape        time.Time
+	mutex             sync.Mutex
+	gitlabEnabled     bool
 }
 
 // Key extraction patterns for different providers
@@ -57,6 +59,7 @@ var KeyPatterns = map[string]*regexp.Regexp{
 func NewScraperHandler(brokerObj broker.Broker) *ScraperHandler {
 	// Initialize rate limiter with 5-second minimum delay
 	rateLimiter := NewRateLimiter(5 * time.Second)
+	gitlabRateLimiter := NewRateLimiter(5 * time.Second)
 
 	// Get GitHub tokens from environment (already validated by config)
 	githubTokens := strings.Split(os.Getenv("GITHUB_API_TOKEN"), ",")
@@ -64,21 +67,37 @@ func NewScraperHandler(brokerObj broker.Broker) *ScraperHandler {
 	// Initialize GitHub client
 	githubClient := NewGitHubClient(githubTokens, rateLimiter)
 
+	// Check if GitLab is enabled and initialize client
+	var gitlabClient *GitLabClient
+	gitlabEnabled := false
+	gitlabTokensEnv := os.Getenv("GITLAB_API_TOKEN")
+	if gitlabTokensEnv != "" {
+		gitlabTokens := strings.Split(gitlabTokensEnv, ",")
+		gitlabClient = NewGitLabClient(gitlabTokens, gitlabRateLimiter)
+		gitlabEnabled = true
+		log.Println("GitLab search enabled")
+	} else {
+		log.Println("GitLab search disabled (no GITLAB_API_TOKEN found)")
+	}
+
 	// Get controllers
 	apiKeyController := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB).(*controllers.APIKeyController)
 	configController := controllers.GetControllerInstance(enum.ScraperConfigController, enum.MONGODB).(*controllers.ScraperConfigController)
 
 	return &ScraperHandler{
-		githubClient:     githubClient,
-		apiKeyController: apiKeyController,
-		configController: configController,
-		rateLimiter:      rateLimiter,
-		broker:           brokerObj,
-		processedCount:   0,
-		duplicateCount:   0,
-		errorCount:       0,
-		scrapingCycles:   0,
-		lastScrape:       time.Time{},
+		githubClient:      githubClient,
+		gitlabClient:      gitlabClient,
+		apiKeyController:  apiKeyController,
+		configController:  configController,
+		rateLimiter:       rateLimiter,
+		gitlabRateLimiter: gitlabRateLimiter,
+		broker:            brokerObj,
+		processedCount:    0,
+		duplicateCount:    0,
+		errorCount:        0,
+		scrapingCycles:    0,
+		lastScrape:        time.Time{},
+		gitlabEnabled:     gitlabEnabled,
 	}
 }
 
@@ -148,34 +167,46 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 
 	helper.LogInfo(ctx, "Processing query: %s (provider: %s)", query.QueryPattern, query.Provider)
 
-	// Search GitHub
+	totalKeysFound := 0
+
+	Search GitHub
 	helper.LogInfo(ctx, "Executing GitHub Code Search API request")
-	results, err := h.githubClient.SearchCode(query.QueryPattern, correlationID)
+	githubResults, err := h.githubClient.SearchCode(query.QueryPattern, correlationID)
 	if err != nil {
 		helper.LogError(ctx, "GitHub search failed", err)
-		return fmt.Errorf("GitHub search failed: %w", err)
+	} else {
+		helper.LogInfo(ctx, "Found %d GitHub results for query: %s", len(githubResults), query.QueryPattern)
+		keysFound := h.processGitHubResultsConcurrently(githubResults, query.Provider, correlationID)
+		totalKeysFound += keysFound
 	}
 
-	helper.LogInfo(ctx, "Found %d results for query: %s", len(results), query.QueryPattern)
-
-	// OPTIMIZATION: Process results concurrently using worker pool pattern
-	// This allows multiple files to be fetched and processed simultaneously
-	keysFound := h.processResultsConcurrently(results, query.Provider, correlationID)
+	// Search GitLab if enabled
+	if h.gitlabEnabled && h.gitlabClient != nil {
+		helper.LogInfo(ctx, "Executing GitLab Code Search API request")
+		gitlabResults, err := h.gitlabClient.SearchCode(query.QueryPattern, correlationID)
+		if err != nil {
+			helper.LogError(ctx, "GitLab search failed", err)
+		} else {
+			helper.LogInfo(ctx, "Found %d GitLab results for query: %s", len(gitlabResults), query.QueryPattern)
+			keysFound := h.processGitLabResultsConcurrently(gitlabResults, query.Provider, correlationID)
+			totalKeysFound += keysFound
+		}
+	}
 
 	// Update query statistics
-	helper.LogInfo(ctx, "Updating query statistics in MongoDB")
-	if err := h.configController.UpdateQueryStats(query.ID, keysFound); err != nil {
+	helper.LogInfo(ctx, "Updating query statistics in MongoDB (total keys: %d)", totalKeysFound)
+	if err := h.configController.UpdateQueryStats(query.ID, totalKeysFound); err != nil {
 		helper.LogError(ctx, "Failed to update query stats in MongoDB", err)
 	}
 
 	return nil
 }
 
-// processResultsConcurrently processes search results using a worker pool
+// processGitHubResultsConcurrently processes GitHub search results using a worker pool
 // EXPLANATION: Instead of processing results one-by-one, we create multiple workers
 // that can process results in parallel. This is like having multiple cashiers
 // at a store instead of just one.
-func (h *ScraperHandler) processResultsConcurrently(results []*github.CodeResult, provider string, correlationID string) int {
+func (h *ScraperHandler) processGitHubResultsConcurrently(results []*github.CodeResult, provider string, correlationID string) int {
 	if len(results) == 0 {
 		return 0
 	}
@@ -362,35 +393,19 @@ func (h *ScraperHandler) StoreDiscoveredKey(keyValue string, provider string, re
 		RepoRefs:   []primitive.ObjectID{},
 	}
 
-	// Try to create the key
-	helper.LogInfo(ctx, "Storing API key in MongoDB (provider: %s)", provider)
-	keyID, err := h.apiKeyController.Create(apiKey)
+	// Upsert the key (create or update last_seen_at)
+	helper.LogInfo(ctx, "Upserting API key in MongoDB (provider: %s)", provider)
+	keyID, isNew, err := h.apiKeyController.UpsertByKeyValue(apiKey)
 	if err != nil {
-		// Check if it's a duplicate key error
-		if mongo.IsDuplicateKeyError(err) {
-			helper.LogInfo(ctx, "Duplicate key detected: %s", maskKey(keyValue))
-			h.incrementDuplicate()
+		helper.LogError(ctx, "Failed to upsert key in MongoDB", err)
+		return fmt.Errorf("failed to upsert key: %w", err)
+	}
 
-			// Update LastSeenAt timestamp
-			helper.LogInfo(ctx, "Updating last_seen_at timestamp in MongoDB")
-			if err := h.apiKeyController.UpdateLastSeen(keyValue); err != nil {
-				helper.LogError(ctx, "Failed to update last seen in MongoDB", err)
-				return fmt.Errorf("failed to update last seen: %w", err)
-			}
-
-			// Get existing key to add repo reference
-			existingKey, err := h.apiKeyController.FindByKeyValue(keyValue)
-			if err != nil {
-				helper.LogError(ctx, "Failed to find existing key in MongoDB", err)
-				return fmt.Errorf("failed to find existing key: %w", err)
-			}
-			keyID = existingKey.ID
-		} else {
-			helper.LogError(ctx, "Failed to create key in MongoDB", err)
-			return fmt.Errorf("failed to create key: %w", err)
-		}
-	} else {
+	if isNew {
 		helper.LogInfo(ctx, "New key discovered: %s (provider: %s)", maskKey(keyValue), provider)
+	} else {
+		helper.LogInfo(ctx, "Duplicate key detected, updated last_seen_at: %s", maskKey(keyValue))
+		h.incrementDuplicate()
 	}
 
 	// Add repository reference
@@ -503,4 +518,120 @@ func maskKey(key string) string {
 		return "****"
 	}
 	return key[:4] + "..." + key[len(key)-4:]
+}
+
+// processGitLabResultsConcurrently processes GitLab search results using a worker pool
+func (h *ScraperHandler) processGitLabResultsConcurrently(results []*GitLabBlobResult, provider string, correlationID string) int {
+	if len(results) == 0 {
+		return 0
+	}
+
+	resultsChan := make(chan *GitLabBlobResult, len(results))
+	keysChan := make(chan int, len(results))
+	var wg sync.WaitGroup
+
+	// Create worker pool
+	numWorkers := 10
+	if envWorkers := os.Getenv("SCRAPER_WORKER_POOL_SIZE"); envWorkers != "" {
+		if parsed, err := fmt.Sscanf(envWorkers, "%d", &numWorkers); err == nil && parsed == 1 {
+			if numWorkers < 1 {
+				numWorkers = 1
+			} else if numWorkers > 50 {
+				numWorkers = 50
+			}
+		}
+	}
+	if len(results) < numWorkers {
+		numWorkers = len(results)
+	}
+
+	// Start workers
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for result := range resultsChan {
+				if err := h.processGitLabSearchResult(result, provider, correlationID); err != nil {
+					ctx := helper.LogContext{
+						ServiceName:   "scraper-service",
+						Operation:     "processGitLabResultsConcurrently",
+						CorrelationID: correlationID,
+					}
+					helper.LogError(ctx, "Error processing GitLab search result", err)
+					h.incrementError()
+					keysChan <- 0
+					continue
+				}
+				keysChan <- 1
+			}
+		}(i)
+	}
+
+	// Send all results to workers
+	for _, result := range results {
+		resultsChan <- result
+	}
+	close(resultsChan)
+
+	// Wait for all workers to finish
+	wg.Wait()
+	close(keysChan)
+
+	// Count total keys found
+	keysFound := 0
+	for count := range keysChan {
+		keysFound += count
+	}
+
+	return keysFound
+}
+
+// processGitLabSearchResult processes a single GitLab search result
+func (h *ScraperHandler) processGitLabSearchResult(result *GitLabBlobResult, provider string, correlationID string) error {
+	ctx := helper.LogContext{
+		ServiceName:   "scraper-service",
+		Operation:     "processGitLabSearchResult",
+		CorrelationID: correlationID,
+	}
+
+	// Get project details
+	project, err := h.gitlabClient.GetProject(result.ProjectID, correlationID)
+	if err != nil {
+		helper.LogError(ctx, "Failed to get GitLab project details", err)
+		return fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// Extract keys from the code snippet
+	keys := h.ExtractKeys(result.Data, provider)
+	if len(keys) == 0 {
+		helper.LogInfo(ctx, "No keys found in GitLab result: %s", result.Path)
+		return nil
+	}
+
+	helper.LogInfo(ctx, "Found %d keys in GitLab file: %s/%s", len(keys), project.PathWithNamespace, result.Path)
+
+	// Construct file URL
+	branchOrRef := result.Ref
+	if branchOrRef == "" {
+		branchOrRef = project.DefaultBranch
+	}
+	fileURL := fmt.Sprintf("%s/-/blob/%s/%s", project.WebURL, branchOrRef, result.Path)
+
+	// Store each discovered key
+	repoInfo := &RepoInfo{
+		RepoURL:   project.WebURL,
+		RepoOwner: project.Namespace.FullPath,
+		RepoName:  project.Name,
+		FileURL:   fileURL,
+		FilePath:  result.Path,
+	}
+
+	for _, keyValue := range keys {
+		if err := h.StoreDiscoveredKey(keyValue, provider, repoInfo, correlationID); err != nil {
+			helper.LogError(ctx, "Failed to store discovered key", err)
+			continue
+		}
+	}
+
+	return nil
 }
