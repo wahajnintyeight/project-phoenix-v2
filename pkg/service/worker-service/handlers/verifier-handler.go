@@ -15,6 +15,7 @@ import (
 	"project-phoenix/v2/internal/controllers"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
+	"project-phoenix/v2/internal/notifier"
 	"project-phoenix/v2/pkg/helper"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -27,6 +28,7 @@ type VerifierHandler struct {
 	validCount       int
 	invalidCount     int
 	debugMode        bool
+	discordNotifier  *notifier.DiscordNotifier
 }
 
 // NewVerifierHandler creates a new VerifierHandler instance
@@ -37,15 +39,23 @@ func NewVerifierHandler() *VerifierHandler {
 	// Check if debug mode is enabled via environment variable
 	debugMode := os.Getenv("VERIFIER_DEBUG") == "true"
 
+	// Initialize Discord notifier if webhook URL is provided
+	var discordNotifier *notifier.DiscordNotifier
+	if webhookURL := os.Getenv("DISCORD_WEBHOOK_VERIFIER"); webhookURL != "" {
+		discordNotifier = notifier.NewDiscordNotifier(webhookURL)
+		log.Println("Discord notifications enabled for verifier")
+	}
+
 	return &VerifierHandler{
 		apiKeyController: apiKeyController,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		processedCount: 0,
-		validCount:     0,
-		invalidCount:   0,
-		debugMode:      debugMode,
+		processedCount:  0,
+		validCount:      0,
+		invalidCount:    0,
+		debugMode:       debugMode,
+		discordNotifier: discordNotifier,
 	}
 }
 
@@ -105,6 +115,14 @@ func (h *VerifierHandler) Process(data map[string]interface{}) error {
 	h.processedCount++
 	if status == model.StatusValid || status == model.StatusValidNoCredits {
 		h.validCount++
+
+		// Send Discord notification for valid keys
+		if h.discordNotifier != nil {
+			stats := h.GetStats()
+			if err := h.discordNotifier.SendAPIKeyValidation(key.Provider, status, credits, stats); err != nil {
+				helper.LogError(ctx, "Failed to send Discord notification", err)
+			}
+		}
 	} else if status == model.StatusInvalid {
 		h.invalidCount++
 	}
@@ -500,6 +518,14 @@ func (h *VerifierHandler) RunValidationCycle(broker interface{}) error {
 			h.processedCount++
 			if status == model.StatusValid || status == model.StatusValidNoCredits {
 				h.validCount++
+
+				// Send Discord notification for valid keys
+				if h.discordNotifier != nil {
+					stats := h.GetStats()
+					if err := h.discordNotifier.SendAPIKeyValidation(k.Provider, status, credits, stats); err != nil {
+						helper.LogError(keyCtx, "Failed to send Discord notification", err)
+					}
+				}
 			} else if status == model.StatusInvalid {
 				h.invalidCount++
 			}
@@ -614,5 +640,115 @@ func (h *VerifierHandler) EnforceValidKeyLimit(correlationID string) error {
 	}
 
 	helper.LogInfo(ctx, "Enforced valid key limit: deleted %d keys", len(validKeys)-maxValidKeys)
+	return nil
+}
+
+// RunRevalidationCycle retrieves valid keys and re-validates them concurrently
+func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
+	correlationID := helper.GenerateCorrelationID()
+	ctx := helper.LogContext{
+		ServiceName:   "worker-service",
+		Operation:     "VerifierHandler.RunRevalidationCycle",
+		CorrelationID: correlationID,
+	}
+
+	helper.LogInfo(ctx, "Starting re-validation cycle for valid keys")
+
+	// Retrieve all valid keys (including ValidNoCredits)
+	helper.LogInfo(ctx, "Retrieving valid keys from MongoDB")
+	validKeys, err := h.apiKeyController.FindByStatus(model.StatusValid)
+	if err != nil {
+		helper.LogError(ctx, "Failed to retrieve valid keys from MongoDB", err)
+		return fmt.Errorf("failed to retrieve valid keys: %v", err)
+	}
+
+	validNoCreditsKeys, err := h.apiKeyController.FindByStatus(model.StatusValidNoCredits)
+	if err != nil {
+		helper.LogError(ctx, "Failed to retrieve ValidNoCredits keys from MongoDB", err)
+	} else {
+		validKeys = append(validKeys, validNoCreditsKeys...)
+	}
+
+	if len(validKeys) == 0 {
+		helper.LogInfo(ctx, "No valid keys to re-validate")
+		return nil
+	}
+
+	helper.LogInfo(ctx, "Found %d valid keys to re-validate", len(validKeys))
+
+	// Re-validate keys concurrently
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 3) // Limit to 3 concurrent re-validations (lower than initial validation)
+
+	revalidatedCount := 0
+	statusChangedCount := 0
+
+	for _, key := range validKeys {
+		wg.Add(1)
+		go func(k *model.APIKey) {
+			defer wg.Done()
+			semaphore <- struct{}{}        // Acquire semaphore
+			defer func() { <-semaphore }() // Release semaphore
+
+			keyCtx := helper.LogContext{
+				ServiceName:   "worker-service",
+				Operation:     "RevalidateKey",
+				CorrelationID: correlationID,
+			}
+
+			// Re-validate the key
+			helper.LogInfo(keyCtx, "Re-validating key %s for provider: %s", k.ID.Hex(), k.Provider)
+			newStatus, credits, err := h.ValidateKeyWithCredits(k, correlationID)
+			if err != nil {
+				helper.LogError(keyCtx, "Re-validation error for key %s", err, k.ID.Hex())
+				// Don't change status on error during re-validation
+				return
+			}
+
+			revalidatedCount++
+
+			// Only update if status changed
+			if newStatus != k.Status {
+				statusChangedCount++
+				helper.LogInfo(keyCtx, "Status changed for key %s: %s -> %s", k.ID.Hex(), k.Status, newStatus)
+
+				// Update key status and credits
+				if updateErr := h.apiKeyController.UpdateStatusAndCredits(k.ID, newStatus, credits); updateErr != nil {
+					helper.LogError(keyCtx, "Failed to update key status in MongoDB", updateErr)
+					return
+				}
+
+				// Send Discord notification for status changes
+				if h.discordNotifier != nil {
+					stats := h.GetStats()
+					if err := h.discordNotifier.SendAPIKeyValidation(k.Provider, newStatus, credits, stats); err != nil {
+						helper.LogError(keyCtx, "Failed to send Discord notification", err)
+					}
+				}
+
+				// Publish status change event
+				if broker != nil {
+					helper.LogInfo(keyCtx, "Publishing status change event to RabbitMQ")
+					if err := h.PublishKeyValidated(k, newStatus, broker, correlationID); err != nil {
+						helper.LogError(keyCtx, "Failed to publish status change event to RabbitMQ", err)
+					}
+				}
+			} else {
+				// Status unchanged, but update credits if available
+				if credits != nil && len(credits) > 0 {
+					if updateErr := h.apiKeyController.UpdateStatusAndCredits(k.ID, newStatus, credits); updateErr != nil {
+						helper.LogError(keyCtx, "Failed to update credits in MongoDB", updateErr)
+					}
+				}
+				helper.LogInfo(keyCtx, "Key %s status unchanged: %s", k.ID.Hex(), newStatus)
+			}
+		}(key)
+	}
+
+	wg.Wait()
+
+	helper.LogInfo(ctx, "Re-validation cycle complete. Re-validated: %d, Status changed: %d",
+		revalidatedCount, statusChangedCount)
+
 	return nil
 }

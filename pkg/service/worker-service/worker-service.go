@@ -227,6 +227,9 @@ func (qc *WorkerService) Start(port string) error {
 	// Start scheduled validation cycle (every hour)
 	go qc.startValidationScheduler()
 
+	// Start re-validation scheduler for valid keys (every 5 minutes)
+	go qc.startRevalidationScheduler()
+
 	qc.server = &http.Server{
 		Addr:    ":" + port,
 		Handler: qc.router,
@@ -300,6 +303,33 @@ func (qc *WorkerService) startValidationScheduler() {
 		log.Println("Running scheduled validation cycle...")
 		if err := qc.verifierHandler.RunValidationCycle(qc.brokerObj); err != nil {
 			log.Printf("Scheduled validation cycle error: %v", err)
+		}
+	}
+}
+
+// startRevalidationScheduler starts the scheduled re-validation cycle for valid keys
+func (qc *WorkerService) startRevalidationScheduler() {
+	// Get re-validation interval from environment (default: 5 minutes)
+	intervalMinutes := 5
+	if envInterval := os.Getenv("REVALIDATION_INTERVAL_MINUTES"); envInterval != "" {
+		if parsed, err := time.ParseDuration(envInterval + "m"); err == nil {
+			intervalMinutes = int(parsed.Minutes())
+		}
+	}
+
+	ticker := time.NewTicker(time.Duration(intervalMinutes) * time.Minute)
+	defer ticker.Stop()
+
+	log.Printf("Re-validation scheduler started (interval: %d minutes)", intervalMinutes)
+
+	// Wait 1 minute before first run to avoid overlap with initial validation
+	time.Sleep(1 * time.Minute)
+
+	// Then run on schedule
+	for range ticker.C {
+		log.Println("Running scheduled re-validation cycle for valid keys...")
+		if err := qc.verifierHandler.RunRevalidationCycle(qc.brokerObj); err != nil {
+			log.Printf("Scheduled re-validation cycle error: %v", err)
 		}
 	}
 }

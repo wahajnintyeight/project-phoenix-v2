@@ -280,6 +280,8 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 	stats.TotalKeys = len(allKeys)
 
 	// Count by status and provider
+	var lastValidated *time.Time
+	var lastScraped *time.Time
 	for _, result := range allKeys {
 		var apiKey model.APIKey
 		bsonBytes, _ := bson.Marshal(result)
@@ -290,6 +292,8 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 		switch apiKey.Status {
 		case model.StatusValid:
 			stats.ValidKeys++
+		case model.StatusValidNoCredits:
+			stats.ValidKeys++ // Count ValidNoCredits as valid keys
 		case model.StatusInvalid:
 			stats.InvalidKeys++
 		case model.StatusPending:
@@ -299,7 +303,22 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 		}
 
 		stats.ByProvider[apiKey.Provider]++
+
+		// Track most recent validation timestamp
+		if apiKey.ValidatedAt != nil {
+			if lastValidated == nil || apiKey.ValidatedAt.After(*lastValidated) {
+				lastValidated = apiKey.ValidatedAt
+			}
+		}
+
+		// Track most recent scrape/discovery timestamp
+		if lastScraped == nil || apiKey.CreatedAt.After(*lastScraped) {
+			lastScraped = &apiKey.CreatedAt
+		}
 	}
+
+	stats.LastValidatedAt = lastValidated
+	stats.LastScrapedAt = lastScraped
 
 	return stats, nil
 }

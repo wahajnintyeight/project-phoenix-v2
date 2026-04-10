@@ -392,3 +392,91 @@ func (n *DiscordNotifier) SendSystemAlert(title, message, level string) error {
 
 	return n.Send(payload)
 }
+
+// SendAPIKeyValidation sends a formatted notification when an API key is validated
+func (n *DiscordNotifier) SendAPIKeyValidation(provider, status string, credits map[string]interface{}, stats map[string]int) error {
+	color := 0x95a5a6 // Gray
+	badge := "🔑"
+	statusLabel := status
+
+	switch status {
+	case "Valid":
+		color = 0x2ecc71 // Green
+		badge = "✅"
+		statusLabel = "Valid Key Found"
+	case "ValidNoCredits":
+		color = 0xf39c12 // Orange
+		badge = "⚠️"
+		statusLabel = "Valid (No Credits)"
+	case "Invalid":
+		color = 0xe74c3c // Red
+		badge = "❌"
+		statusLabel = "Invalid Key"
+	case "Error":
+		color = 0x95a5a6 // Gray
+		badge = "⚡"
+		statusLabel = "Validation Error"
+	}
+
+	title := fmt.Sprintf("%s %s API Key - %s", badge, provider, statusLabel)
+
+	description := fmt.Sprintf("A %s API key has been validated.", provider)
+
+	// Add credits info for OpenRouter keys
+	if credits != nil && len(credits) > 0 {
+		if totalCredits, ok := credits["total_credits"].(float64); ok {
+			if totalUsage, ok := credits["total_usage"].(float64); ok {
+				description += fmt.Sprintf("\n\n💰 **Credits:** $%.2f available | $%.2f used", totalCredits, totalUsage)
+			}
+		}
+	}
+
+	fields := []DiscordEmbedField{
+		{Name: "Provider", Value: provider, Inline: true},
+		{Name: "Status", Value: status, Inline: true},
+	}
+
+	// Add stats if provided
+	if stats != nil {
+		if processed, ok := stats["processed"]; ok {
+			fields = append(fields, DiscordEmbedField{
+				Name:   "Total Processed",
+				Value:  fmt.Sprintf("%d keys", processed),
+				Inline: true,
+			})
+		}
+		if valid, ok := stats["valid"]; ok {
+			fields = append(fields, DiscordEmbedField{
+				Name:   "Valid Keys",
+				Value:  fmt.Sprintf("%d keys", valid),
+				Inline: true,
+			})
+		}
+		if invalid, ok := stats["invalid"]; ok {
+			fields = append(fields, DiscordEmbedField{
+				Name:   "Invalid Keys",
+				Value:  fmt.Sprintf("%d keys", invalid),
+				Inline: true,
+			})
+		}
+	}
+
+	payload := DiscordWebhookPayload{
+		Username:  "Phoenix Key Verifier",
+		AvatarURL: "https://cdn.discordapp.com/emojis/1234567890.png", // Optional: Add a custom avatar
+		Embeds: []DiscordEmbed{
+			{
+				Title:       title,
+				Description: description,
+				Color:       color,
+				Timestamp:   time.Now().Format(time.RFC3339),
+				Fields:      fields,
+				Footer: &DiscordEmbedFooter{
+					Text: "Project Phoenix v2 | Key Validator",
+				},
+			},
+		},
+	}
+
+	return n.Send(payload)
+}
