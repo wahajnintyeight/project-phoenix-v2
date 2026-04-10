@@ -718,8 +718,9 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 					return
 				}
 
-				// Send Discord notification for status changes
-				if h.discordNotifier != nil {
+				// Send Discord notification ONLY if new status is Valid or ValidNoCredits
+				// Don't notify when keys become invalid (Valid -> Invalid)
+				if h.discordNotifier != nil && (newStatus == model.StatusValid || newStatus == model.StatusValidNoCredits) {
 					stats := h.GetStats()
 					if err := h.discordNotifier.SendAPIKeyValidation(k.Provider, newStatus, credits, stats); err != nil {
 						helper.LogError(keyCtx, "Failed to send Discord notification", err)
