@@ -646,17 +646,27 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
 		apiKeyController := controller.(*controllers.APIKeyController)
 
-		// Only return valid keys with populated references
-		keys, e := apiKeyController.FindByStatusWithReferences(model.StatusValid)
+		// Get both Valid and ValidNoCredits keys with populated references
+		validKeys, e := apiKeyController.FindByStatusWithReferences(model.StatusValid)
 		if e != nil {
 			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
-		} else {
-			result := map[string]interface{}{
-				"total": len(keys),
-				"keys":  keys,
-			}
-			response.SendResponse(w, int(enum.DATA_FETCHED), result)
+			break
 		}
+
+		validNoCreditsKeys, e := apiKeyController.FindByStatusWithReferences(model.StatusValidNoCredits)
+		if e != nil {
+			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
+			break
+		}
+
+		// Combine both lists
+		allKeys := append(validKeys, validNoCreditsKeys...)
+
+		result := map[string]interface{}{
+			"total": len(allKeys),
+			"keys":  allKeys,
+		}
+		response.SendResponse(w, int(enum.DATA_FETCHED), result)
 		break
 	case apiRequestHandlerObj.Endpoint + "/keys/valid":
 		log.Println("List Valid API Keys")
@@ -667,15 +677,26 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
 		apiKeyController := controller.(*controllers.APIKeyController)
 
-		keys, e := apiKeyController.FindByStatus(model.StatusValid)
+		// Get both Valid and ValidNoCredits keys
+		validKeys, e := apiKeyController.FindByStatus(model.StatusValid)
 		if e != nil {
 			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
-		} else {
-			result := map[string]interface{}{
-				"keys": keys,
-			}
-			response.SendResponse(w, int(enum.DATA_FETCHED), result)
+			break
 		}
+
+		validNoCreditsKeys, e := apiKeyController.FindByStatus(model.StatusValidNoCredits)
+		if e != nil {
+			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
+			break
+		}
+
+		// Combine both lists
+		allKeys := append(validKeys, validNoCreditsKeys...)
+
+		result := map[string]interface{}{
+			"keys": allKeys,
+		}
+		response.SendResponse(w, int(enum.DATA_FETCHED), result)
 		break
 	case apiRequestHandlerObj.Endpoint + "/stats":
 		log.Println("Get API Key Statistics")
