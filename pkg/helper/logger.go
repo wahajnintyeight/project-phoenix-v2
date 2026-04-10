@@ -15,16 +15,16 @@ type LogContext struct {
 
 // LogInfo logs an informational message with structured context
 func LogInfo(ctx LogContext, message string, args ...interface{}) {
-	// timestamp := time.Now().UTC().Format(time.RFC3339)
-	// formattedMsg := fmt.Sprintf(message, args...)
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	formattedMsg := fmt.Sprintf(message, args...)
 
-	// if ctx.CorrelationID != "" {
-	// 	log.Printf("[%s] [INFO] [%s] [%s] [correlation_id=%s] %s",
-	// 		timestamp, ctx.ServiceName, ctx.Operation, ctx.CorrelationID, formattedMsg)
-	// } else {
-	// 	log.Printf("[%s] [INFO] [%s] [%s] %s",
-	// 		timestamp, ctx.ServiceName, ctx.Operation, formattedMsg)
-	// }
+	if ctx.CorrelationID != "" {
+		log.Printf("[%s] [INFO] [%s] [%s] [correlation_id=%s] %s",
+			timestamp, ctx.ServiceName, ctx.Operation, ctx.CorrelationID, formattedMsg)
+	} else {
+		log.Printf("[%s] [INFO] [%s] [%s] %s",
+			timestamp, ctx.ServiceName, ctx.Operation, formattedMsg)
+	}
 }
 
 // LogError logs an error message with structured context
