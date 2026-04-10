@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -24,12 +26,16 @@ type VerifierHandler struct {
 	processedCount   int
 	validCount       int
 	invalidCount     int
+	debugMode        bool
 }
 
 // NewVerifierHandler creates a new VerifierHandler instance
 func NewVerifierHandler() *VerifierHandler {
 	// Get APIKeyController from the controller factory
 	apiKeyController := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB).(*controllers.APIKeyController)
+
+	// Check if debug mode is enabled via environment variable
+	debugMode := os.Getenv("VERIFIER_DEBUG") == "true"
 
 	return &VerifierHandler{
 		apiKeyController: apiKeyController,
@@ -39,6 +45,7 @@ func NewVerifierHandler() *VerifierHandler {
 		processedCount: 0,
 		validCount:     0,
 		invalidCount:   0,
+		debugMode:      debugMode,
 	}
 }
 
@@ -76,7 +83,7 @@ func (h *VerifierHandler) Process(data map[string]interface{}) error {
 
 	// Validate the key
 	helper.LogInfo(ctx, "Validating key against provider API: %s", key.Provider)
-	status, err := h.ValidateKey(key, correlationID)
+	status, credits, err := h.ValidateKeyWithCredits(key, correlationID)
 	if err != nil {
 		helper.LogError(ctx, "Validation error for key %s", err, keyID.Hex())
 		// Update status to Error
@@ -87,9 +94,9 @@ func (h *VerifierHandler) Process(data map[string]interface{}) error {
 		return err
 	}
 
-	// Update key status in database
-	helper.LogInfo(ctx, "Updating key status in MongoDB: %s", status)
-	if err := h.apiKeyController.UpdateStatus(keyID, status); err != nil {
+	// Update key status and credits in database
+	helper.LogInfo(ctx, "Updating key status and credits in MongoDB: %s", status)
+	if err := h.apiKeyController.UpdateStatusAndCredits(keyID, status, credits); err != nil {
 		helper.LogError(ctx, "Failed to update key status in MongoDB", err)
 		return fmt.Errorf("failed to update key status: %v", err)
 	}
@@ -118,30 +125,56 @@ func (h *VerifierHandler) GetStats() map[string]int {
 
 // ValidateKey routes to provider-specific validators
 func (h *VerifierHandler) ValidateKey(key *model.APIKey, correlationID string) (string, error) {
+	status, _, err := h.ValidateKeyWithCredits(key, correlationID)
+	return status, err
+}
+
+// ValidateKeyWithCredits routes to provider-specific validators and returns credits info
+func (h *VerifierHandler) ValidateKeyWithCredits(key *model.APIKey, correlationID string) (string, map[string]interface{}, error) {
+	log.Println("Verifying ", key.Provider)
 	switch key.Provider {
 	case model.ProviderOpenAI:
-		return h.ValidateOpenAIKey(key.KeyValue, correlationID)
+		status, err := h.ValidateOpenAIKey(key.KeyValue, correlationID)
+		return status, nil, err
 	case model.ProviderAnthropic:
-		return h.ValidateAnthropicKey(key.KeyValue, correlationID)
+		status, err := h.ValidateAnthropicKey(key.KeyValue, correlationID)
+		return status, nil, err
 	case model.ProviderGoogle:
-		return h.ValidateGoogleKey(key.KeyValue, correlationID)
+		status, err := h.ValidateGoogleKey(key.KeyValue, correlationID)
+		return status, nil, err
 	case model.ProviderOpenRouter:
-		return h.ValidateOpenRouterKey(key.KeyValue, correlationID)
+		return h.ValidateOpenRouterKeyWithCredits(key.KeyValue, correlationID)
 	default:
-		return model.StatusError, fmt.Errorf("unknown provider: %s", key.Provider)
+		return model.StatusError, nil, fmt.Errorf("unknown provider: %s", key.Provider)
 	}
 }
 
 // ValidateOpenAIKey validates an OpenAI API key
 func (h *VerifierHandler) ValidateOpenAIKey(keyValue string, correlationID string) (string, error) {
-	url := "https://api.openai.com/v1/models"
+	url := "https://api.openai.com/v1/chat/completions"
 
-	req, err := http.NewRequest("GET", url, nil)
+	// Using gpt-4o-mini for verification - still available in API as of April 2026
+	// This tests actual inference capability, not just key existence
+	requestBody := map[string]interface{}{
+		"model":      "gpt-5.4",
+		"max_tokens": 1,
+		"messages": []map[string]string{
+			{"role": "user", "content": "ping"},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return model.StatusError, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return model.StatusError, err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+keyValue)
+	req.Header.Set("Content-Type", "application/json")
 
 	status, err := h.executeRequestWithRetry(req, correlationID)
 	return status, err
@@ -152,9 +185,10 @@ func (h *VerifierHandler) ValidateAnthropicKey(keyValue string, correlationID st
 	url := "https://api.anthropic.com/v1/messages"
 
 	// Minimal request body to test authentication
+	// Using claude-haiku-4-5 as claude-3-haiku is being retired in April 2026
 	requestBody := map[string]interface{}{
-		"model":      "claude-3-haiku-20240307",
-		"max_tokens": 1,
+		"model":      "claude-opus-4-6",
+		"max_tokens": 1024,
 		"messages": []map[string]string{
 			{"role": "user", "content": "test"},
 		},
@@ -170,7 +204,7 @@ func (h *VerifierHandler) ValidateAnthropicKey(keyValue string, correlationID st
 		return model.StatusError, err
 	}
 
-	req.Header.Set("x-api-key", keyValue)
+	req.Header.Set("X-Api-Key", keyValue)
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -180,30 +214,138 @@ func (h *VerifierHandler) ValidateAnthropicKey(keyValue string, correlationID st
 
 // ValidateGoogleKey validates a Google AI API key
 func (h *VerifierHandler) ValidateGoogleKey(keyValue string, correlationID string) (string, error) {
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", keyValue)
+	// Using generateContent endpoint to ensure key has active inference permissions
+	// Just listing models can succeed with restricted keys that can't actually run inference
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=%s", keyValue)
 
-	req, err := http.NewRequest("GET", url, nil)
+	requestBody := map[string]interface{}{
+		"contents": []map[string]interface{}{
+			{
+				"parts": []map[string]string{
+					{"text": "ping"},
+				},
+			},
+		},
+		"generationConfig": map[string]interface{}{
+			"maxOutputTokens": 1,
+		},
+	}
+
+	bodyBytes, err := json.Marshal(requestBody)
 	if err != nil {
 		return model.StatusError, err
 	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return model.StatusError, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
 
 	status, err := h.executeRequestWithRetry(req, correlationID)
 	return status, err
 }
 
-// ValidateOpenRouterKey validates an OpenRouter API key
+// ValidateOpenRouterKey validates an OpenRouter API key using the credits endpoint
 func (h *VerifierHandler) ValidateOpenRouterKey(keyValue string, correlationID string) (string, error) {
-	url := "https://openrouter.ai/api/v1/models"
+	status, _, err := h.ValidateOpenRouterKeyWithCredits(keyValue, correlationID)
+	return status, err
+}
+
+// ValidateOpenRouterKeyWithCredits validates an OpenRouter API key and returns credits info
+func (h *VerifierHandler) ValidateOpenRouterKeyWithCredits(keyValue string, correlationID string) (string, map[string]interface{}, error) {
+	ctx := helper.LogContext{
+		ServiceName:   "worker-service",
+		Operation:     "VerifierHandler.ValidateOpenRouterKeyWithCredits",
+		CorrelationID: correlationID,
+	}
+
+	// Use the /credits endpoint to check key validity and get credit balance
+	url := "https://openrouter.ai/api/v1/credits"
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return model.StatusError, err
+		return model.StatusError, nil, err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+keyValue)
+	req.Header.Set("Content-Type", "application/json")
 
-	status, err := h.executeRequestWithRetry(req, correlationID)
-	return status, err
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		helper.LogError(ctx, "HTTP request error", err)
+		return model.StatusError, nil, err
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		helper.LogError(ctx, "Failed to read response body", err)
+		return model.StatusError, nil, err
+	}
+
+	// Log response if debug mode is enabled
+	if h.debugMode {
+		log.Printf("[DEBUG] OpenRouter Credits API Response:\n")
+		log.Printf("  URL: %s\n", url)
+		log.Printf("  Status Code: %d\n", resp.StatusCode)
+		log.Printf("  Body: %s\n", string(bodyBytes))
+	}
+
+	// Check status code
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return model.StatusInvalid, nil, nil
+	}
+
+	if resp.StatusCode != 200 {
+		return model.StatusError, nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	// Parse credits response
+	var creditsResp struct {
+		Data struct {
+			TotalCredits *float64 `json:"total_credits"`
+			TotalUsage   *float64 `json:"total_usage"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(bodyBytes, &creditsResp); err != nil {
+		helper.LogError(ctx, "Failed to parse credits response", err)
+		return model.StatusError, nil, err
+	}
+
+	// Validate that we received credit information
+	if creditsResp.Data.TotalCredits == nil {
+		helper.LogError(ctx, "OpenRouter API returned 200 but missing total_credits field", nil)
+		return model.StatusError, nil, fmt.Errorf("missing total_credits in response")
+	}
+
+	totalCredits := *creditsResp.Data.TotalCredits
+	totalUsage := float64(0)
+	if creditsResp.Data.TotalUsage != nil {
+		totalUsage = *creditsResp.Data.TotalUsage
+	}
+
+	// Store credits info
+	credits := map[string]interface{}{
+		"total_credits": totalCredits,
+		"total_usage":   totalUsage,
+		"checked_at":    time.Now(),
+	}
+
+	// Determine status based on credits
+	status := model.StatusValid
+	if totalCredits <= 0 {
+		status = model.StatusValidNoCredits
+		helper.LogInfo(ctx, "OpenRouter key has no credits remaining")
+	}
+
+	helper.LogInfo(ctx, "OpenRouter key validated: credits=%.2f, usage=%.2f, status=%s",
+		totalCredits, totalUsage, status)
+
+	return status, credits, nil
 }
 
 // executeRequestWithRetry executes HTTP request with retry logic for 5xx errors
@@ -233,6 +375,31 @@ func (h *VerifierHandler) executeRequestWithRetry(req *http.Request, correlation
 		}
 
 		defer resp.Body.Close()
+
+		// Read response body for debugging
+		var bodyString string
+		if resp.Body != nil && h.debugMode {
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err == nil {
+				bodyString = string(bodyBytes)
+			}
+		}
+
+		// Log full response if debug mode is enabled
+		if h.debugMode {
+			log.Printf("[DEBUG] Provider API Response:\n")
+			log.Printf("  URL: %s\n", req.URL.String())
+			log.Printf("  Status Code: %d\n", resp.StatusCode)
+			log.Printf("  Status: %s\n", resp.Status)
+			log.Printf("  Headers: %+v\n", resp.Header)
+			if len(bodyString) > 0 && len(bodyString) < 10000 {
+				log.Printf("  Body: %s\n", bodyString)
+			} else if len(bodyString) >= 10000 {
+				log.Printf("  Body: [truncated - %d bytes]\n", len(bodyString))
+			} else {
+				log.Printf("  Body: [empty or not read]\n")
+			}
+		}
 
 		// Determine status from response
 		status := h.determineStatusFromResponse(resp)
@@ -316,15 +483,15 @@ func (h *VerifierHandler) RunValidationCycle(broker interface{}) error {
 
 			// Validate the key
 			helper.LogInfo(keyCtx, "Validating key %s against provider: %s", k.ID.Hex(), k.Provider)
-			status, err := h.ValidateKey(k, correlationID)
+			status, credits, err := h.ValidateKeyWithCredits(k, correlationID)
 			if err != nil {
 				helper.LogError(keyCtx, "Validation error for key %s", err, k.ID.Hex())
 				status = model.StatusError
 			}
 
-			// Update key status
-			helper.LogInfo(keyCtx, "Updating key status in MongoDB: %s", status)
-			if updateErr := h.apiKeyController.UpdateStatus(k.ID, status); updateErr != nil {
+			// Update key status and credits
+			helper.LogInfo(keyCtx, "Updating key status and credits in MongoDB: %s", status)
+			if updateErr := h.apiKeyController.UpdateStatusAndCredits(k.ID, status, credits); updateErr != nil {
 				helper.LogError(keyCtx, "Failed to update key status in MongoDB", updateErr)
 				return
 			}

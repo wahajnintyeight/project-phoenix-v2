@@ -203,6 +203,22 @@ func (c *APIKeyController) UpdateStatus(id primitive.ObjectID, status string) er
 	return c.Update(id, update)
 }
 
+// UpdateStatusAndCredits updates the status and credits information of an API key
+func (c *APIKeyController) UpdateStatusAndCredits(id primitive.ObjectID, status string, credits map[string]interface{}) error {
+	now := time.Now()
+	update := bson.M{
+		"status":       status,
+		"validated_at": now,
+	}
+
+	// Only add credits if provided
+	if credits != nil {
+		update["credits"] = credits
+	}
+
+	return c.Update(id, update)
+}
+
 // UpdateLastSeen updates the last_seen_at timestamp for a key
 func (c *APIKeyController) UpdateLastSeen(keyValue string) error {
 	query := bson.M{"key_value": keyValue}
