@@ -149,7 +149,7 @@ func (h *VerifierHandler) ValidateKey(key *model.APIKey, correlationID string) (
 
 // ValidateKeyWithCredits routes to provider-specific validators and returns credits info
 func (h *VerifierHandler) ValidateKeyWithCredits(key *model.APIKey, correlationID string) (string, map[string]interface{}, error) {
-	log.Println("Verifying ", key.Provider)
+	// log.Println("Verifying ", key.Provider)
 	switch key.Provider {
 	case model.ProviderOpenAI:
 		status, err := h.ValidateOpenAIKey(key.KeyValue, correlationID)
