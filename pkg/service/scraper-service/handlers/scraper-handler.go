@@ -169,7 +169,7 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 
 	totalKeysFound := 0
 
-	Search GitHub
+	// Search GitHub
 	helper.LogInfo(ctx, "Executing GitHub Code Search API request")
 	githubResults, err := h.githubClient.SearchCode(query.QueryPattern, correlationID)
 	if err != nil {
