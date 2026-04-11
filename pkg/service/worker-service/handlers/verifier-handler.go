@@ -116,11 +116,16 @@ func (h *VerifierHandler) Process(data map[string]interface{}) error {
 	if status == model.StatusValid || status == model.StatusValidNoCredits {
 		h.validCount++
 
-		// Send Discord notification for valid keys
-		if h.discordNotifier != nil {
+		// Send Discord notification for valid keys (only if not already notified)
+		if h.discordNotifier != nil && key.NotifiedAt == nil {
 			stats := h.GetStats()
 			if err := h.discordNotifier.SendAPIKeyValidation(key.Provider, status, credits, stats); err != nil {
 				helper.LogError(ctx, "Failed to send Discord notification", err)
+			} else {
+				// Mark as notified
+				if err := h.apiKeyController.UpdateNotifiedAt(keyID); err != nil {
+					helper.LogError(ctx, "Failed to update notified_at timestamp", err)
+				}
 			}
 		}
 	} else if status == model.StatusInvalid {
@@ -519,11 +524,16 @@ func (h *VerifierHandler) RunValidationCycle(broker interface{}) error {
 			if status == model.StatusValid || status == model.StatusValidNoCredits {
 				h.validCount++
 
-				// Send Discord notification for valid keys
-				if h.discordNotifier != nil {
+				// Send Discord notification for valid keys (only if not already notified)
+				if h.discordNotifier != nil && k.NotifiedAt == nil {
 					stats := h.GetStats()
 					if err := h.discordNotifier.SendAPIKeyValidation(k.Provider, status, credits, stats); err != nil {
 						helper.LogError(keyCtx, "Failed to send Discord notification", err)
+					} else {
+						// Mark as notified
+						if err := h.apiKeyController.UpdateNotifiedAt(k.ID); err != nil {
+							helper.LogError(keyCtx, "Failed to update notified_at timestamp", err)
+						}
 					}
 				}
 			} else if status == model.StatusInvalid {
@@ -718,12 +728,19 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 					return
 				}
 
-				// Send Discord notification ONLY if new status is Valid or ValidNoCredits
-				// Don't notify when keys become invalid (Valid -> Invalid)
-				if h.discordNotifier != nil && (newStatus == model.StatusValid || newStatus == model.StatusValidNoCredits) {
+				// Send Discord notification ONLY if:
+				// 1. New status is Valid or ValidNoCredits
+				// 2. Key was not already notified (NotifiedAt is nil)
+				// This prevents duplicate notifications during re-validation
+				if h.discordNotifier != nil && (newStatus == model.StatusValid || newStatus == model.StatusValidNoCredits) && k.NotifiedAt == nil {
 					stats := h.GetStats()
 					if err := h.discordNotifier.SendAPIKeyValidation(k.Provider, newStatus, credits, stats); err != nil {
 						helper.LogError(keyCtx, "Failed to send Discord notification", err)
+					} else {
+						// Mark as notified
+						if err := h.apiKeyController.UpdateNotifiedAt(k.ID); err != nil {
+							helper.LogError(keyCtx, "Failed to update notified_at timestamp", err)
+						}
 					}
 				}
 

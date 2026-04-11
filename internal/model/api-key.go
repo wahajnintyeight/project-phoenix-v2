@@ -31,6 +31,7 @@ type APIKey struct {
 	CreatedAt   time.Time              `bson:"created_at" json:"created_at"`
 	ValidatedAt *time.Time             `bson:"validated_at,omitempty" json:"validated_at,omitempty"`
 	LastSeenAt  time.Time              `bson:"last_seen_at" json:"last_seen_at"`
+	NotifiedAt  *time.Time             `bson:"notified_at,omitempty" json:"notified_at,omitempty"` // Track when Discord notification was sent
 	ErrorCount  int                    `bson:"error_count" json:"error_count"`
 	RepoRefs    []primitive.ObjectID   `bson:"repo_refs" json:"repo_refs"`
 	Credits     map[string]interface{} `bson:"credits,omitempty" json:"credits,omitempty"` // Store provider-specific credits info

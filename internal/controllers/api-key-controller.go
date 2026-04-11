@@ -220,6 +220,15 @@ func (c *APIKeyController) UpdateStatusAndCredits(id primitive.ObjectID, status 
 	return c.Update(id, update)
 }
 
+// UpdateNotifiedAt updates the notified_at timestamp for a key
+func (c *APIKeyController) UpdateNotifiedAt(id primitive.ObjectID) error {
+	now := time.Now()
+	update := bson.M{
+		"notified_at": now,
+	}
+	return c.Update(id, update)
+}
+
 // UpdateLastSeen updates the last_seen_at timestamp for a key
 func (c *APIKeyController) UpdateLastSeen(keyValue string) error {
 	query := bson.M{"key_value": keyValue}
