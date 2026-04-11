@@ -59,6 +59,31 @@ func (c *APIKeyController) PerformIndexing() error {
 		}
 	}
 
+	// Create unique compound index on repo_references collection
+	// This ensures no duplicate references for the same file path, repo URL, and API key
+	repoRefUniqueIndex := bson.D{
+		{Key: "api_key_id", Value: 1},
+		{Key: "file_path", Value: 1},
+		{Key: "repo_url", Value: 1},
+	}
+	if err := c.DB.ValidateUniqueIndexing("repo_references", repoRefUniqueIndex); err != nil {
+		log.Println("Error creating unique compound index on repo_references:", err)
+		return err
+	}
+
+	// Create additional indexes on repo_references for query performance
+	repoRefIndexes := []bson.D{
+		{{Key: "api_key_id", Value: 1}},
+		{{Key: "found_at", Value: -1}},
+	}
+
+	for _, index := range repoRefIndexes {
+		if err := c.DB.ValidateIndexing("repo_references", index); err != nil {
+			log.Println("Error creating index on repo_references:", err)
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -273,8 +298,54 @@ func (c *APIKeyController) UpsertByKeyValue(key *model.APIKey) (primitive.Object
 }
 
 // AddRepoReference creates a repository reference and adds its ID to an API key's repo_refs array
+// Only creates a new reference if one doesn't already exist for the same file path and API key
 func (c *APIKeyController) AddRepoReference(keyID primitive.ObjectID, ref *model.RepoReference) error {
-	// Create the repository reference
+	// Check if this reference already exists for this API key
+	existingRefQuery := bson.M{
+		"api_key_id": keyID,
+		"file_path":  ref.FilePath,
+		"repo_url":   ref.RepoURL,
+	}
+
+	existingRef, err := c.DB.FindOne(existingRefQuery, "repo_references")
+	if err == nil && existingRef != nil {
+		// Reference already exists, check if it's already in the API key's repo_refs array
+		var existingRefID primitive.ObjectID
+		if id, ok := existingRef["_id"].(primitive.ObjectID); ok {
+			existingRefID = id
+		} else {
+			return nil
+		}
+
+		// Get the current key
+		keyQuery := bson.M{"_id": keyID}
+		keyResult, err := c.DB.FindOne(keyQuery, c.GetCollectionName())
+		if err != nil {
+			return err
+		}
+
+		var apiKey model.APIKey
+		bsonBytes, _ := bson.Marshal(keyResult)
+		if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
+			return err
+		}
+
+		// Check if the reference ID is already in the array
+		for _, refID := range apiKey.RepoRefs {
+			if refID == existingRefID {
+				// Already exists, nothing to do
+				return nil
+			}
+		}
+
+		// Add the existing reference ID to the array
+		apiKey.RepoRefs = append(apiKey.RepoRefs, existingRefID)
+		update := bson.M{"repo_refs": apiKey.RepoRefs}
+		_, err = c.DB.Update(keyQuery, update, c.GetCollectionName())
+		return err
+	}
+
+	// Create the repository reference (it doesn't exist yet)
 	result, err := c.DB.Create(ref, "repo_references")
 	if err != nil {
 		return err
