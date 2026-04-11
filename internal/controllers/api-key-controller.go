@@ -316,30 +316,14 @@ func (c *APIKeyController) AddRepoReference(keyID primitive.ObjectID, ref *model
 			return nil
 		}
 
-		// Get the current key
+		// Use $addToSet to add the reference ID only if it doesn't already exist
+		// This is atomic and prevents duplicates even with concurrent calls
 		keyQuery := bson.M{"_id": keyID}
-		keyResult, err := c.DB.FindOne(keyQuery, c.GetCollectionName())
-		if err != nil {
-			return err
+		update := bson.M{
+			"$addToSet": bson.M{
+				"repo_refs": existingRefID,
+			},
 		}
-
-		var apiKey model.APIKey
-		bsonBytes, _ := bson.Marshal(keyResult)
-		if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
-			return err
-		}
-
-		// Check if the reference ID is already in the array
-		for _, refID := range apiKey.RepoRefs {
-			if refID == existingRefID {
-				// Already exists, nothing to do
-				return nil
-			}
-		}
-
-		// Add the existing reference ID to the array
-		apiKey.RepoRefs = append(apiKey.RepoRefs, existingRefID)
-		update := bson.M{"repo_refs": apiKey.RepoRefs}
 		_, err = c.DB.Update(keyQuery, update, c.GetCollectionName())
 		return err
 	}
@@ -347,6 +331,31 @@ func (c *APIKeyController) AddRepoReference(keyID primitive.ObjectID, ref *model
 	// Create the repository reference (it doesn't exist yet)
 	result, err := c.DB.Create(ref, "repo_references")
 	if err != nil {
+		// Check if it's a duplicate key error (race condition)
+		if mongo.IsDuplicateKeyError(err) {
+			// Another goroutine created it, fetch and add to array
+			existingRef, fetchErr := c.DB.FindOne(existingRefQuery, "repo_references")
+			if fetchErr != nil {
+				return fetchErr
+			}
+
+			var existingRefID primitive.ObjectID
+			if id, ok := existingRef["_id"].(primitive.ObjectID); ok {
+				existingRefID = id
+			} else {
+				return nil
+			}
+
+			// Use $addToSet to add the reference ID atomically
+			keyQuery := bson.M{"_id": keyID}
+			update := bson.M{
+				"$addToSet": bson.M{
+					"repo_refs": existingRefID,
+				},
+			}
+			_, err = c.DB.Update(keyQuery, update, c.GetCollectionName())
+			return err
+		}
 		return err
 	}
 
@@ -357,24 +366,14 @@ func (c *APIKeyController) AddRepoReference(keyID primitive.ObjectID, ref *model
 		return nil
 	}
 
-	// Get the current key
+	// Use $addToSet to add the new reference ID atomically
+	// This prevents duplicates even if called concurrently
 	query := bson.M{"_id": keyID}
-	keyResult, err := c.DB.FindOne(query, c.GetCollectionName())
-	if err != nil {
-		return err
+	update := bson.M{
+		"$addToSet": bson.M{
+			"repo_refs": refID,
+		},
 	}
-
-	var apiKey model.APIKey
-	bsonBytes, _ := bson.Marshal(keyResult)
-	if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
-		return err
-	}
-
-	// Append the new reference ID
-	apiKey.RepoRefs = append(apiKey.RepoRefs, refID)
-
-	// Update the key
-	update := bson.M{"repo_refs": apiKey.RepoRefs}
 	_, err = c.DB.Update(query, update, c.GetCollectionName())
 	return err
 }

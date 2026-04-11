@@ -302,18 +302,27 @@ func (h *ScraperHandler) processSearchResult(result *github.CodeResult, provider
 	}
 
 	// Extract repository information
+	rawPath := result.GetPath()
+
+	// Clean the file path to remove '..' and other path traversal elements
+	// GitHub API rejects paths with '..' for security reasons
+	cleanPath := cleanFilePath(rawPath)
+	if cleanPath == "" {
+		return fmt.Errorf("invalid file path after cleaning: %s", rawPath)
+	}
+
 	repoInfo := &RepoInfo{
 		RepoURL:   result.Repository.GetHTMLURL(),
 		RepoOwner: result.Repository.Owner.GetLogin(),
 		RepoName:  result.Repository.GetName(),
 		FileURL:   result.GetHTMLURL(),
-		FilePath:  result.GetPath(),
+		FilePath:  cleanPath,
 	}
 
 	// Get file content
 	// EXPLANATION: Multiple goroutines can fetch different files simultaneously
 	// This is much faster than waiting for each file one-by-one
-	helper.LogInfo(ctx, "Fetching file content from GitHub: %s", repoInfo.FilePath)
+	helper.LogInfo(ctx, "Fetching file content from GitHub: %s (original: %s)", repoInfo.FilePath, rawPath)
 	content, err := h.githubClient.GetFileContent(repoInfo.RepoOwner, repoInfo.RepoName, repoInfo.FilePath, correlationID)
 	if err != nil {
 		helper.LogError(ctx, "Failed to get file content from GitHub", err)
@@ -516,6 +525,34 @@ func maskKey(key string) string {
 		return "****"
 	}
 	return key[:4] + "..." + key[len(key)-4:]
+}
+
+// cleanFilePath normalizes a file path by removing '..' and other path traversal elements
+// This is necessary because GitHub API rejects paths with '..' for security reasons
+func cleanFilePath(path string) string {
+	// Split path into components
+	parts := strings.Split(path, "/")
+
+	// Build clean path by resolving '..' references
+	var cleanParts []string
+	for _, part := range parts {
+		if part == "" || part == "." {
+			// Skip empty parts and current directory references
+			continue
+		}
+		if part == ".." {
+			// Go up one directory (remove last part if exists)
+			if len(cleanParts) > 0 {
+				cleanParts = cleanParts[:len(cleanParts)-1]
+			}
+			continue
+		}
+		// Add normal path component
+		cleanParts = append(cleanParts, part)
+	}
+
+	// Rejoin the path
+	return strings.Join(cleanParts, "/")
 }
 
 // processGitLabResultsConcurrently processes GitLab search results using a worker pool
