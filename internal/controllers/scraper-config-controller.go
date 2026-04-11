@@ -4,6 +4,7 @@ import (
 	"log"
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/model"
+	scraperconfig "project-phoenix/v2/internal/service-configs/scraper-service"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -124,8 +125,64 @@ func (c *ScraperConfigController) UpdateQueryStats(id primitive.ObjectID, result
 	return c.UpdateQuery(id, update)
 }
 
-// SeedDefaultQueries seeds the database with default search queries if they don't exist
+// SeedDefaultQueries seeds the database with default search queries from the configuration file
 func (c *ScraperConfigController) SeedDefaultQueries() error {
+	// Load search patterns from configuration file
+	config, err := scraperconfig.LoadSearchPatterns()
+	if err != nil {
+		log.Printf("Warning: Failed to load search patterns config, using fallback: %v", err)
+		return c.seedFallbackQueries()
+	}
+
+	log.Printf("Loaded search patterns config version %s", config.Version)
+	log.Printf("Total enabled queries to seed: %d", config.CountEnabledQueries())
+
+	seededCount := 0
+	skippedCount := 0
+
+	// Iterate through all enabled providers and their queries
+	for _, providerPatterns := range config.Patterns {
+		if !providerPatterns.Enabled {
+			log.Printf("Skipping disabled provider: %s", providerPatterns.Provider)
+			continue
+		}
+
+		for _, pattern := range providerPatterns.Queries {
+			// Check if query already exists
+			existingQuery := bson.M{
+				"query_pattern": pattern.Pattern,
+			}
+			existing, err := c.DB.FindOne(existingQuery, c.GetCollectionName())
+			if err != nil || existing == nil {
+				// Query doesn't exist, create it
+				query := &model.SearchQuery{
+					QueryPattern: pattern.Pattern,
+					Provider:     providerPatterns.Provider,
+					Enabled:      true,
+					CreatedAt:    time.Now(),
+				}
+
+				_, err := c.CreateQuery(query)
+				if err != nil {
+					log.Printf("Error seeding query '%s' for %s: %v", pattern.Pattern, providerPatterns.Provider, err)
+					continue
+				}
+				log.Printf("Seeded: [%s] %s", providerPatterns.Provider, pattern.Description)
+				seededCount++
+			} else {
+				skippedCount++
+			}
+		}
+	}
+
+	log.Printf("Query seeding complete: %d new, %d existing", seededCount, skippedCount)
+	return nil
+}
+
+// seedFallbackQueries provides a fallback if the config file cannot be loaded
+func (c *ScraperConfigController) seedFallbackQueries() error {
+	log.Println("Using fallback query seeding")
+
 	defaultQueries := []model.SearchQuery{
 		{
 			QueryPattern: `"sk-" "openai" extension:env`,
@@ -154,20 +211,18 @@ func (c *ScraperConfigController) SeedDefaultQueries() error {
 	}
 
 	for _, query := range defaultQueries {
-		// Check if query already exists
 		existingQuery := bson.M{
 			"query_pattern": query.QueryPattern,
 			"provider":      query.Provider,
 		}
 		existing, err := c.DB.FindOne(existingQuery, c.GetCollectionName())
 		if err != nil || existing == nil {
-			// Query doesn't exist, create it
 			_, err := c.CreateQuery(&query)
 			if err != nil {
-				log.Printf("Error seeding default query for %s: %v", query.Provider, err)
+				log.Printf("Error seeding fallback query for %s: %v", query.Provider, err)
 				continue
 			}
-			log.Printf("Seeded default query for %s", query.Provider)
+			log.Printf("Seeded fallback query for %s", query.Provider)
 		}
 	}
 

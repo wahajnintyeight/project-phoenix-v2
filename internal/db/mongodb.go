@@ -147,7 +147,7 @@ func (m *MongoDB) FindOne(data interface{}, collectionName string) (bson.M, erro
 	var result primitive.M
 	err := collection.FindOne(context.Background(), filter).Decode(&result)
 	if err != nil {
-		log.Println("MongoDB | Unable to find data in ", collectionName, " | Query: ", filter)
+		// log.Println("MongoDB | Unable to find data in ", collectionName, " | Query: ", filter)
 		return nil, err
 	} else {
 		return result, nil
