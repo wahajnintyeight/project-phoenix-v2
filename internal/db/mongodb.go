@@ -208,6 +208,20 @@ func (m *MongoDB) Update(query interface{}, update interface{}, collectionName s
 	return strconv.Itoa(int(res.ModifiedCount)), nil
 }
 
+// UpdateWithOperators performs an update using MongoDB operators directly (e.g., $addToSet, $push, $pull)
+// without wrapping them in $set. Use this when you need to use update operators.
+func (m *MongoDB) UpdateWithOperators(query interface{}, update interface{}, collectionName string) (string, error) {
+	conn := GetConnectionFromPool()
+	defer ReleaseConnectionToPool(conn)
+	collection := conn.db.Collection(collectionName)
+
+	res, e := collection.UpdateOne(context.Background(), query, update)
+	if e != nil {
+		return "", e
+	}
+	return strconv.Itoa(int(res.ModifiedCount)), nil
+}
+
 func (m *MongoDB) UpdateAndIncrement(query interface{}, update bson.M, incMap interface{}, setData bson.M, collectionName string) (string, error) {
 	conn := GetConnectionFromPool()
 	defer ReleaseConnectionToPool(conn)

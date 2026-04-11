@@ -324,7 +324,7 @@ func (c *APIKeyController) AddRepoReference(keyID primitive.ObjectID, ref *model
 				"repo_refs": existingRefID,
 			},
 		}
-		_, err = c.DB.Update(keyQuery, update, c.GetCollectionName())
+		_, err = c.DB.UpdateWithOperators(keyQuery, update, c.GetCollectionName())
 		return err
 	}
 
@@ -353,7 +353,7 @@ func (c *APIKeyController) AddRepoReference(keyID primitive.ObjectID, ref *model
 					"repo_refs": existingRefID,
 				},
 			}
-			_, err = c.DB.Update(keyQuery, update, c.GetCollectionName())
+			_, err = c.DB.UpdateWithOperators(keyQuery, update, c.GetCollectionName())
 			return err
 		}
 		return err
@@ -374,7 +374,7 @@ func (c *APIKeyController) AddRepoReference(keyID primitive.ObjectID, ref *model
 			"repo_refs": refID,
 		},
 	}
-	_, err = c.DB.Update(query, update, c.GetCollectionName())
+	_, err = c.DB.UpdateWithOperators(query, update, c.GetCollectionName())
 	return err
 }
 
