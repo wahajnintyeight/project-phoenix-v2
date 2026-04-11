@@ -133,25 +133,23 @@ func (h *ScraperHandler) RunScrapingCycle() error {
 
 	helper.LogInfo(ctx, "Found %d enabled queries", len(queries))
 
-	// Process queries concurrently
-	var wg sync.WaitGroup
+	// Process queries sequentially to respect GitHub rate limits
+	// Processing concurrently causes all queries to queue up and hit rate limits quickly
 	for _, query := range queries {
-		wg.Add(1)
-		go func(q *model.SearchQuery) {
-			defer wg.Done()
-			if err := h.processQuery(q, correlationID); err != nil {
-				queryCtx := helper.LogContext{
-					ServiceName:   "scraper-service",
-					Operation:     "processQuery",
-					CorrelationID: correlationID,
-				}
-				helper.LogError(queryCtx, "Error processing query %s", err, q.QueryPattern)
-				h.incrementError()
+		if err := h.processQuery(query, correlationID); err != nil {
+			queryCtx := helper.LogContext{
+				ServiceName:   "scraper-service",
+				Operation:     "processQuery",
+				CorrelationID: correlationID,
 			}
-		}(query)
-	}
+			helper.LogError(queryCtx, "Error processing query %s", err, query.QueryPattern)
+			h.incrementError()
+		}
 
-	wg.Wait()
+		// Add a small delay between queries to avoid overwhelming the rate limiter
+		// This ensures we don't queue up too many requests at once
+		time.Sleep(15 * time.Second)
+	}
 
 	helper.LogInfo(ctx, "Scraping cycle completed")
 	return nil
