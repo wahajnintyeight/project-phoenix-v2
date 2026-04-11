@@ -29,10 +29,6 @@
         {
           "pattern": "\"gpt-4 api key\" extension:env",
           "description": "GPT-4 API key references"
-        },
-        {
-          "pattern": "\"API_KEY\" extension:env",
-          "description": "Generic API key variable"
         }
       ]
     },
@@ -55,10 +51,6 @@
         {
           "pattern": "\"claude api key\" extension:env",
           "description": "Claude API key references"
-        },
-         {
-          "pattern": "\"_KEY\" extension:env",
-          "description": "API key references"
         }
       ]
     },
@@ -77,10 +69,6 @@
         {
           "pattern": "\"gemini_api_key\" extension:env",
           "description": "Gemini-specific API key"
-        },
-        {
-          "pattern": "\"_KEY\" extension:env",
-          "description": "API key references"
         }
       ]
     },
@@ -103,16 +91,12 @@
         {
           "pattern": "\"openrouter api key\" extension:env",
           "description": "OpenRouter natural language reference"
-        },
-        {
-          "pattern": "\"_KEY\" extension:env",
-          "description": "API key references"
         }
       ]
     },
     {
       "provider": "Other",
-      "enabled": false,
+      "enabled": true,
       "queries": [
         {
           "pattern": "\"r8_\" extension:env",
@@ -128,11 +112,11 @@
         },
         {
           "pattern": "\"API_KEY\" extension:env",
-          "description": "Generic API key variable"
+          "description": "Generic API key variable - verifier will determine provider"
         },
         {
           "pattern": "\"_KEY\" extension:env",
-          "description": "Generic key variable"
+          "description": "Generic key variable - verifier will determine provider"
         }
       ]
     }
@@ -142,6 +126,7 @@
     "Use 'extension:' to target specific file types (env, json, yaml, config)",
     "Use quotes for exact matches",
     "Combine multiple terms with spaces for AND logic",
-    "Set 'enabled: false' to disable a provider's queries without deleting them"
+    "Set 'enabled: false' to disable a provider's queries without deleting them",
+    "Generic patterns in 'Other' category will be validated against all providers by the verifier service"
   ]
 }

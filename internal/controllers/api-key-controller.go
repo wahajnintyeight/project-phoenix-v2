@@ -59,7 +59,6 @@ func (c *APIKeyController) PerformIndexing() error {
 		}
 	}
 
-	// Create unique compound index on repo_references collection
 	// This ensures no duplicate references for the same file path, repo URL, and API key
 	repoRefUniqueIndex := bson.D{
 		{Key: "api_key_id", Value: 1},
