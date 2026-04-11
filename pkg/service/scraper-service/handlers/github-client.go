@@ -75,7 +75,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 	for attempt := 0; attempt < 3; attempt++ {
 		result, resp, err = c.client.Search.Code(reqCtx, query, &github.SearchOptions{
 			ListOptions: github.ListOptions{
-				PerPage: 500,
+				PerPage: 990,
 			},
 		})
 
