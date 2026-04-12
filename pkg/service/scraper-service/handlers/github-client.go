@@ -50,6 +50,9 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 		CorrelationID: correlationID,
 	}
 
+	// Log the search query being executed
+	helper.LogInfo(ctx, "Executing GitHub Code Search with query: %s", query)
+
 	// Wait for rate limiter
 	c.rateLimiter.Wait()
 
@@ -71,6 +74,9 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 	var result *github.CodeSearchResult
 	var resp *github.Response
 	var err error
+
+	// Log the API endpoint being called
+	helper.LogInfo(ctx, "GitHub API endpoint: https://api.github.com/search/code?q=%s&per_page=100", query)
 
 	for attempt := 0; attempt < 3; attempt++ {
 		result, resp, err = c.client.Search.Code(reqCtx, query, &github.SearchOptions{
