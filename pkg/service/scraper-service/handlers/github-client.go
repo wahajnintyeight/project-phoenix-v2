@@ -17,13 +17,14 @@ type GitHubClient struct {
 	client         *github.Client
 	tokens         []string
 	currentToken   int
-	rateLimiter    *RateLimiter
+	searchLimiter  *RateLimiter // For Search API (30 req/min)
+	contentLimiter *RateLimiter // For Content API (5000 req/hr)
 	requestTimeout time.Duration
 	ctx            context.Context
 }
 
 // NewGitHubClient creates a new GitHub client with token rotation support
-func NewGitHubClient(tokens []string, rateLimiter *RateLimiter) *GitHubClient {
+func NewGitHubClient(tokens []string, searchLimiter *RateLimiter, contentLimiter *RateLimiter) *GitHubClient {
 	// Token validation is done by config, this should never be empty
 
 	ctx := context.Background()
@@ -36,7 +37,8 @@ func NewGitHubClient(tokens []string, rateLimiter *RateLimiter) *GitHubClient {
 		client:         github.NewClient(tc),
 		tokens:         tokens,
 		currentToken:   0,
-		rateLimiter:    rateLimiter,
+		searchLimiter:  searchLimiter,
+		contentLimiter: contentLimiter,
 		requestTimeout: 30 * time.Second,
 		ctx:            ctx,
 	}
@@ -56,16 +58,15 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 	page := 1
 	maxPages := 10 // GitHub allows max 1000 results (10 pages * 100 per page)
 
-	
 	for page <= maxPages {
-		// Wait for rate limiter before each request
-		c.rateLimiter.Wait()
+		// Wait for rate limiter before each request (Search API limiter)
+		c.searchLimiter.Wait()
 
 		// Check if we should pause due to low quota
-		if c.rateLimiter.ShouldPause() {
-			remaining, resetTime := c.rateLimiter.GetQuotaInfo()
+		if c.searchLimiter.ShouldPause() {
+			remaining, resetTime := c.searchLimiter.GetQuotaInfo()
 			waitDuration := time.Until(resetTime)
-			helper.LogInfo(ctx, "Rate limit quota low (%d remaining), pausing until %v (waiting %v)", remaining, resetTime, waitDuration)
+			helper.LogInfo(ctx, "Search API rate limit quota low (%d remaining), pausing until %v (waiting %v)", remaining, resetTime, waitDuration)
 			if waitDuration > 0 {
 				time.Sleep(waitDuration)
 			}
@@ -95,8 +96,8 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 				// Update rate limit from response headers
 				if resp != nil && resp.Rate.Remaining > 0 {
 					resetTime := resp.Rate.Reset.Time
-					c.rateLimiter.UpdateQuota(resp.Rate.Remaining, resetTime)
-					helper.LogInfo(ctx, "GitHub API rate limit: %d remaining, resets at %v", resp.Rate.Remaining, resetTime)
+					c.searchLimiter.UpdateQuota(resp.Rate.Remaining, resetTime)
+log.Printf("GitHub Search API rate limit: %d remaining, resets at %v", resp.Rate.Remaining, resetTime)
 				}
 				break
 			}
@@ -173,7 +174,8 @@ func (c *GitHubClient) GetFileContent(owner, repo, path string, correlationID st
 		CorrelationID: correlationID,
 	}
 
-	c.rateLimiter.Wait()
+	// Use Content API rate limiter (much higher limit than Search API)
+	c.contentLimiter.Wait()
 
 	reqCtx, cancel := context.WithTimeout(c.ctx, c.requestTimeout)
 	defer cancel()
@@ -185,10 +187,10 @@ func (c *GitHubClient) GetFileContent(owner, repo, path string, correlationID st
 		return "", fmt.Errorf("failed to get file content: %w", err)
 	}
 
-	// Update rate limit
+	// Update rate limit for Content API
 	if resp != nil && resp.Rate.Remaining > 0 {
-		c.rateLimiter.UpdateQuota(resp.Rate.Remaining, resp.Rate.Reset.Time)
-		helper.LogInfo(ctx, "GitHub API rate limit: %d remaining", resp.Rate.Remaining)
+		c.contentLimiter.UpdateQuota(resp.Rate.Remaining, resp.Rate.Reset.Time)
+		log.Printf("GitHub Content API rate limit: %d remaining", resp.Rate.Remaining)
 	}
 
 	if fileContent == nil {
@@ -214,9 +216,14 @@ func (c *GitHubClient) CheckRateLimit() (*github.RateLimits, error) {
 		return nil, fmt.Errorf("failed to check rate limit: %w", err)
 	}
 
-	// Update internal rate limiter
-	if rateLimits != nil && rateLimits.Core != nil {
-		c.rateLimiter.UpdateQuota(rateLimits.Core.Remaining, rateLimits.Core.Reset.Time)
+	// Update internal rate limiters
+	if rateLimits != nil {
+		if rateLimits.Search != nil {
+			c.searchLimiter.UpdateQuota(rateLimits.Search.Remaining, rateLimits.Search.Reset.Time)
+		}
+		if rateLimits.Core != nil {
+			c.contentLimiter.UpdateQuota(rateLimits.Core.Remaining, rateLimits.Core.Reset.Time)
+		}
 	}
 
 	return rateLimits, nil

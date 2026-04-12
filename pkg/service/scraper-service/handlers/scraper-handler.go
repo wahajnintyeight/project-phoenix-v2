@@ -31,20 +31,21 @@ type RepoInfo struct {
 
 // ScraperHandler handles GitHub and GitLab scraping operations
 type ScraperHandler struct {
-	githubClient      *GitHubClient
-	gitlabClient      *GitLabClient
-	apiKeyController  *controllers.APIKeyController
-	configController  *controllers.ScraperConfigController
-	rateLimiter       *RateLimiter
-	gitlabRateLimiter *RateLimiter
-	broker            broker.Broker
-	processedCount    int
-	duplicateCount    int
-	errorCount        int
-	scrapingCycles    int
-	lastScrape        time.Time
-	mutex             sync.Mutex
-	gitlabEnabled     bool
+	githubClient         *GitHubClient
+	gitlabClient         *GitLabClient
+	apiKeyController     *controllers.APIKeyController
+	configController     *controllers.ScraperConfigController
+	githubSearchLimiter  *RateLimiter // Separate limiter for GitHub Search API (30 req/min)
+	githubContentLimiter *RateLimiter // Separate limiter for GitHub Content API (5000 req/hr)
+	gitlabRateLimiter    *RateLimiter
+	broker               broker.Broker
+	processedCount       int
+	duplicateCount       int
+	errorCount           int
+	scrapingCycles       int
+	lastScrape           time.Time
+	mutex                sync.Mutex
+	gitlabEnabled        bool
 }
 
 // Key extraction patterns for different providers
@@ -57,15 +58,22 @@ var KeyPatterns = map[string]*regexp.Regexp{
 
 // NewScraperHandler creates a new scraper handler
 func NewScraperHandler(brokerObj broker.Broker) *ScraperHandler {
-	// Initialize rate limiter with 5-second minimum delay
-	rateLimiter := NewRateLimiter(5 * time.Second)
-	gitlabRateLimiter := NewRateLimiter(5 * time.Second)
+	// GitHub Search API: 30 requests per minute, burst of 5
+	// This allows 5 concurrent search requests, then throttles to 30/min average
+	githubSearchLimiter := NewRateLimiter(30, 5)
+
+	// GitHub Content API: 5000 requests per hour = ~83 requests per minute
+	// Burst of 20 allows multiple concurrent file fetches
+	githubContentLimiter := NewRateLimiter(83, 20)
+
+	// GitLab: 10 requests per second = 600 per minute, burst of 10
+	gitlabRateLimiter := NewRateLimiter(600, 10)
 
 	// Get GitHub tokens from environment (already validated by config)
 	githubTokens := strings.Split(os.Getenv("GITHUB_API_TOKEN"), ",")
 
-	// Initialize GitHub client
-	githubClient := NewGitHubClient(githubTokens, rateLimiter)
+	// Initialize GitHub client with both rate limiters
+	githubClient := NewGitHubClient(githubTokens, githubSearchLimiter, githubContentLimiter)
 
 	// Check if GitLab is enabled and initialize client
 	var gitlabClient *GitLabClient
@@ -85,19 +93,20 @@ func NewScraperHandler(brokerObj broker.Broker) *ScraperHandler {
 	configController := controllers.GetControllerInstance(enum.ScraperConfigController, enum.MONGODB).(*controllers.ScraperConfigController)
 
 	return &ScraperHandler{
-		githubClient:      githubClient,
-		gitlabClient:      gitlabClient,
-		apiKeyController:  apiKeyController,
-		configController:  configController,
-		rateLimiter:       rateLimiter,
-		gitlabRateLimiter: gitlabRateLimiter,
-		broker:            brokerObj,
-		processedCount:    0,
-		duplicateCount:    0,
-		errorCount:        0,
-		scrapingCycles:    0,
-		lastScrape:        time.Time{},
-		gitlabEnabled:     gitlabEnabled,
+		githubClient:         githubClient,
+		gitlabClient:         gitlabClient,
+		apiKeyController:     apiKeyController,
+		configController:     configController,
+		githubSearchLimiter:  githubSearchLimiter,
+		githubContentLimiter: githubContentLimiter,
+		gitlabRateLimiter:    gitlabRateLimiter,
+		broker:               brokerObj,
+		processedCount:       0,
+		duplicateCount:       0,
+		errorCount:           0,
+		scrapingCycles:       0,
+		lastScrape:           time.Time{},
+		gitlabEnabled:        gitlabEnabled,
 	}
 }
 
@@ -146,9 +155,7 @@ func (h *ScraperHandler) RunScrapingCycle() error {
 			h.incrementError()
 		}
 
-		// Add a small delay between queries to avoid overwhelming the rate limiter
-		// This ensures we don't queue up too many requests at once
-		time.Sleep(15 * time.Second)
+		// No need for artificial delays - rate limiter handles this automatically
 	}
 
 	helper.LogInfo(ctx, "Scraping cycle completed")
@@ -487,16 +494,25 @@ func (h *ScraperHandler) GetStats() map[string]interface{} {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	remaining, resetTime := h.rateLimiter.GetQuotaInfo()
+	searchRemaining, searchResetTime := h.githubSearchLimiter.GetQuotaInfo()
+	contentRemaining, contentResetTime := h.githubContentLimiter.GetQuotaInfo()
 
 	return map[string]interface{}{
-		"scraping_cycles":      h.scrapingCycles,
-		"keys_discovered":      h.processedCount,
-		"duplicates_found":     h.duplicateCount,
-		"errors":               h.errorCount,
-		"rate_limit_remaining": remaining,
-		"rate_limit_reset":     resetTime,
-		"last_scrape":          h.lastScrape,
+		"scraping_cycles":  h.scrapingCycles,
+		"keys_discovered":  h.processedCount,
+		"duplicates_found": h.duplicateCount,
+		"errors":           h.errorCount,
+		"github_rate_limit": map[string]interface{}{
+			"search": map[string]interface{}{
+				"remaining": searchRemaining,
+				"reset_at":  searchResetTime,
+			},
+			"content": map[string]interface{}{
+				"remaining": contentRemaining,
+				"reset_at":  contentResetTime,
+			},
+		},
+		"last_scrape": h.lastScrape,
 	}
 }
 
