@@ -82,6 +82,8 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 
 		for attempt := 0; attempt < 3; attempt++ {
 			result, resp, err = c.client.Search.Code(reqCtx, query, &github.SearchOptions{
+				Sort:  "indexed", // Sort by recently indexed files
+				Order: "desc",    // Most recent first
 				ListOptions: github.ListOptions{
 					Page:    page,
 					PerPage: 100, // GitHub max is 100
