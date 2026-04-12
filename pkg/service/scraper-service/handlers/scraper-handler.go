@@ -186,7 +186,7 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 	helper.LogInfo(ctx, "Executing GitHub Code Search API request")
 	githubResults, err := h.githubClient.SearchCode(query.QueryPattern, correlationID)
 	if err != nil {
-		helper.LogError(ctx, "GitHub search failed", err)
+		helper.LogError(ctx, fmt.Sprintf("GitHub search failed - Query Pattern: %s, Provider: %s", query.QueryPattern, query.Provider), err)
 	} else {
 		helper.LogInfo(ctx, "Found %d GitHub results for query: %s", len(githubResults), query.QueryPattern)
 		keysFound := h.processGitHubResultsConcurrently(githubResults, query.Provider, correlationID)
@@ -340,7 +340,7 @@ func (h *ScraperHandler) processSearchResult(result *github.CodeResult, provider
 	helper.LogInfo(ctx, "Fetching file content from GitHub: %s (original: %s)", repoInfo.FilePath, rawPath)
 	content, err := h.githubClient.GetFileContent(repoInfo.RepoOwner, repoInfo.RepoName, repoInfo.FilePath, correlationID)
 	if err != nil {
-		helper.LogError(ctx, "Failed to get file content from GitHub", err)
+		helper.LogError(ctx, fmt.Sprintf("Failed to get file content from GitHub - Repo URL: %s, File Path: %s", repoInfo.RepoURL, repoInfo.FilePath), err)
 		return fmt.Errorf("failed to get file content: %w", err)
 	}
 

@@ -97,7 +97,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 				if resp != nil && resp.Rate.Remaining > 0 {
 					resetTime := resp.Rate.Reset.Time
 					c.searchLimiter.UpdateQuota(resp.Rate.Remaining, resetTime)
-log.Printf("GitHub Search API rate limit: %d remaining, resets at %v", resp.Rate.Remaining, resetTime)
+					log.Printf("GitHub Search API rate limit: %d remaining, resets at %v", resp.Rate.Remaining, resetTime)
 				}
 				break
 			}
@@ -122,7 +122,7 @@ log.Printf("GitHub Search API rate limit: %d remaining, resets at %v", resp.Rate
 			}
 
 			// Other errors, don't retry
-			helper.LogError(ctx, "GitHub search failed", err)
+			helper.LogError(ctx, fmt.Sprintf("GitHub search failed - Query: %s", query), err)
 			cancel()
 			return allResults, fmt.Errorf("GitHub search failed: %w", err)
 		}
@@ -130,7 +130,7 @@ log.Printf("GitHub Search API rate limit: %d remaining, resets at %v", resp.Rate
 		cancel() // Clean up context
 
 		if err != nil {
-			helper.LogError(ctx, "GitHub search failed after retries on page %d", err, page)
+			helper.LogError(ctx, fmt.Sprintf("GitHub search failed after retries on page %d - Query: %s", page, query), err)
 			return allResults, fmt.Errorf("GitHub search failed after retries: %w", err)
 		}
 
@@ -183,7 +183,7 @@ func (c *GitHubClient) GetFileContent(owner, repo, path string, correlationID st
 	helper.LogInfo(ctx, "Fetching file content from GitHub: %s/%s/%s", owner, repo, path)
 	fileContent, _, resp, err := c.client.Repositories.GetContents(reqCtx, owner, repo, path, nil)
 	if err != nil {
-		helper.LogError(ctx, "Failed to get file content from GitHub", err)
+		helper.LogError(ctx, fmt.Sprintf("Failed to get file content from GitHub - Repo: %s/%s, Path: %s", owner, repo, path), err)
 		return "", fmt.Errorf("failed to get file content: %w", err)
 	}
 
