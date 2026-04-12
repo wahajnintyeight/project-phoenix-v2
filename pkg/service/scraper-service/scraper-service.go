@@ -236,19 +236,37 @@ func (s *ScraperService) startScheduledScraping(intervalMinutes string) {
 	log.Printf("Starting scheduled scraping every %v", interval)
 
 	// Run immediately on startup
-	if err := s.scraperHandler.RunScrapingCycle(); err != nil {
-		log.Printf("Error in initial scraping cycle: %v", err)
-	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Recovered from panic in initial scraping cycle: %v", r)
+			}
+		}()
+		if err := s.scraperHandler.RunScrapingCycle(); err != nil {
+			log.Printf("Error in initial scraping cycle: %v", err)
+		}
+	}()
 
 	// Then run on schedule
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		log.Println("Starting scheduled scraping cycle")
-		if err := s.scraperHandler.RunScrapingCycle(); err != nil {
-			log.Printf("Error in scraping cycle: %v", err)
-		}
+		log.Printf("Ticker fired at %v - Starting scheduled scraping cycle", time.Now().Format("2006/01/02 15:04:05"))
+
+		// Run each cycle in a separate goroutine with panic recovery
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Recovered from panic in scraping cycle: %v", r)
+				}
+			}()
+
+			if err := s.scraperHandler.RunScrapingCycle(); err != nil {
+				log.Printf("Error in scraping cycle: %v", err)
+			}
+			log.Printf("Scraping cycle completed at %v", time.Now().Format("2006/01/02 15:04:05"))
+		}()
 	}
 }
 

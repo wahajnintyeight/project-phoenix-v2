@@ -76,7 +76,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 	var err error
 
 	// Log the API endpoint being called
-	log.Println("GitHub API endpoint: https://api.github.com/search/code?q=%s&per_page=100", query)
+	log.Printf("GitHub API endpoint: https://api.github.com/search/code?q=%s&per_page=100", query)
 
 	for attempt := 0; attempt < 3; attempt++ {
 		result, resp, err = c.client.Search.Code(reqCtx, query, &github.SearchOptions{
@@ -90,7 +90,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 			if resp != nil && resp.Rate.Remaining > 0 {
 				resetTime := resp.Rate.Reset.Time
 				c.rateLimiter.UpdateQuota(resp.Rate.Remaining, resetTime)
-				helper.LogInfo(ctx, "GitHub API rate limit: %d remaining, resets at %v", resp.Rate.Remaining, resetTime)
+				log.Printf("GitHub API rate limit: %d remaining, resets at %v", resp.Rate.Remaining, resetTime)
 			}
 			break
 		}
@@ -123,7 +123,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 		return nil, fmt.Errorf("GitHub search failed after retries: %w", err)
 	}
 
-	log.Println("GitHub search completed: found %d results", len(result.CodeResults))
+	log.Printf("GitHub search completed: found %d results", len(result.CodeResults))
 	return result.CodeResults, nil
 }
 
