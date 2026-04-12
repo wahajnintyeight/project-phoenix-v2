@@ -190,7 +190,7 @@ func (c *GitHubClient) GetFileContent(owner, repo, path string, correlationID st
 	// Update rate limit for Content API
 	if resp != nil && resp.Rate.Remaining > 0 {
 		c.contentLimiter.UpdateQuota(resp.Rate.Remaining, resp.Rate.Reset.Time)
-		log.Printf("GitHub Content API rate limit: %d remaining", resp.Rate.Remaining)
+		// log.Printf("GitHub Content API rate limit: %d remaining", resp.Rate.Remaining)
 	}
 
 	if fileContent == nil {

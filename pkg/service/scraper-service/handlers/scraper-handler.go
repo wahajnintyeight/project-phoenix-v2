@@ -142,9 +142,17 @@ func (h *ScraperHandler) RunScrapingCycle() error {
 
 	helper.LogInfo(ctx, "Found %d enabled queries", len(queries))
 
+	// Check if we should randomly select a subset of queries
+	maxQueriesPerCycle := h.getMaxQueriesPerCycle()
+	selectedQueries := h.selectQueries(queries, maxQueriesPerCycle)
+
+	if len(selectedQueries) < len(queries) {
+		helper.LogInfo(ctx, "Randomly selected %d out of %d queries for this cycle", len(selectedQueries), len(queries))
+	}
+
 	// Process queries sequentially to respect GitHub rate limits
 	// Processing concurrently causes all queries to queue up and hit rate limits quickly
-	for _, query := range queries {
+	for _, query := range selectedQueries {
 		if err := h.processQuery(query, correlationID); err != nil {
 			queryCtx := helper.LogContext{
 				ServiceName:   "scraper-service",
@@ -533,6 +541,49 @@ func (h *ScraperHandler) incrementError() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.errorCount++
+}
+
+// getMaxQueriesPerCycle returns the maximum number of queries to process per cycle
+// Can be configured via MAX_QUERIES_PER_CYCLE environment variable
+// Default is 0 (process all queries)
+func (h *ScraperHandler) getMaxQueriesPerCycle() int {
+	maxQueries := os.Getenv("MAX_QUERIES_PER_CYCLE")
+	if maxQueries == "" {
+		return 0 // Process all queries by default
+	}
+
+	var count int
+	if _, err := fmt.Sscanf(maxQueries, "%d", &count); err != nil {
+		log.Printf("Invalid MAX_QUERIES_PER_CYCLE value, processing all queries: %v", err)
+		return 0
+	}
+
+	if count < 0 {
+		return 0
+	}
+
+	return count
+}
+
+// selectQueries randomly selects a subset of queries for this cycle
+// If maxQueries is 0 or >= len(queries), returns all queries
+func (h *ScraperHandler) selectQueries(queries []*model.SearchQuery, maxQueries int) []*model.SearchQuery {
+	if maxQueries == 0 || maxQueries >= len(queries) {
+		return queries
+	}
+
+	// Create a copy to avoid modifying the original slice
+	selected := make([]*model.SearchQuery, len(queries))
+	copy(selected, queries)
+
+	// Shuffle using Fisher-Yates algorithm
+	for i := len(selected) - 1; i > 0; i-- {
+		j := time.Now().UnixNano() % int64(i+1)
+		selected[i], selected[j] = selected[j], selected[i]
+	}
+
+	// Return the first maxQueries items
+	return selected[:maxQueries]
 }
 
 // maskKey masks an API key for logging (shows first and last 4 characters)

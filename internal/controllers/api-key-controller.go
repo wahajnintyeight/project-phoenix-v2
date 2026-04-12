@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"context"
 	"log"
+	"os"
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/model"
 	"time"
@@ -384,14 +386,31 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 		ByProvider: make(map[string]int),
 	}
 
-	// Count total keys
+	// Count total keys using CountDocuments instead of pagination
 	query := bson.M{}
-	_, _, allKeys, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
+	dbConn := db.GetConnectionFromPool()
+	defer db.ReleaseConnectionToPool(dbConn)
+
+	collection := dbConn.Client.Database(os.Getenv("MONGO_DB_NAME")).Collection(c.GetCollectionName())
+
+	// Get total count
+	totalCount, err := collection.CountDocuments(context.Background(), query)
 	if err != nil {
 		return nil, err
 	}
+	stats.TotalKeys = int(totalCount)
 
-	stats.TotalKeys = len(allKeys)
+	// Fetch all keys without pagination limit
+	cursor, err := collection.Find(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.Background())
+
+	var allKeys []bson.M
+	if err = cursor.All(context.Background(), &allKeys); err != nil {
+		return nil, err
+	}
 
 	// Count by status and provider
 	var lastValidated *time.Time
