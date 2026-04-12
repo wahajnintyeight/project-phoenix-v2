@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type APIKeyController struct {
@@ -211,6 +212,84 @@ func (c *APIKeyController) FindAllWithPagination(query bson.M, page int) (int64,
 	}
 
 	return totalPages, currentPage, apiKeys, nil
+}
+
+// FindAllWithPaginationAndReferences retrieves API keys with pagination and populates repo references
+func (c *APIKeyController) FindAllWithPaginationAndReferences(query bson.M, page int) (int64, int, []*model.APIKeyWithReferences, error) {
+	// Use direct MongoDB access for sorting support
+	dbConn := db.GetConnectionFromPool()
+	defer db.ReleaseConnectionToPool(dbConn)
+
+	collection := dbConn.Client.Database(os.Getenv("MONGO_DB_NAME")).Collection(c.GetCollectionName())
+	ctx := context.Background()
+
+	const pageSize = 10
+	if page < 1 {
+		page = 1
+	}
+
+	// Calculate total documents
+	totalDocs, err := collection.CountDocuments(ctx, query)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	// Calculate total pages
+	totalPages := totalDocs / pageSize
+	if totalDocs%pageSize > 0 {
+		totalPages++
+	}
+
+	// Fetch documents with pagination and sorting (descending by created_at)
+	opts := options.Find()
+	opts.SetLimit(pageSize)
+	opts.SetSkip(pageSize * int64(page-1))
+	opts.SetSort(bson.D{{Key: "created_at", Value: -1}}) // Sort by created_at descending
+
+	cursor, err := collection.Find(ctx, query, opts)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err = cursor.All(ctx, &results); err != nil {
+		return 0, 0, nil, err
+	}
+
+	var apiKeys []*model.APIKeyWithReferences
+	for _, result := range results {
+		var apiKey model.APIKey
+		bsonBytes, _ := bson.Marshal(result)
+		if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
+			continue
+		}
+
+		// Populate repo references
+		var references []*model.RepoReference
+		for _, refID := range apiKey.RepoRefs {
+			refQuery := bson.M{"_id": refID}
+			refResult, err := c.DB.FindOne(refQuery, "repo_references")
+			if err != nil {
+				continue
+			}
+
+			var ref model.RepoReference
+			refBytes, _ := bson.Marshal(refResult)
+			if err := bson.Unmarshal(refBytes, &ref); err != nil {
+				continue
+			}
+			references = append(references, &ref)
+		}
+
+		apiKeyWithRefs := &model.APIKeyWithReferences{
+			APIKey:     apiKey,
+			References: references,
+		}
+		apiKeys = append(apiKeys, apiKeyWithRefs)
+	}
+
+	return totalPages, page, apiKeys, nil
 }
 
 // Update updates an API key by ID

@@ -640,11 +640,7 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		break
 	case apiRequestHandlerObj.Endpoint + "/keys":
-		log.Println("List Valid API Keys")
-		// TODO: Add authentication later
-		// if !ValidateSession(w, r) {
-		// 	return
-		// }
+		log.Println("List Valid API Keys with Pagination")
 		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
 		apiKeyController := controller.(*controllers.APIKeyController)
 
@@ -657,21 +653,28 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Query for both Valid and ValidNoCredits statuses
+		// Build query for both Valid and ValidNoCredits statuses
 		query := bson.M{
 			"status": bson.M{
 				"$in": []string{model.StatusValid, model.StatusValidNoCredits},
 			},
 		}
 
-		totalPages, currentPage, keys, e := apiKeyController.FindAllWithPagination(query, page)
+		// Add provider filter if specified
+		provider := r.URL.Query().Get("provider")
+		if provider != "" {
+			query["provider"] = provider
+		}
+
+		// Fetch keys with references, sorted by created_at descending
+		totalPages, currentPage, keysWithRefs, e := apiKeyController.FindAllWithPaginationAndReferences(query, page)
 		if e != nil {
 			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
 			break
 		}
 
 		result := map[string]interface{}{
-			"keys":         keys,
+			"keys":         keysWithRefs,
 			"current_page": currentPage,
 			"total_pages":  totalPages,
 		}
