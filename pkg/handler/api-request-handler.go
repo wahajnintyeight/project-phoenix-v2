@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 
 	"net/http"
 	"project-phoenix/v2/internal/controllers"
@@ -17,6 +18,7 @@ import (
 
 	// "github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	// "github.com/gorilla/mux"
 )
@@ -646,25 +648,32 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
 		apiKeyController := controller.(*controllers.APIKeyController)
 
-		// Get both Valid and ValidNoCredits keys with populated references
-		validKeys, e := apiKeyController.FindByStatusWithReferences(model.StatusValid)
+		// Get page parameter from query string, default to 1
+		pageStr := r.URL.Query().Get("page")
+		page := 1
+		if pageStr != "" {
+			if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+				page = p
+			}
+		}
+
+		// Query for both Valid and ValidNoCredits statuses
+		query := bson.M{
+			"status": bson.M{
+				"$in": []string{model.StatusValid, model.StatusValidNoCredits},
+			},
+		}
+
+		totalPages, currentPage, keys, e := apiKeyController.FindAllWithPagination(query, page)
 		if e != nil {
 			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
 			break
 		}
-
-		validNoCreditsKeys, e := apiKeyController.FindByStatusWithReferences(model.StatusValidNoCredits)
-		if e != nil {
-			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
-			break
-		}
-
-		// Combine both lists
-		allKeys := append(validKeys, validNoCreditsKeys...)
 
 		result := map[string]interface{}{
-			"total": len(allKeys),
-			"keys":  allKeys,
+			"keys":         keys,
+			"current_page": currentPage,
+			"total_pages":  totalPages,
 		}
 		response.SendResponse(w, int(enum.DATA_FETCHED), result)
 		break
