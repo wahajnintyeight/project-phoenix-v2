@@ -56,6 +56,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 	page := 1
 	maxPages := 10 // GitHub allows max 1000 results (10 pages * 100 per page)
 
+	
 	for page <= maxPages {
 		// Wait for rate limiter before each request
 		c.rateLimiter.Wait()
