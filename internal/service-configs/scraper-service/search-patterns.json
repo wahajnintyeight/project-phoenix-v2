@@ -11,7 +11,7 @@
           "description": "OpenAI project-based keys in .env files"
         },
         {
-          "pattern": "\"sk-\" \"openai\" ",
+          "pattern": "\"sk-\" ",
           "description": "OpenAI keys in .env files"
         },
         {
@@ -59,7 +59,7 @@
       "enabled": true,
       "queries": [
         {
-          "pattern": "\"AIza\" \"google\" ",
+          "pattern": "\"AIza\" ",
           "description": "Google API keys in .env files"
         },
         {
