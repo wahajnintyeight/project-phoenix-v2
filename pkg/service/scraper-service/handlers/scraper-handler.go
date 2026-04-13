@@ -182,9 +182,9 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 
 	totalKeysFound := 0
 
-	// Search GitHub
-	helper.LogInfo(ctx, "Executing GitHub Code Search API request")
-	githubResults, err := h.githubClient.SearchCode(query.QueryPattern, correlationID)
+	// Search GitHub using exhaustive search (bypasses 1000-result cap)
+	helper.LogInfo(ctx, "Executing GitHub Code Search API request with size-based bisection")
+	githubResults, err := h.githubClient.SearchCodeAll(query.QueryPattern, correlationID)
 	if err != nil {
 		helper.LogError(ctx, fmt.Sprintf("GitHub search failed - Query Pattern: %s, Provider: %s", query.QueryPattern, query.Provider), err)
 	} else {

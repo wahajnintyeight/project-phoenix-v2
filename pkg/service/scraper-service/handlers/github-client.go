@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"project-phoenix/v2/pkg/helper"
 	"strconv"
 	"time"
@@ -45,6 +46,7 @@ func NewGitHubClient(tokens []string, searchLimiter *RateLimiter, contentLimiter
 }
 
 // SearchCode searches GitHub for code matching the query with pagination support
+// This method is capped at 1000 results due to GitHub's API limitation
 func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github.CodeResult, error) {
 	ctx := helper.LogContext{
 		ServiceName:   "scraper-service",
@@ -84,8 +86,6 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 
 		for attempt := 0; attempt < 3; attempt++ {
 			result, resp, err = c.client.Search.Code(reqCtx, query, &github.SearchOptions{
-				Sort:  "indexed", // Sort by recently indexed files
-				Order: "desc",    // Most recent first
 				ListOptions: github.ListOptions{
 					Page:    page,
 					PerPage: 100, // GitHub max is 100
@@ -164,6 +164,155 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 
 	log.Printf("GitHub search completed: found %d total results across %d pages", len(allResults), page)
 	return allResults, nil
+}
+
+// searchSizeRange recursively searches within a file size range, bisecting when hitting the 1000-result cap
+func (c *GitHubClient) searchSizeRange(query string, minBytes, maxBytes int, maxResults int, currentCount int, correlationID string) ([]*github.CodeResult, error) {
+	ctx := helper.LogContext{
+		ServiceName:   "scraper-service",
+		Operation:     "GitHubClient.searchSizeRange",
+		CorrelationID: correlationID,
+	}
+
+	// Check if we've reached the max result cap
+	if maxResults > 0 && currentCount >= maxResults {
+		helper.LogInfo(ctx, "Reached MAX_RESULT_CAP of %d results, stopping search", maxResults)
+		return nil, nil
+	}
+
+	// Build query with size range
+	rangeQuery := fmt.Sprintf("%s size:%d..%d", query, minBytes, maxBytes)
+	helper.LogInfo(ctx, "Searching size range: %d..%d bytes (current count: %d)", minBytes, maxBytes, currentCount)
+
+	// Search with the size-constrained query
+	results, err := c.SearchCode(rangeQuery, correlationID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If under cap or can't split further (1-byte range), return results
+	if len(results) < 1000 || minBytes >= maxBytes {
+		helper.LogInfo(ctx, "Size range %d..%d: found %d results (no bisection needed)", minBytes, maxBytes, len(results))
+
+		// Trim results if we would exceed max cap
+		if maxResults > 0 {
+			remaining := maxResults - currentCount
+			if remaining <= 0 {
+				return nil, nil
+			}
+			if len(results) > remaining {
+				helper.LogInfo(ctx, "Trimming results from %d to %d to respect MAX_RESULT_CAP", len(results), remaining)
+				results = results[:remaining]
+			}
+		}
+
+		return results, nil
+	}
+
+	// Hit the 1000-result cap - bisect the size range
+	mid := (minBytes + maxBytes) / 2
+	helper.LogInfo(ctx, "Size range %d..%d hit 1000-result cap, bisecting at %d bytes", minBytes, maxBytes, mid)
+
+	// Search left half
+	left, err := c.searchSizeRange(query, minBytes, mid, maxResults, currentCount, correlationID)
+	if err != nil {
+		return nil, fmt.Errorf("left bisection failed: %w", err)
+	}
+
+	// Update current count with left results
+	newCount := currentCount + len(left)
+
+	// Search right half (only if we haven't hit the cap)
+	var right []*github.CodeResult
+	if maxResults == 0 || newCount < maxResults {
+		right, err = c.searchSizeRange(query, mid+1, maxBytes, maxResults, newCount, correlationID)
+		if err != nil {
+			return nil, fmt.Errorf("right bisection failed: %w", err)
+		}
+	} else {
+		helper.LogInfo(ctx, "Skipping right bisection, already at MAX_RESULT_CAP")
+	}
+
+	// Combine results
+	combined := append(left, right...)
+	helper.LogInfo(ctx, "Size range %d..%d: combined %d results (left: %d, right: %d)", minBytes, maxBytes, len(combined), len(left), len(right))
+	return combined, nil
+}
+
+// SearchCodeAll bypasses GitHub's 1000-result cap by recursively bisecting on file size
+// Uses the size: qualifier which IS supported for code search (unlike created: or pushed:)
+// Respects MAX_RESULT_CAP environment variable (0 = unlimited)
+func (c *GitHubClient) SearchCodeAll(query string, correlationID string) ([]*github.CodeResult, error) {
+	ctx := helper.LogContext{
+		ServiceName:   "scraper-service",
+		Operation:     "GitHubClient.SearchCodeAll",
+		CorrelationID: correlationID,
+	}
+
+	// Get max result cap from environment (0 = unlimited)
+	maxResults := c.getMaxResultCap()
+	if maxResults > 0 {
+		helper.LogInfo(ctx, "Starting search with MAX_RESULT_CAP=%d for query: %s", maxResults, query)
+	} else {
+		helper.LogInfo(ctx, "Starting exhaustive search (unlimited) with size-based bisection for query: %s", query)
+	}
+
+	// GitHub's max indexed file size is 384KB
+	const maxFileSize = 384 * 1024
+	allResults, err := c.searchSizeRange(query, 0, maxFileSize, maxResults, 0, correlationID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Deduplicate by SHA (files with identical content share the same SHA)
+	seen := make(map[string]struct{})
+	var unique []*github.CodeResult
+	duplicates := 0
+
+	for _, r := range allResults {
+		sha := r.GetSHA()
+		if sha == "" {
+			// Include results without SHA (shouldn't happen, but be safe)
+			unique = append(unique, r)
+			continue
+		}
+
+		if _, exists := seen[sha]; !exists {
+			seen[sha] = struct{}{}
+			unique = append(unique, r)
+		} else {
+			duplicates++
+		}
+	}
+
+	if maxResults > 0 {
+		helper.LogInfo(ctx, "Search completed with cap: %d total results, %d unique (removed %d duplicates)", len(allResults), len(unique), duplicates)
+	} else {
+		helper.LogInfo(ctx, "Exhaustive search completed: %d total results, %d unique (removed %d duplicates)", len(allResults), len(unique), duplicates)
+	}
+	return unique, nil
+}
+
+// getMaxResultCap returns the maximum number of results to fetch per query
+// Configured via MAX_RESULT_CAP environment variable
+// Returns 0 for unlimited (default)
+func (c *GitHubClient) getMaxResultCap() int {
+	maxCap := os.Getenv("MAX_RESULT_CAP")
+	if maxCap == "" {
+		return 0 // Unlimited by default
+	}
+
+	var count int
+	if _, err := fmt.Sscanf(maxCap, "%d", &count); err != nil {
+		log.Printf("Invalid MAX_RESULT_CAP value '%s', using unlimited: %v", maxCap, err)
+		return 0
+	}
+
+	if count < 0 {
+		return 0 // Treat negative as unlimited
+	}
+
+	return count
 }
 
 // GetFileContent retrieves the content of a file from GitHub
