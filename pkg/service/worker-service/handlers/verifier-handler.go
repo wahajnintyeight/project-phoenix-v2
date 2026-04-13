@@ -113,10 +113,10 @@ func (h *VerifierHandler) Process(data map[string]interface{}) error {
 
 	// Update counters
 	h.processedCount++
-	if status == model.StatusValid || status == model.StatusValidNoCredits {
+	if status == model.StatusValid {
 		h.validCount++
 
-		// Send Discord notification for valid keys (only if not already notified)
+		// Send Discord notification ONLY for valid keys with credits (not for invalid or no credits)
 		if h.discordNotifier != nil && key.NotifiedAt == nil {
 			stats := h.GetStats()
 			if err := h.discordNotifier.SendAPIKeyValidation(key.Provider, status, credits, stats); err != nil {
@@ -524,8 +524,8 @@ func (h *VerifierHandler) RunValidationCycle(broker interface{}) error {
 			if status == model.StatusValid || status == model.StatusValidNoCredits {
 				h.validCount++
 
-				// Send Discord notification for valid keys (only if not already notified)
-				if h.discordNotifier != nil && k.NotifiedAt == nil {
+				// Send Discord notification ONLY for valid keys with credits (not for invalid or no credits)
+				if h.discordNotifier != nil && status == model.StatusValid && k.NotifiedAt == nil {
 					stats := h.GetStats()
 					if err := h.discordNotifier.SendAPIKeyValidation(k.Provider, status, credits, stats); err != nil {
 						helper.LogError(keyCtx, "Failed to send Discord notification", err)
@@ -729,10 +729,10 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 				}
 
 				// Send Discord notification ONLY if:
-				// 1. New status is Valid or ValidNoCredits
+				// 1. New status is Valid (with credits, not ValidNoCredits)
 				// 2. Key was not already notified (NotifiedAt is nil)
 				// This prevents duplicate notifications during re-validation
-				if h.discordNotifier != nil && (newStatus == model.StatusValid || newStatus == model.StatusValidNoCredits) && k.NotifiedAt == nil {
+				if h.discordNotifier != nil && newStatus == model.StatusValid && k.NotifiedAt == nil {
 					stats := h.GetStats()
 					if err := h.discordNotifier.SendAPIKeyValidation(k.Provider, newStatus, credits, stats); err != nil {
 						helper.LogError(keyCtx, "Failed to send Discord notification", err)
