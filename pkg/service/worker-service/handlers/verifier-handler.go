@@ -210,7 +210,7 @@ func (h *VerifierHandler) ValidateAnthropicKey(keyValue string, correlationID st
 	// Minimal request body to test authentication
 	// Using claude-haiku-4-5 as claude-3-haiku is being retired in April 2026
 	requestBody := map[string]interface{}{
-		"model":      "claude-opus-4-6",
+		"model":      "claude-sonnet-4-6",
 		"max_tokens": 1024,
 		"messages": []map[string]string{
 			{"role": "user", "content": "test"},
@@ -239,7 +239,7 @@ func (h *VerifierHandler) ValidateAnthropicKey(keyValue string, correlationID st
 func (h *VerifierHandler) ValidateGoogleKey(keyValue string, correlationID string) (string, error) {
 	// Using generateContent endpoint to ensure key has active inference permissions
 	// Just listing models can succeed with restricted keys that can't actually run inference
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=%s", keyValue)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=%s", keyValue)
 
 	requestBody := map[string]interface{}{
 		"contents": []map[string]interface{}{
