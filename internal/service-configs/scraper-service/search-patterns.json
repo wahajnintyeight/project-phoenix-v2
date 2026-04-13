@@ -7,27 +7,27 @@
       "enabled": true,
       "queries": [
         {
-          "pattern": "\"sk-proj-\" extension:env",
+          "pattern": "\"sk-proj-\" ",
           "description": "OpenAI project-based keys in .env files"
         },
         {
-          "pattern": "\"sk-\" \"openai\" extension:env",
+          "pattern": "\"sk-\" \"openai\" ",
           "description": "OpenAI keys in .env files"
         },
         {
-          "pattern": "\"OPENAI_API_KEY\" extension:env",
+          "pattern": "\"OPENAI_API_KEY\" ",
           "description": "OpenAI environment variable in .env files"
         },
         {
-          "pattern": "\"openai.api_key\" extension:json",
+          "pattern": "\"openai.api_key\" ",
           "description": "OpenAI config in JSON files"
         },
         {
-          "pattern": "\"chatgpt api key\" extension:env",
+          "pattern": "\"chatgpt api key\" ",
           "description": "ChatGPT API key references"
         },
         {
-          "pattern": "\"gpt-4 api key\" extension:env",
+          "pattern": "\"gpt-4 api key\" ",
           "description": "GPT-4 API key references"
         }
       ]
@@ -37,19 +37,19 @@
       "enabled": true,
       "queries": [
         {
-          "pattern": "\"sk-ant-\" extension:env",
+          "pattern": "\"sk-ant-\" ",
           "description": "Anthropic keys in .env files"
         },
         {
-          "pattern": "\"ANTHROPIC_API_KEY\" extension:env",
+          "pattern": "\"ANTHROPIC_API_KEY\" ",
           "description": "Anthropic environment variable"
         },
         {
-          "pattern": "\"anthropic_api_key\" extension:env",
+          "pattern": "\"anthropic_api_key\" ",
           "description": "Anthropic lowercase variant"
         },
         {
-          "pattern": "\"claude api key\" extension:env",
+          "pattern": "\"claude api key\" ",
           "description": "Claude API key references"
         }
       ]
@@ -59,15 +59,15 @@
       "enabled": true,
       "queries": [
         {
-          "pattern": "\"AIza\" \"google\" extension:env",
+          "pattern": "\"AIza\" \"google\" ",
           "description": "Google API keys in .env files"
         },
         {
-          "pattern": "\"GOOGLE_API_KEY\" extension:env",
+          "pattern": "\"GOOGLE_API_KEY\" ",
           "description": "Google environment variable"
         },
         {
-          "pattern": "\"gemini_api_key\" extension:env",
+          "pattern": "\"gemini_api_key\" ",
           "description": "Gemini-specific API key"
         }
       ]
@@ -77,19 +77,19 @@
       "enabled": true,
       "queries": [
         {
-          "pattern": "\"sk-or-\" extension:env",
+          "pattern": "\"sk-or-\" ",
           "description": "OpenRouter keys in .env files"
         },
         {
-          "pattern": "\"OPENROUTER_API_KEY\" extension:env",
+          "pattern": "\"OPENROUTER_API_KEY\" ",
           "description": "OpenRouter environment variable"
         },
         {
-          "pattern": "\"openrouter_api_key\" extension:env",
+          "pattern": "\"openrouter_api_key\" ",
           "description": "OpenRouter lowercase variant"
         },
         {
-          "pattern": "\"openrouter api key\" extension:env",
+          "pattern": "\"openrouter api key\" ",
           "description": "OpenRouter natural language reference"
         }
       ]
@@ -99,23 +99,23 @@
       "enabled": true,
       "queries": [
         {
-          "pattern": "\"r8_\" extension:env",
+          "pattern": "\"r8_\" ",
           "description": "Replicate API keys"
         },
         {
-          "pattern": "\"fw_\" extension:env",
+          "pattern": "\"fw_\" ",
           "description": "Fireworks AI keys"
         },
         {
-          "pattern": "\"hf_\" extension:env",
+          "pattern": "\"hf_\" ",
           "description": "HuggingFace keys"
         },
         {
-          "pattern": "\"API_KEY\" extension:env",
+          "pattern": "\"API_KEY\" ",
           "description": "Generic API key variable - verifier will determine provider"
         },
         {
-          "pattern": "\"_KEY\" extension:env",
+          "pattern": "\"_KEY\" ",
           "description": "Generic key variable - verifier will determine provider"
         }
       ]
