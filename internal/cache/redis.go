@@ -134,3 +134,11 @@ func (r *Redis) SetWithExpiry(key string, value map[string]interface{}, ttlHours
 		}
 	}
 }
+
+// GetClient returns the underlying Redis client for advanced operations
+func (r *Redis) GetClient() interface{} {
+	if r == nil {
+		return nil
+	}
+	return r.client
+}

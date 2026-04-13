@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"log"
+	"project-phoenix/v2/internal/cache"
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/enum"
 	"sync"
@@ -33,6 +34,7 @@ var (
 	llmAPIConfigControllerInstance    *LLMAPIConfigController
 	apiKeyControllerInstance          *APIKeyController
 	scraperConfigControllerInstance   *ScraperConfigController
+	fileExtensionControllerInstance   *FileExtensionController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
@@ -261,6 +263,29 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			}
 		}
 		return scraperConfigControllerInstance
+	case enum.FileExtensionController:
+		if fileExtensionControllerInstance == nil {
+			log.Println("Initialize File Extension Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+				return nil
+			}
+
+			// Initialize Redis client
+			redisClient := cache.GetInstance()
+
+			fileExtensionControllerInstance = &FileExtensionController{
+				DB:          dbInstance,
+				redisClient: redisClient,
+			}
+
+			// Initialize default extensions and seed Redis cache
+			if e := fileExtensionControllerInstance.InitializeDefaults(); e != nil {
+				log.Println("Error while initializing default extensions: ", e)
+			}
+		}
+		return fileExtensionControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil

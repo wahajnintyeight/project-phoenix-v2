@@ -31,21 +31,22 @@ type RepoInfo struct {
 
 // ScraperHandler handles GitHub and GitLab scraping operations
 type ScraperHandler struct {
-	githubClient         *GitHubClient
-	gitlabClient         *GitLabClient
-	apiKeyController     *controllers.APIKeyController
-	configController     *controllers.ScraperConfigController
-	githubSearchLimiter  *RateLimiter // Separate limiter for GitHub Search API (30 req/min)
-	githubContentLimiter *RateLimiter // Separate limiter for GitHub Content API (5000 req/hr)
-	gitlabRateLimiter    *RateLimiter
-	broker               broker.Broker
-	processedCount       int
-	duplicateCount       int
-	errorCount           int
-	scrapingCycles       int
-	lastScrape           time.Time
-	mutex                sync.Mutex
-	gitlabEnabled        bool
+	githubClient            *GitHubClient
+	gitlabClient            *GitLabClient
+	apiKeyController        *controllers.APIKeyController
+	configController        *controllers.ScraperConfigController
+	fileExtensionController *controllers.FileExtensionController
+	githubSearchLimiter     *RateLimiter // Separate limiter for GitHub Search API (30 req/min)
+	githubContentLimiter    *RateLimiter // Separate limiter for GitHub Content API (5000 req/hr)
+	gitlabRateLimiter       *RateLimiter
+	broker                  broker.Broker
+	processedCount          int
+	duplicateCount          int
+	errorCount              int
+	scrapingCycles          int
+	lastScrape              time.Time
+	mutex                   sync.Mutex
+	gitlabEnabled           bool
 }
 
 // Key extraction patterns for different providers
@@ -91,22 +92,24 @@ func NewScraperHandler(brokerObj broker.Broker) *ScraperHandler {
 	// Get controllers
 	apiKeyController := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB).(*controllers.APIKeyController)
 	configController := controllers.GetControllerInstance(enum.ScraperConfigController, enum.MONGODB).(*controllers.ScraperConfigController)
+	fileExtensionController := controllers.GetControllerInstance(enum.FileExtensionController, enum.MONGODB).(*controllers.FileExtensionController)
 
 	return &ScraperHandler{
-		githubClient:         githubClient,
-		gitlabClient:         gitlabClient,
-		apiKeyController:     apiKeyController,
-		configController:     configController,
-		githubSearchLimiter:  githubSearchLimiter,
-		githubContentLimiter: githubContentLimiter,
-		gitlabRateLimiter:    gitlabRateLimiter,
-		broker:               brokerObj,
-		processedCount:       0,
-		duplicateCount:       0,
-		errorCount:           0,
-		scrapingCycles:       0,
-		lastScrape:           time.Time{},
-		gitlabEnabled:        gitlabEnabled,
+		githubClient:            githubClient,
+		gitlabClient:            gitlabClient,
+		apiKeyController:        apiKeyController,
+		configController:        configController,
+		fileExtensionController: fileExtensionController,
+		githubSearchLimiter:     githubSearchLimiter,
+		githubContentLimiter:    githubContentLimiter,
+		gitlabRateLimiter:       gitlabRateLimiter,
+		broker:                  brokerObj,
+		processedCount:          0,
+		duplicateCount:          0,
+		errorCount:              0,
+		scrapingCycles:          0,
+		lastScrape:              time.Time{},
+		gitlabEnabled:           gitlabEnabled,
 	}
 }
 
@@ -170,7 +173,14 @@ func (h *ScraperHandler) RunScrapingCycle() error {
 	return nil
 }
 
-// processQuery processes a single search query
+// processQuery processes a single search query with file extension filtering
+// ARCHITECTURE: Sequential extension processing for optimal rate limit distribution
+// Instead of searching all file types at once, we search one extension at a time
+// This allows us to:
+// 1. Distribute API load across multiple scraping cycles
+// 2. Prioritize high-value extensions (e.g., .env files first)
+// 3. Track which extensions yield the most results
+// 4. Resume from where we left off if interrupted
 func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID string) error {
 	ctx := helper.LogContext{
 		ServiceName:   "scraper-service",
@@ -178,35 +188,59 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 		CorrelationID: correlationID,
 	}
 
-	helper.LogInfo(ctx, "Processing query: %s (provider: %s)", query.QueryPattern, query.Provider)
+	// Get the next file extension to search
+	extension, err := h.fileExtensionController.GetNextExtensionToSearch()
+	if err != nil {
+		helper.LogError(ctx, "Failed to get next extension to search", err)
+		return fmt.Errorf("failed to get next extension: %w", err)
+	}
+
+	helper.LogInfo(ctx, "Processing query: %s (provider: %s, extension: .%s, priority: %d)",
+		query.QueryPattern, query.Provider, extension.Extension, extension.Priority)
+
+	// Build query with extension filter
+	// Example: "AIzaSy extension:js" searches only JavaScript files
+	queryWithExtension := fmt.Sprintf("%s extension:%s", query.QueryPattern, extension.Extension)
 
 	totalKeysFound := 0
+	totalResults := 0
 
 	// Search GitHub using exhaustive search (bypasses 1000-result cap)
-	helper.LogInfo(ctx, "Executing GitHub Code Search API request with size-based bisection")
-	githubResults, err := h.githubClient.SearchCodeAll(query.QueryPattern, correlationID)
+	helper.LogInfo(ctx, "Executing GitHub Code Search API request with size-based bisection for .%s files", extension.Extension)
+	githubResults, err := h.githubClient.SearchCodeAll(queryWithExtension, correlationID)
 	if err != nil {
-		helper.LogError(ctx, fmt.Sprintf("GitHub search failed - Query Pattern: %s, Provider: %s", query.QueryPattern, query.Provider), err)
+		helper.LogError(ctx, fmt.Sprintf("GitHub search failed - Query Pattern: %s, Provider: %s, Extension: .%s",
+			query.QueryPattern, query.Provider, extension.Extension), err)
 	} else {
-		helper.LogInfo(ctx, "Found %d GitHub results for query: %s", len(githubResults), query.QueryPattern)
+		totalResults += len(githubResults)
+		helper.LogInfo(ctx, "Found %d GitHub results for query: %s (extension: .%s)",
+			len(githubResults), query.QueryPattern, extension.Extension)
 		keysFound := h.processGitHubResultsConcurrently(githubResults, query.Provider, correlationID)
 		totalKeysFound += keysFound
 	}
 
 	// Search GitLab if enabled
 	if h.gitlabEnabled && h.gitlabClient != nil {
-		helper.LogInfo(ctx, "Executing GitLab Code Search API request")
-		gitlabResults, err := h.gitlabClient.SearchCode(query.QueryPattern, correlationID)
+		helper.LogInfo(ctx, "Executing GitLab Code Search API request for .%s files", extension.Extension)
+		gitlabResults, err := h.gitlabClient.SearchCode(queryWithExtension, correlationID)
 		if err != nil {
 			helper.LogError(ctx, "GitLab search failed", err)
 		} else {
-			helper.LogInfo(ctx, "Found %d GitLab results for query: %s", len(gitlabResults), query.QueryPattern)
+			totalResults += len(gitlabResults)
+			helper.LogInfo(ctx, "Found %d GitLab results for query: %s (extension: .%s)",
+				len(gitlabResults), query.QueryPattern, extension.Extension)
 			keysFound := h.processGitLabResultsConcurrently(gitlabResults, query.Provider, correlationID)
 			totalKeysFound += keysFound
 		}
 	}
 
-	// Update query statistics
+	// Update extension statistics
+	helper.LogInfo(ctx, "Updating extension statistics in MongoDB (results: %d, keys: %d)", totalResults, totalKeysFound)
+	if err := h.fileExtensionController.UpdateSearchStats(extension.ID, totalResults, totalKeysFound); err != nil {
+		helper.LogError(ctx, "Failed to update extension stats in MongoDB", err)
+	}
+
+	// Update query statistics (cumulative across all extensions)
 	helper.LogInfo(ctx, "Updating query statistics in MongoDB (total keys: %d)", totalKeysFound)
 	if err := h.configController.UpdateQueryStats(query.ID, totalKeysFound); err != nil {
 		helper.LogError(ctx, "Failed to update query stats in MongoDB", err)

@@ -17,4 +17,5 @@ const (
 	LLMAPIConfigController
 	APIKeyController
 	ScraperConfigController
+	FileExtensionController
 )
