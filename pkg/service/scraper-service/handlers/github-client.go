@@ -47,7 +47,10 @@ func NewGitHubClient(tokens []string, searchLimiter *RateLimiter, contentLimiter
 
 // SearchCode searches GitHub for code matching the query with pagination support
 // This method is capped at 1000 results due to GitHub's API limitation
-func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github.CodeResult, error) {
+// SearchCode searches GitHub for code matching the query with pagination support
+// This method is capped at 1000 results due to GitHub's API limitation
+// Returns results and total count available from GitHub
+func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github.CodeResult, int, error) {
 	ctx := helper.LogContext{
 		ServiceName:   "scraper-service",
 		Operation:     "GitHubClient.SearchCode",
@@ -57,6 +60,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 	log.Printf("Executing GitHub Code Search with query: %s", query)
 
 	var allResults []*github.CodeResult
+	var totalAvailable int
 	page := 1
 	maxPages := 10 // GitHub allows max 1000 results (10 pages * 100 per page)
 
@@ -108,7 +112,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 				if err := c.WaitForRateLimit(resp, correlationID); err != nil {
 					cancel()
 					helper.LogError(ctx, "Rate limit wait failed", err)
-					return allResults, fmt.Errorf("rate limit wait failed: %w", err)
+					return allResults, totalAvailable, fmt.Errorf("rate limit wait failed: %w", err)
 				}
 				continue
 			}
@@ -124,22 +128,34 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 			// Other errors, don't retry
 			helper.LogError(ctx, fmt.Sprintf("GitHub search failed - Query: %s", query), err)
 			cancel()
-			return allResults, fmt.Errorf("GitHub search failed: %w", err)
+			return allResults, totalAvailable, fmt.Errorf("GitHub search failed: %w", err)
 		}
 
 		cancel() // Clean up context
 
 		if err != nil {
 			helper.LogError(ctx, fmt.Sprintf("GitHub search failed after retries on page %d - Query: %s", page, query), err)
-			return allResults, fmt.Errorf("GitHub search failed after retries: %w", err)
+			return allResults, totalAvailable, fmt.Errorf("GitHub search failed after retries: %w", err)
 		}
 
 		// Add results from this page
 		pageResults := len(result.CodeResults)
 		allResults = append(allResults, result.CodeResults...)
+		totalAvailable = result.GetTotal()
 
 		log.Printf("GitHub search page %d: found %d results (total so far: %d, total available: %d)",
-			page, pageResults, len(allResults), result.GetTotal())
+			page, pageResults, len(allResults), totalAvailable)
+
+		// Check if we got 0 results - could mean end or pagination issue
+		if pageResults == 0 {
+			// If we have results but got 0 on this page, and total available is higher, it's a pagination issue
+			if len(allResults) > 0 && totalAvailable > len(allResults) {
+				log.Printf("GitHub search: got 0 results on page %d but %d total available (pagination issue), stopping", page, totalAvailable)
+			} else {
+				log.Printf("GitHub search completed: reached last page at page %d", page)
+			}
+			break
+		}
 
 		// Check if we got fewer results than requested (last page)
 		if pageResults < 100 {
@@ -154,7 +170,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 		}
 
 		// Check if there are more results available
-		if result.GetTotal() <= len(allResults) {
+		if totalAvailable <= len(allResults) {
 			log.Printf("GitHub search completed: fetched all %d available results", len(allResults))
 			break
 		}
@@ -163,7 +179,7 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 	}
 
 	log.Printf("GitHub search completed: found %d total results across %d pages", len(allResults), page)
-	return allResults, nil
+	return allResults, totalAvailable, nil
 }
 
 // searchSizeRange recursively searches within a file size range, bisecting when hitting the 1000-result cap
@@ -185,14 +201,23 @@ func (c *GitHubClient) searchSizeRange(query string, minBytes, maxBytes int, max
 	helper.LogInfo(ctx, "Searching size range: %d..%d bytes (current count: %d)", minBytes, maxBytes, currentCount)
 
 	// Search with the size-constrained query
-	results, err := c.SearchCode(rangeQuery, correlationID)
+	results, totalAvailable, err := c.SearchCode(rangeQuery, correlationID)
 	if err != nil {
 		return nil, err
 	}
 
-	// If under cap or can't split further (1-byte range), return results
-	if len(results) < 1000 || minBytes >= maxBytes {
-		helper.LogInfo(ctx, "Size range %d..%d: found %d results (no bisection needed)", minBytes, maxBytes, len(results))
+	// Check if bisection is needed:
+	// 1. Hit the 1000-result cap, OR
+	// 2. Got fewer results than available (pagination issue)
+	needsBisection := (len(results) >= 1000 || (totalAvailable > len(results) && len(results) > 0)) && minBytes < maxBytes
+
+	// If no bisection needed, return results
+	if !needsBisection {
+		if totalAvailable > len(results) && len(results) > 0 {
+			helper.LogInfo(ctx, "Size range %d..%d: found %d results but %d available (pagination issue detected, but can't bisect further)", minBytes, maxBytes, len(results), totalAvailable)
+		} else {
+			helper.LogInfo(ctx, "Size range %d..%d: found %d results (no bisection needed)", minBytes, maxBytes, len(results))
+		}
 
 		// Trim results if we would exceed max cap
 		if maxResults > 0 {
@@ -209,9 +234,13 @@ func (c *GitHubClient) searchSizeRange(query string, minBytes, maxBytes int, max
 		return results, nil
 	}
 
-	// Hit the 1000-result cap - bisect the size range
+	// Hit the 1000-result cap or pagination issue - bisect the size range
 	mid := (minBytes + maxBytes) / 2
-	helper.LogInfo(ctx, "Size range %d..%d hit 1000-result cap, bisecting at %d bytes", minBytes, maxBytes, mid)
+	if len(results) >= 1000 {
+		helper.LogInfo(ctx, "Size range %d..%d hit 1000-result cap, bisecting at %d bytes", minBytes, maxBytes, mid)
+	} else {
+		helper.LogInfo(ctx, "Size range %d..%d has pagination issue (%d results but %d available), bisecting at %d bytes", minBytes, maxBytes, len(results), totalAvailable, mid)
+	}
 
 	// Search left half
 	left, err := c.searchSizeRange(query, minBytes, mid, maxResults, currentCount, correlationID)
