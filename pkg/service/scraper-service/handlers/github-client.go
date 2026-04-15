@@ -79,7 +79,8 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 		}
 
 		// Create context with timeout for this page
-		reqCtx, cancel := context.WithTimeout(c.ctx, c.requestTimeout)
+		// Use a longer timeout to account for potential rate limit waits
+		reqCtx, cancel := context.WithTimeout(c.ctx, 2*time.Minute)
 
 		// Perform search with retry logic
 		var result *github.CodeSearchResult
@@ -355,7 +356,8 @@ func (c *GitHubClient) GetFileContent(owner, repo, path string, correlationID st
 	// Use Content API rate limiter (much higher limit than Search API)
 	c.contentLimiter.Wait()
 
-	reqCtx, cancel := context.WithTimeout(c.ctx, c.requestTimeout)
+	// Use a longer timeout to account for potential rate limit waits
+	reqCtx, cancel := context.WithTimeout(c.ctx, 2*time.Minute)
 	defer cancel()
 
 	helper.LogInfo(ctx, "Fetching file content from GitHub: %s/%s/%s", owner, repo, path)
