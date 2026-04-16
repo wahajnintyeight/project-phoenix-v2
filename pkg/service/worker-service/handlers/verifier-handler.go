@@ -210,7 +210,7 @@ func (h *VerifierHandler) ValidateAnthropicKey(keyValue string, correlationID st
 	// Minimal request body to test authentication
 	// Using claude-haiku-4-5 as claude-3-haiku is being retired in April 2026
 	requestBody := map[string]interface{}{
-		"model":      "claude-sonnet-4-6",
+		"model":      "claude-haiku-4-5-20251001",
 		"max_tokens": 1024,
 		"messages": []map[string]string{
 			{"role": "user", "content": "test"},
