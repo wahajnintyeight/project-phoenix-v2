@@ -127,6 +127,12 @@ func (h *ScraperHandler) RunScrapingCycle() error {
 	h.lastScrape = time.Now()
 	h.mutex.Unlock()
 
+	// Persist the scrape start time so the stats API reflects active scraping,
+	// not just when keys were last discovered.
+	if err := h.apiKeyController.UpdateLastScrapedAt(h.lastScrape); err != nil {
+		helper.LogError(ctx, "Failed to persist last_scraped_at", err)
+	}
+
 	helper.LogInfo(ctx, "Starting scraping cycle")
 
 	// Get enabled queries

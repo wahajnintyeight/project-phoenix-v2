@@ -61,41 +61,38 @@ func (c *ScraperConfigController) CreateQuery(query *model.SearchQuery) (primiti
 
 // GetEnabledQueries retrieves all enabled search queries
 func (c *ScraperConfigController) GetEnabledQueries() ([]*model.SearchQuery, error) {
-	query := bson.M{"enabled": true}
-	_, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
-	if err != nil {
-		return nil, err
-	}
-
-	var queries []*model.SearchQuery
-	for _, result := range results {
-		var searchQuery model.SearchQuery
-		bsonBytes, _ := bson.Marshal(result)
-		if err := bson.Unmarshal(bsonBytes, &searchQuery); err != nil {
-			continue
-		}
-		queries = append(queries, &searchQuery)
-	}
-
-	return queries, nil
+	return c.fetchAllQueries(bson.M{"enabled": true})
 }
 
 // GetAllQueries retrieves all search queries
 func (c *ScraperConfigController) GetAllQueries() ([]*model.SearchQuery, error) {
-	query := bson.M{}
-	_, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
-	if err != nil {
-		return nil, err
-	}
+	return c.fetchAllQueries(bson.M{})
+}
 
+// fetchAllQueries retrieves all documents matching the given query by iterating through all pages.
+// This avoids the hardcoded pageSize=10 limit in FindAllWithPagination silently truncating results.
+func (c *ScraperConfigController) fetchAllQueries(filter bson.M) ([]*model.SearchQuery, error) {
 	var queries []*model.SearchQuery
-	for _, result := range results {
-		var searchQuery model.SearchQuery
-		bsonBytes, _ := bson.Marshal(result)
-		if err := bson.Unmarshal(bsonBytes, &searchQuery); err != nil {
-			continue
+	page := 1
+	for {
+		totalPages, _, results, err := c.DB.FindAllWithPagination(filter, page, c.GetCollectionName())
+		if err != nil {
+			return nil, err
 		}
-		queries = append(queries, &searchQuery)
+
+		for _, result := range results {
+			var searchQuery model.SearchQuery
+			bsonBytes, _ := bson.Marshal(result)
+			if err := bson.Unmarshal(bsonBytes, &searchQuery); err != nil {
+				continue
+			}
+			queries = append(queries, &searchQuery)
+		}
+
+		if int64(page) >= totalPages {
+			break
+		}
+		page++
 	}
 
 	return queries, nil

@@ -530,9 +530,54 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 	}
 
 	stats.LastValidatedAt = lastValidated
-	stats.LastScrapedAt = lastScraped
+
+	// Use the persisted last_scraped_at from scraper metadata instead of deriving from key CreatedAt
+	if lastScrapedAt, err := c.GetLastScrapedAt(); err == nil && lastScrapedAt != nil {
+		stats.LastScrapedAt = lastScrapedAt
+	} else {
+		// Fallback to derived value if metadata not yet available
+		stats.LastScrapedAt = lastScraped
+	}
 
 	return stats, nil
+}
+
+const scraperMetadataCollection = "scraper_metadata"
+const scraperMetadataKey = "global"
+
+// UpdateLastScrapedAt persists the current scrape start time to the database.
+// This is called at the start of each scraping cycle so that the stats endpoint
+// reflects when scraping is actively running, not just when keys were last discovered.
+func (c *APIKeyController) UpdateLastScrapedAt(t time.Time) error {
+	if c.DB == nil {
+		return nil
+	}
+	query := bson.M{"key": scraperMetadataKey}
+	update := bson.M{
+		"key":             scraperMetadataKey,
+		"last_scraped_at": t,
+	}
+	c.DB.UpdateOrCreate(query, update, scraperMetadataCollection)
+	return nil
+}
+
+// GetLastScrapedAt retrieves the persisted last scrape time from the database.
+func (c *APIKeyController) GetLastScrapedAt() (*time.Time, error) {
+	if c.DB == nil {
+		return nil, nil
+	}
+	query := bson.M{"key": scraperMetadataKey}
+	result, err := c.DB.FindOne(query, scraperMetadataCollection)
+	if err != nil || result == nil {
+		return nil, err
+	}
+	if raw, ok := result["last_scraped_at"]; ok {
+		if t, ok := raw.(primitive.DateTime); ok {
+			tt := t.Time()
+			return &tt, nil
+		}
+	}
+	return nil, nil
 }
 
 // DeleteOldestValidKeys deletes the oldest valid keys to enforce the limit
