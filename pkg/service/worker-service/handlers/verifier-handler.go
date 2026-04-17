@@ -237,34 +237,13 @@ func (h *VerifierHandler) ValidateAnthropicKey(keyValue string, correlationID st
 
 // ValidateGoogleKey validates a Google AI API key
 func (h *VerifierHandler) ValidateGoogleKey(keyValue string, correlationID string) (string, error) {
-	// Using generateContent endpoint to ensure key has active inference permissions
-	// Just listing models can succeed with restricted keys that can't actually run inference
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=%s", keyValue)
+	// Use the models list endpoint — lightweight GET, no token consumption
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", keyValue)
 
-	requestBody := map[string]interface{}{
-		"contents": []map[string]interface{}{
-			{
-				"parts": []map[string]string{
-					{"text": "ping"},
-				},
-			},
-		},
-		"generationConfig": map[string]interface{}{
-			"maxOutputTokens": 1,
-		},
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return model.StatusError, err
 	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		return model.StatusError, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
 
 	status, err := h.executeRequestWithRetry(req, correlationID)
 	return status, err
