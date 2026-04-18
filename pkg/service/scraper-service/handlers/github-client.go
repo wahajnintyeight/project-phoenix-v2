@@ -7,6 +7,7 @@ import (
 	"os"
 	"project-phoenix/v2/pkg/helper"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v60/github"
@@ -27,16 +28,24 @@ type GitHubClient struct {
 // NewGitHubClient creates a new GitHub client with token rotation support
 func NewGitHubClient(tokens []string, searchLimiter *RateLimiter, contentLimiter *RateLimiter) *GitHubClient {
 	// Token validation is done by config, this should never be empty
+	cleanTokens := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		cleanTokens = append(cleanTokens, token)
+	}
 
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: tokens[0]},
+		&oauth2.Token{AccessToken: cleanTokens[0]},
 	)
 	tc := oauth2.NewClient(ctx, ts)
 
 	return &GitHubClient{
 		client:         github.NewClient(tc),
-		tokens:         tokens,
+		tokens:         cleanTokens,
 		currentToken:   0,
 		searchLimiter:  searchLimiter,
 		contentLimiter: contentLimiter,

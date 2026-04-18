@@ -35,7 +35,15 @@ func LoadConfig() (*Config, error) {
 	// Parse GitHub tokens
 	githubTokens := os.Getenv("GITHUB_API_TOKEN")
 	if githubTokens != "" {
-		config.GitHubTokens = strings.Split(githubTokens, ",")
+		parts := strings.Split(githubTokens, ",")
+		config.GitHubTokens = make([]string, 0, len(parts))
+		for _, token := range parts {
+			token = strings.TrimSpace(token)
+			if token == "" {
+				continue
+			}
+			config.GitHubTokens = append(config.GitHubTokens, token)
+		}
 	}
 
 	// Parse scraping interval
