@@ -127,6 +127,21 @@ func (c *GitHubClient) SearchCode(query string, correlationID string) ([]*github
 				continue
 			}
 
+			// GitHub code search intermittently returns 404 for valid paginated or
+			// size-bisected queries. Treat that as an exhausted/invalid branch rather
+			// than failing the whole scrape cycle.
+			if resp != nil && resp.StatusCode == 404 {
+				if page == 1 {
+					fmt.Printf("GitHub search returned HTTP 404 on page 1 for query %q; treating this branch as empty", query)
+					cancel()
+					return allResults, totalAvailable, nil
+				}
+
+				fmt.Printf("GitHub search returned HTTP 404 on page %d for query %q after %d collected results; stopping pagination and returning partial results", page, query, len(allResults))
+				cancel()
+				return allResults, totalAvailable, nil
+			}
+
 			// Retry on 5xx errors with exponential backoff
 			if resp != nil && resp.StatusCode >= 500 {
 				backoff := time.Duration(1<<uint(attempt)) * time.Second
