@@ -175,6 +175,10 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 	//switch case for handling all the POST routes
 	urlPath := r.URL.Path
 	switch urlPath {
+	case apiRequestHandlerObj.Endpoint + "/validate-key":
+		log.Println("Validate Key (no-store)")
+		HandleValidateKey(w, r)
+		return
 	case apiRequestHandlerObj.Endpoint + "/login":
 		log.Println("Login")
 		controller := controllers.GetControllerInstance(enum.UserController, enum.MONGODB)

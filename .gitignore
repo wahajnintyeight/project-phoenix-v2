@@ -9,3 +9,4 @@ cmd/*.pem
 pkg/handler/barclays_secret_key.txt
 _tmp
 /internal/service-configs/sse-service/utils/deno
+/vendor
