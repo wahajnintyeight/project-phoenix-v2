@@ -17,7 +17,6 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/gosimple/slug v1.14.0
 	github.com/joho/godotenv v1.5.1
-	github.com/leanovate/gopter v0.2.11
 	github.com/lib/pq v1.10.9
 	github.com/qdrant/go-client v1.17.1
 	github.com/rabbitmq/amqp091-go v1.9.0
@@ -146,7 +145,7 @@ require (
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/time v0.14.0
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251029180050-ab9386a59fda // indirect

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -47,6 +48,8 @@ type ScraperHandler struct {
 	lastScrape              time.Time
 	mutex                   sync.Mutex
 	gitlabEnabled           bool
+	gitlabLastProjectID     int
+	gitlabLastProjectPage   int
 }
 
 // Key extraction patterns for different providers
@@ -110,6 +113,8 @@ func NewScraperHandler(brokerObj broker.Broker) *ScraperHandler {
 		scrapingCycles:          0,
 		lastScrape:              time.Time{},
 		gitlabEnabled:           gitlabEnabled,
+		gitlabLastProjectID:     0,
+		gitlabLastProjectPage:   1,
 	}
 }
 
@@ -213,6 +218,7 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 
 	// Search GitHub using exhaustive search (bypasses 1000-result cap)
 	helper.LogInfo(ctx, "Executing GitHub Code Search API request with size-based bisection for .%s files", extension.Extension)
+
 	githubResults, err := h.githubClient.SearchCodeAll(queryWithExtension, correlationID)
 	if err != nil {
 		helper.LogError(ctx, fmt.Sprintf("GitHub search failed - Query Pattern: %s, Provider: %s, Extension: .%s",
@@ -227,16 +233,15 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 
 	// Search GitLab if enabled
 	if h.gitlabEnabled && h.gitlabClient != nil {
-		helper.LogInfo(ctx, "Executing GitLab Code Search API request for .%s files", extension.Extension)
-		gitlabResults, err := h.gitlabClient.SearchCode(queryWithExtension, correlationID)
+		fmt.Printf("Executing GitLab public project discovery and recursive crawl for .%s files", extension.Extension)
+		gitlabResults, keysFound, err := h.processGitLabProjectDiscovery(query.Provider, extension.Extension, correlationID)
 		if err != nil {
-			helper.LogError(ctx, "GitLab search failed", err)
+			helper.LogError(ctx, "GitLab discovery/crawl failed", err)
 		} else {
-			totalResults += len(gitlabResults)
-			helper.LogInfo(ctx, "Found %d GitLab results for query: %s (extension: .%s)",
-				len(gitlabResults), query.QueryPattern, extension.Extension)
-			keysFound := h.processGitLabResultsConcurrently(gitlabResults, query.Provider, correlationID)
+			totalResults += gitlabResults
 			totalKeysFound += keysFound
+			helper.LogInfo(ctx, "Found %d GitLab results for query: %s (extension: .%s)",
+				gitlabResults, query.QueryPattern, extension.Extension)
 		}
 	}
 
@@ -253,6 +258,190 @@ func (h *ScraperHandler) processQuery(query *model.SearchQuery, correlationID st
 	}
 
 	return nil
+}
+
+// processGitLabProjectDiscovery enumerates public projects and scans matching files.
+// It keeps an in-memory checkpoint (page + project ID) so cycles can resume progress.
+func (h *ScraperHandler) processGitLabProjectDiscovery(provider string, extension string, correlationID string) (int, int, error) {
+	ctx := helper.LogContext{
+		ServiceName:   "scraper-service",
+		Operation:     "processGitLabProjectDiscovery",
+		CorrelationID: correlationID,
+	}
+
+	projectsPerPage := 100
+	if envVal := os.Getenv("GITLAB_PROJECTS_PER_PAGE"); envVal != "" {
+		if parsed, err := fmt.Sscanf(envVal, "%d", &projectsPerPage); err == nil && parsed == 1 {
+			if projectsPerPage < 1 {
+				projectsPerPage = 1
+			} else if projectsPerPage > 100 {
+				projectsPerPage = 100
+			}
+		}
+	}
+
+	maxProjectsPerCycle := 25
+	if envVal := os.Getenv("GITLAB_MAX_PROJECTS_PER_CYCLE"); envVal != "" {
+		if parsed, err := fmt.Sscanf(envVal, "%d", &maxProjectsPerCycle); err == nil && parsed == 1 {
+			if maxProjectsPerCycle < 1 {
+				maxProjectsPerCycle = 1
+			}
+		}
+	}
+
+	page, lastProjectID := h.getGitLabCheckpoint()
+	firstPage := page
+
+	fmt.Printf("\n[scraper-handler] Starting GitLab discovery crawl (provider=%s, extension=.%s, page=%d, last_project_id=%d, limit=%d)",
+		provider, extension, page, lastProjectID, maxProjectsPerCycle)
+
+	processedProjects := 0
+	totalCandidateFiles := 0
+	totalKeysFound := 0
+
+	for processedProjects < maxProjectsPerCycle {
+		projects, err := h.gitlabClient.ListPublicProjects(page, projectsPerPage, correlationID)
+		if err != nil {
+			return totalCandidateFiles, totalKeysFound, fmt.Errorf("failed to list GitLab public projects (page=%d): %w", page, err)
+		}
+
+		if len(projects) == 0 {
+			fmt.Printf("Reached end of GitLab project listing, resetting checkpoint to beginning")
+			h.setGitLabCheckpoint(1, 0)
+			break
+		}
+
+		fmt.Println("Found projects count:", len(projects))
+		for _, project := range projects {
+			if processedProjects >= maxProjectsPerCycle {
+				break
+			}
+
+			if project == nil || project.ID <= 0 {
+				continue
+			}
+
+			if page == firstPage && project.ID <= lastProjectID {
+				continue
+			}
+
+			candidateFiles, keysFound, err := h.processGitLabProjectFiles(project, provider, extension, correlationID)
+			if err != nil {
+				if errors.Is(err, ErrGitLabRepositoryUnavailable) {
+					helper.LogInfo(ctx, "Skipping GitLab project %d (%s): repository is empty or unavailable", project.ID, project.PathWithNamespace)
+					h.setGitLabCheckpoint(page, project.ID)
+					processedProjects++
+					continue
+				}
+
+				helper.LogError(ctx, fmt.Sprintf("Failed processing GitLab project %d (%s)", project.ID, project.PathWithNamespace), err)
+				h.incrementError()
+			}
+
+			totalCandidateFiles += candidateFiles
+			totalKeysFound += keysFound
+			processedProjects++
+
+			h.setGitLabCheckpoint(page, project.ID)
+		}
+
+		page++
+		lastProjectID = 0 // Only skip IDs on first resumed page
+	}
+
+	helper.LogInfo(ctx, "GitLab discovery crawl finished (projects=%d, candidate_files=%d, keys=%d)",
+		processedProjects, totalCandidateFiles, totalKeysFound)
+
+	return totalCandidateFiles, totalKeysFound, nil
+}
+
+func (h *ScraperHandler) processGitLabProjectFiles(project *GitLabProject, provider string, extension string, correlationID string) (int, int, error) {
+	ctx := helper.LogContext{
+		ServiceName:   "scraper-service",
+		Operation:     "processGitLabProjectFiles",
+		CorrelationID: correlationID,
+	}
+
+	tree, err := h.gitlabClient.GetRepositoryTree(project.ID, correlationID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get repository tree for project %d: %w", project.ID, err)
+	}
+
+	branch := project.DefaultBranch
+	if branch == "" {
+		branch = "main"
+	}
+
+	normalizedExtension := strings.TrimPrefix(strings.ToLower(extension), ".")
+	candidateFiles := 0
+	totalKeysFound := 0
+
+	for _, node := range tree {
+		if node == nil || node.Type != "blob" || node.Path == "" || node.ID == "" {
+			continue
+		}
+
+		if normalizedExtension != "" && !strings.HasSuffix(strings.ToLower(node.Path), "."+normalizedExtension) {
+			continue
+		}
+
+		candidateFiles++
+
+		content, err := h.gitlabClient.GetFileContentRaw(project.ID, node.ID, correlationID)
+		if err != nil {
+			helper.LogError(ctx, fmt.Sprintf("Failed to fetch raw GitLab file content (project=%d, path=%s)", project.ID, node.Path), err)
+			continue
+		}
+
+		keys := h.ExtractKeys(content, provider)
+		if len(keys) == 0 {
+			continue
+		}
+
+		helper.LogInfo(ctx, "Found %d keys in GitLab file: %s/%s", len(keys), project.PathWithNamespace, node.Path)
+		totalKeysFound += len(keys)
+
+		fileURL := fmt.Sprintf("%s/-/blob/%s/%s", project.WebURL, branch, node.Path)
+		repoInfo := &RepoInfo{
+			RepoURL:   project.WebURL,
+			RepoOwner: project.Namespace.FullPath,
+			RepoName:  project.Name,
+			FileURL:   fileURL,
+			FilePath:  node.Path,
+		}
+
+		for _, keyValue := range keys {
+			if err := h.StoreDiscoveredKey(keyValue, provider, repoInfo, correlationID); err != nil {
+				helper.LogError(ctx, "Failed to store discovered key from GitLab raw content", err)
+				h.incrementError()
+			}
+		}
+	}
+
+	return candidateFiles, totalKeysFound, nil
+}
+
+func (h *ScraperHandler) getGitLabCheckpoint() (int, int) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	page := h.gitlabLastProjectPage
+	if page < 1 {
+		page = 1
+	}
+
+	return page, h.gitlabLastProjectID
+}
+
+func (h *ScraperHandler) setGitLabCheckpoint(page int, projectID int) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	if page < 1 {
+		page = 1
+	}
+	h.gitlabLastProjectPage = page
+	h.gitlabLastProjectID = projectID
 }
 
 // processGitHubResultsConcurrently processes GitHub search results using a worker pool

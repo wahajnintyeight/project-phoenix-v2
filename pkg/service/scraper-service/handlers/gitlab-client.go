@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"strconv"
 	"time"
 )
+
+var ErrGitLabRepositoryUnavailable = errors.New("gitlab repository unavailable")
 
 // GitLabBlobResult represents a single blob search result from GitLab
 type GitLabBlobResult struct {
@@ -35,6 +38,16 @@ type GitLabProject struct {
 	} `json:"namespace"`
 }
 
+// GitLabTreeNode represents an item in a project's repository tree.
+// For blob entries, ID is the blob SHA.
+type GitLabTreeNode struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Path string `json:"path"`
+	Mode string `json:"mode"`
+}
+
 // GitLabClient wraps the GitLab API client with rate limiting and retry logic
 type GitLabClient struct {
 	httpClient     *http.Client
@@ -57,6 +70,236 @@ func NewGitLabClient(tokens []string, rateLimiter *RateLimiter) *GitLabClient {
 		requestTimeout: 30 * time.Second,
 		baseURL:        "https://gitlab.com",
 	}
+}
+
+// ListPublicProjects fetches one page of public projects in stable ID order.
+func (c *GitLabClient) ListPublicProjects(page, perPage int, correlationID string) ([]*GitLabProject, error) {
+	ctx := helper.LogContext{
+		ServiceName:   "scraper-service",
+		Operation:     "GitLabClient.ListPublicProjects",
+		CorrelationID: correlationID,
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 || perPage > 100 {
+		perPage = 100
+	}
+
+	projectsURL := fmt.Sprintf("%s/api/v4/projects?visibility=public&order_by=id&sort=asc&page=%d&per_page=%d",
+		c.baseURL, page, perPage)
+
+	helper.LogInfo(ctx, "Scanning public GitLab projects (page=%d, per_page=%d)", page, perPage)
+
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		c.rateLimiter.Wait()
+
+		req, err := http.NewRequest("GET", projectsURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("PRIVATE-TOKEN", c.tokens[c.currentToken])
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		c.updateRateLimitFromHeaders(resp.Header, correlationID)
+
+		if resp.StatusCode == 429 {
+			_ = c.WaitForRateLimit(resp, correlationID)
+			resp.Body.Close()
+			lastErr = fmt.Errorf("rate limited")
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			return nil, fmt.Errorf("GitLab API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+		}
+
+		var projects []*GitLabProject
+		if err := json.NewDecoder(resp.Body).Decode(&projects); err != nil {
+			resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode project list: %w", err)
+		}
+		resp.Body.Close()
+
+		return projects, nil
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("failed to list public projects after retries: %w", lastErr)
+	}
+
+	return nil, fmt.Errorf("failed to list public projects after retries")
+}
+
+// GetRepositoryTree fetches full recursive repository tree for a project.
+// GitLab paginates tree responses, so this method walks all pages.
+func (c *GitLabClient) GetRepositoryTree(projectID int, correlationID string) ([]*GitLabTreeNode, error) {
+	ctx := helper.LogContext{
+		ServiceName:   "scraper-service",
+		Operation:     "GitLabClient.GetRepositoryTree",
+		CorrelationID: correlationID,
+	}
+
+	if projectID <= 0 {
+		return nil, fmt.Errorf("invalid project ID: %d", projectID)
+	}
+
+	var allNodes []*GitLabTreeNode
+	page := 1
+	perPage := 100
+
+	for {
+		treeURL := fmt.Sprintf("%s/api/v4/projects/%d/repository/tree?recursive=true&page=%d&per_page=%d",
+			c.baseURL, projectID, page, perPage)
+
+		var resp *http.Response
+		var lastErr error
+
+		for attempt := 0; attempt < 3; attempt++ {
+			c.rateLimiter.Wait()
+
+			req, err := http.NewRequest("GET", treeURL, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create request: %w", err)
+			}
+			req.Header.Set("PRIVATE-TOKEN", c.tokens[c.currentToken])
+			req.Header.Set("Accept", "application/json")
+
+			resp, err = c.httpClient.Do(req)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+
+			c.updateRateLimitFromHeaders(resp.Header, correlationID)
+
+			if resp.StatusCode == 429 {
+				_ = c.WaitForRateLimit(resp, correlationID)
+				resp.Body.Close()
+				lastErr = fmt.Errorf("rate limited")
+				continue
+			}
+
+			if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadGateway {
+				resp.Body.Close()
+				return nil, fmt.Errorf("%w: project %d", ErrGitLabRepositoryUnavailable, projectID)
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				return nil, fmt.Errorf("GitLab API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+			}
+
+			break
+		}
+
+		if resp == nil {
+			if lastErr != nil {
+				return nil, fmt.Errorf("failed to fetch repository tree for project %d: %w", projectID, lastErr)
+			}
+			return nil, fmt.Errorf("failed to fetch repository tree for project %d", projectID)
+		}
+
+		var nodes []*GitLabTreeNode
+		if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
+			resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode repository tree: %w", err)
+		}
+
+		nextPage := resp.Header.Get("X-Next-Page")
+		resp.Body.Close()
+
+		allNodes = append(allNodes, nodes...)
+
+		if nextPage == "" {
+			break
+		}
+
+		nextPageInt, err := strconv.Atoi(nextPage)
+		if err != nil || nextPageInt <= 0 {
+			helper.LogInfo(ctx, "Invalid X-Next-Page value '%s', stopping pagination", nextPage)
+			break
+		}
+		page = nextPageInt
+	}
+
+	return allNodes, nil
+}
+
+// GetFileContentRaw fetches raw file content from a blob SHA.
+func (c *GitLabClient) GetFileContentRaw(projectID int, sha string, correlationID string) (string, error) {
+	ctx := helper.LogContext{
+		ServiceName:   "scraper-service",
+		Operation:     "GitLabClient.GetFileContentRaw",
+		CorrelationID: correlationID,
+	}
+
+	if projectID <= 0 {
+		return "", fmt.Errorf("invalid project ID: %d", projectID)
+	}
+	if sha == "" {
+		return "", fmt.Errorf("blob SHA is required")
+	}
+
+	blobURL := fmt.Sprintf("%s/api/v4/projects/%d/repository/blobs/%s/raw", c.baseURL, projectID, sha)
+
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		c.rateLimiter.Wait()
+
+		req, err := http.NewRequest("GET", blobURL, nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("PRIVATE-TOKEN", c.tokens[c.currentToken])
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		c.updateRateLimitFromHeaders(resp.Header, correlationID)
+
+		if resp.StatusCode == 429 {
+			_ = c.WaitForRateLimit(resp, correlationID)
+			resp.Body.Close()
+			lastErr = fmt.Errorf("rate limited")
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			return "", fmt.Errorf("GitLab API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+		}
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return "", fmt.Errorf("failed to read blob body: %w", err)
+		}
+
+		return string(bodyBytes), nil
+	}
+
+	if lastErr != nil {
+		return "", fmt.Errorf("failed to fetch blob raw content after retries: %w", lastErr)
+	}
+
+	helper.LogInfo(ctx, "Failed to fetch blob raw content after retries (project=%d, sha=%s)", projectID, sha)
+	return "", fmt.Errorf("failed to fetch blob raw content after retries")
 }
 
 // SearchCode searches GitLab for code matching the query using basic search
