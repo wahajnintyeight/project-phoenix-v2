@@ -603,7 +603,7 @@ func (h *ScraperHandler) processSearchResult(result *github.CodeResult, provider
 func (h *ScraperHandler) ExtractKeys(content string, provider string) []string {
 	pattern, ok := KeyPatterns[provider]
 	if !ok {
-		log.Printf("No pattern found for provider: %s", provider)
+		// log.Printf("No pattern found for provider: %s", provider)
 		return nil
 	}
 
