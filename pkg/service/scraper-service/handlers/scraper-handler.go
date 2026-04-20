@@ -311,7 +311,7 @@ func (h *ScraperHandler) processGitLabProjectDiscovery(provider string, extensio
 			break
 		}
 
-		fmt.Println("Found projects count:", len(projects))
+		fmt.Println("\n[scraper-handler] Found projects count:", len(projects))
 		for _, project := range projects {
 			if processedProjects >= maxProjectsPerCycle {
 				break
@@ -328,13 +328,13 @@ func (h *ScraperHandler) processGitLabProjectDiscovery(provider string, extensio
 			candidateFiles, keysFound, err := h.processGitLabProjectFiles(project, provider, extension, correlationID)
 			if err != nil {
 				if errors.Is(err, ErrGitLabRepositoryUnavailable) {
-					helper.LogInfo(ctx, "Skipping GitLab project %d (%s): repository is empty or unavailable", project.ID, project.PathWithNamespace)
+					fmt.Printf("[scraper-handler] Skipping GitLab project %d (%s): repository is empty or unavailable\n", project.ID, project.PathWithNamespace)
 					h.setGitLabCheckpoint(page, project.ID)
 					processedProjects++
 					continue
 				}
 
-				helper.LogError(ctx, fmt.Sprintf("Failed processing GitLab project %d (%s)", project.ID, project.PathWithNamespace), err)
+				fmt.Printf("[scraper-handler] Failed processing GitLab project %d (%s): %v\n", project.ID, project.PathWithNamespace, err)
 				h.incrementError()
 			}
 
@@ -398,7 +398,7 @@ func (h *ScraperHandler) processGitLabProjectFiles(project *GitLabProject, provi
 			continue
 		}
 
-		helper.LogInfo(ctx, "Found %d keys in GitLab file: %s/%s", len(keys), project.PathWithNamespace, node.Path)
+		fmt.Printf("[scraper-handler] Found %d keys in GitLab file: %s/%s\n", len(keys), project.PathWithNamespace, node.Path)
 		totalKeysFound += len(keys)
 
 		fileURL := fmt.Sprintf("%s/-/blob/%s/%s", project.WebURL, branch, node.Path)

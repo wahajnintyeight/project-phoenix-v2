@@ -150,6 +150,7 @@ func (c *GitLabClient) GetRepositoryTree(projectID int, correlationID string) ([
 		CorrelationID: correlationID,
 	}
 
+	fmt.Printf("[GitLabClient] Fetching repository tree for project %d\n", projectID)
 	if projectID <= 0 {
 		return nil, fmt.Errorf("invalid project ID: %d", projectID)
 	}
