@@ -8,9 +8,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os/exec"
 	"strings"
 	"time"
+
+	"project-phoenix/v2/internal/model"
 )
 
 // KeyTestRequest is the request body for the /validate-key endpoint.
@@ -34,6 +35,13 @@ type providerResult struct {
 	Response string
 	Credits  map[string]interface{}
 	Err      error
+}
+
+type openRouterModelsResult struct {
+	Provider string                  `json:"provider"`
+	Models   []model.OpenRouterModel `json:"models"`
+	Count    int                     `json:"count"`
+	Error    string                  `json:"error,omitempty"`
 }
 
 // keyTesterHTTPClient is a package-level client shared for test requests.
@@ -68,6 +76,38 @@ func HandleValidateKey(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":   1009,
 		"result": result,
+	})
+}
+
+// HandleFetchOpenRouterModels handles GET /validate-key/openrouter-models.
+// It returns the available OpenRouter models for a supplied API key.
+func HandleFetchOpenRouterModels(w http.ResponseWriter, r *http.Request) {
+	apiKey := strings.TrimSpace(r.URL.Query().Get("api_key"))
+	if apiKey == "" {
+		http.Error(w, `{"error":"api_key is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	result := fetchOpenRouterModels(apiKey)
+	if result.Err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":   1009,
+			"result": openRouterModelsResult{Provider: "openrouter", Error: result.Err.Error()},
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	var payload openRouterModelsResult
+	if err := json.Unmarshal([]byte(result.Response), &payload); err != nil {
+		http.Error(w, `{"error":"failed to encode models response"}`, http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":   1009,
+		"result": payload,
 	})
 }
 
@@ -206,11 +246,11 @@ func testGoogleKey(keyValue, model string) providerResult {
 }
 
 // testOpenRouterKey validates an OpenRouter key.
-// If model is provided, it validates with a chat completion curl call.
+// If model is provided, it validates with a chat completion request.
 // Otherwise it falls back to credits endpoint.
 func testOpenRouterKey(keyValue, model string) providerResult {
 	if strings.TrimSpace(model) != "" {
-		return testOpenRouterModelWithCurl(keyValue, model)
+		return testOpenRouterModelWithRequest(keyValue, model)
 	}
 
 	req, err := http.NewRequest("GET", "https://openrouter.ai/api/v1/credits", nil)
@@ -279,7 +319,54 @@ func testOpenRouterKey(keyValue, model string) providerResult {
 	return providerResult{Status: status, Credits: credits, Response: responseMessage}
 }
 
-func testOpenRouterModelWithCurl(keyValue, model string) providerResult {
+func fetchOpenRouterModels(apiKey string) providerResult {
+	req, err := http.NewRequest("GET", "https://openrouter.ai/api/v1/models", nil)
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := keyTesterHTTPClient.Do(req)
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return providerResult{Status: "Invalid", Response: extractProviderResponse(bodyBytes)}
+	}
+	if resp.StatusCode != 200 {
+		return providerResult{
+			Status:   "Error",
+			Response: extractProviderResponse(bodyBytes),
+			Err:      fmt.Errorf("provider returned HTTP %d", resp.StatusCode),
+		}
+	}
+
+	var openRouterResp model.OpenRouterModelsResponse
+	if err := json.Unmarshal(bodyBytes, &openRouterResp); err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+
+	resultBody, err := json.Marshal(openRouterModelsResult{
+		Provider: "openrouter",
+		Models:   openRouterResp.Data,
+		Count:    len(openRouterResp.Data),
+	})
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+
+	return providerResult{Status: "Valid", Response: string(resultBody)}
+}
+
+func testOpenRouterModelWithRequest(keyValue, model string) providerResult {
 	payload := map[string]interface{}{
 		"messages": []map[string]string{
 			{
@@ -304,58 +391,40 @@ func testOpenRouterModelWithCurl(keyValue, model string) providerResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(
-		ctx,
-		"curl",
-		"-sS",
-		"-X", "POST",
-		"https://openrouter.ai/api/v1/chat/completions",
-		"-H", "Authorization: Bearer "+keyValue,
-		"-H", "Content-Type: application/json",
-		"-d", string(body),
-		"-w", "\n%{http_code}",
-	)
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(body))
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	req.Header.Set("Authorization", "Bearer "+keyValue)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 
-	output, err := cmd.CombinedOutput()
+	resp, err := keyTesterHTTPClient.Do(req)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return providerResult{Status: "Error", Err: fmt.Errorf("curl timeout after 25s")}
+			return providerResult{Status: "Error", Err: fmt.Errorf("request timeout after 25s")}
 		}
-		return providerResult{Status: "Error", Err: fmt.Errorf("curl failed: %w, output: %s", err, strings.TrimSpace(string(output)))}
+		return providerResult{Status: "Error", Err: fmt.Errorf("request failed: %w", err)}
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
 	}
 
-	raw := strings.TrimSpace(string(output))
-	if raw == "" {
-		return providerResult{Status: "Error", Err: fmt.Errorf("empty curl response")}
-	}
-
-	lastNewline := strings.LastIndex(raw, "\n")
-	if lastNewline == -1 {
-		responseMessage := extractProviderResponse([]byte(raw))
-		return providerResult{Status: "Error", Response: responseMessage, Err: fmt.Errorf("unable to parse curl status code")}
-	}
-
-	bodyPart := strings.TrimSpace(raw[:lastNewline])
-	statusPart := strings.TrimSpace(raw[lastNewline+1:])
-
-	statusCode := 0
-	if _, scanErr := fmt.Sscanf(statusPart, "%d", &statusCode); scanErr != nil {
-		responseMessage := extractProviderResponse([]byte(bodyPart))
-		return providerResult{Status: "Error", Response: responseMessage, Err: fmt.Errorf("invalid curl status code: %s", statusPart)}
-	}
-
-	responseMessage := extractProviderResponse([]byte(bodyPart))
+	responseMessage := extractProviderResponse(bodyBytes)
 
 	switch {
-	case statusCode == 200:
+	case resp.StatusCode == 200:
 		return providerResult{Status: "Valid", Response: responseMessage}
-	case statusCode == 401 || statusCode == 403:
+	case resp.StatusCode == 401 || resp.StatusCode == 403:
 		return providerResult{Status: "Invalid", Response: responseMessage}
 	default:
 		return providerResult{
 			Status:   "Error",
 			Response: responseMessage,
-			Err:      fmt.Errorf("provider returned HTTP %d", statusCode),
+			Err:      fmt.Errorf("provider returned HTTP %d", resp.StatusCode),
 		}
 	}
 }

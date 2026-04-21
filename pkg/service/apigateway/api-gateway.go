@@ -146,7 +146,7 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/keys",
 		s.serviceConfig.EndpointPrefix + "/stats",
 		s.serviceConfig.EndpointPrefix + "/validate-key",
-
+		s.serviceConfig.EndpointPrefix + "/validate-key/openrouter-models",
 	}
 	customMiddlewareWrapperWithSession := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

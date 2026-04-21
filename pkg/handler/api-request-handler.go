@@ -179,6 +179,10 @@ func POSTRoutes(w http.ResponseWriter, r *http.Request) {
 		log.Println("Validate Key (no-store)")
 		HandleValidateKey(w, r)
 		return
+	case apiRequestHandlerObj.Endpoint + "/validate-key/openrouter-models":
+		log.Println("Fetch OpenRouter Models")
+		HandleFetchOpenRouterModels(w, r)
+		return
 	case apiRequestHandlerObj.Endpoint + "/login":
 		log.Println("Login")
 		controller := controllers.GetControllerInstance(enum.UserController, enum.MONGODB)
