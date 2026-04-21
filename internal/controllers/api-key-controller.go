@@ -491,7 +491,7 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 		return nil, err
 	}
 
-	// Count by status and provider
+	// Count by status and valid-only provider totals
 	var lastValidated *time.Time
 	var lastScraped *time.Time
 	for _, result := range allKeys {
@@ -514,7 +514,9 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 			stats.ErrorKeys++
 		}
 
-		stats.ByProvider[apiKey.Provider]++
+		if apiKey.Status == model.StatusValid || apiKey.Status == model.StatusValidNoCredits {
+			stats.ByProvider[apiKey.Provider]++
+		}
 
 		// Track most recent validation timestamp
 		if apiKey.ValidatedAt != nil {
