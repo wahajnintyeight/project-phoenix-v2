@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -235,20 +236,50 @@ func (h *VerifierHandler) ValidateAnthropicKey(keyValue string, correlationID st
 	return status, err
 }
 
-// ValidateGoogleKey validates a Google AI API key
-func (h *VerifierHandler) ValidateGoogleKey(keyValue string, correlationID string) (string, error) {
-	// Use the models list endpoint — lightweight GET, no token consumption
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", keyValue)
+// // ValidateGoogleKey validates a Google AI API key
+// func (h *VerifierHandler) ValidateGoogleKey(keyValue string, correlationID string) (string, error) {
+// 	// Use the models list endpoint — lightweight GET, no token consumption
+// 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", keyValue)
 
-	req, err := http.NewRequest("GET", url, nil)
+// 	req, err := http.NewRequest("GET", url, nil)
+// 	if err != nil {
+// 		return model.StatusError, err
+// 	}
+
+// 	status, err := h.executeRequestWithRetry(req, correlationID)
+// 	return status, err
+// }
+
+func (h *VerifierHandler) ValidateGoogleKey(keyValue string, correlationID string) (string, error) {
+	// Latest lightweight production model as of Apr 2026:
+	// gemini-2.5-flash
+	url := fmt.Sprintf(
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=%s",
+		keyValue,
+	)
+
+	payload := `{
+		"contents": [
+			{
+				"parts": [
+					{
+						"text": "Hello"
+					}
+				]
+			}
+		]
+	}`
+
+	req, err := http.NewRequest("POST", url, strings.NewReader(payload))
 	if err != nil {
 		return model.StatusError, err
 	}
 
+	req.Header.Set("Content-Type", "application/json")
+
 	status, err := h.executeRequestWithRetry(req, correlationID)
 	return status, err
 }
-
 // ValidateOpenRouterKey validates an OpenRouter API key using the credits endpoint
 func (h *VerifierHandler) ValidateOpenRouterKey(keyValue string, correlationID string) (string, error) {
 	status, _, err := h.ValidateOpenRouterKeyWithCredits(keyValue, correlationID)
