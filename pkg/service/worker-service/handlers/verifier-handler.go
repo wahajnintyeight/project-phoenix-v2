@@ -464,7 +464,9 @@ func (h *VerifierHandler) determineStatusFromResponse(resp *http.Response) strin
 		// Check if response indicates no credits (provider-specific logic)
 		// For now, assume Valid if 200
 		return model.StatusValid
-	case resp.StatusCode == 401 || resp.StatusCode == 403:
+	case resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 429:
+		// Some providers use 429 for quota exhaustion or auth-related denial.
+		// Treat it as invalid so the key is not kept in the re-validation pool.
 		return model.StatusInvalid
 	default:
 		return model.StatusError
