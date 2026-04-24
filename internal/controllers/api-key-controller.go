@@ -128,19 +128,30 @@ func (c *APIKeyController) FindByKeyValue(keyValue string) (*model.APIKey, error
 // FindByStatus retrieves all API keys with a specific status
 func (c *APIKeyController) FindByStatus(status string) ([]*model.APIKey, error) {
 	query := bson.M{"status": status}
-	_, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
+	totalPages, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
 	if err != nil {
 		return nil, err
 	}
 
 	var apiKeys []*model.APIKey
-	for _, result := range results {
-		var apiKey model.APIKey
-		bsonBytes, _ := bson.Marshal(result)
-		if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
-			continue
+	appendResults := func(pageResults []bson.M) {
+		for _, result := range pageResults {
+			var apiKey model.APIKey
+			bsonBytes, _ := bson.Marshal(result)
+			if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
+				continue
+			}
+			apiKeys = append(apiKeys, &apiKey)
 		}
-		apiKeys = append(apiKeys, &apiKey)
+	}
+
+	appendResults(results)
+	for page := 2; page <= int(totalPages); page++ {
+		_, _, pageResults, err := c.DB.FindAllWithPagination(query, page, c.GetCollectionName())
+		if err != nil {
+			return nil, err
+		}
+		appendResults(pageResults)
 	}
 
 	return apiKeys, nil
@@ -149,41 +160,52 @@ func (c *APIKeyController) FindByStatus(status string) ([]*model.APIKey, error) 
 // FindByStatusWithReferences retrieves all API keys with a specific status and populates repo references
 func (c *APIKeyController) FindByStatusWithReferences(status string) ([]*model.APIKeyWithReferences, error) {
 	query := bson.M{"status": status}
-	_, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
+	totalPages, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
 	if err != nil {
 		return nil, err
 	}
 
 	var apiKeys []*model.APIKeyWithReferences
-	for _, result := range results {
-		var apiKey model.APIKey
-		bsonBytes, _ := bson.Marshal(result)
-		if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
-			continue
-		}
-
-		// Populate repo references
-		var references []*model.RepoReference
-		for _, refID := range apiKey.RepoRefs {
-			refQuery := bson.M{"_id": refID}
-			refResult, err := c.DB.FindOne(refQuery, "repo_references")
-			if err != nil {
+	appendResults := func(pageResults []bson.M) {
+		for _, result := range pageResults {
+			var apiKey model.APIKey
+			bsonBytes, _ := bson.Marshal(result)
+			if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
 				continue
 			}
 
-			var ref model.RepoReference
-			refBytes, _ := bson.Marshal(refResult)
-			if err := bson.Unmarshal(refBytes, &ref); err != nil {
-				continue
-			}
-			references = append(references, &ref)
-		}
+			// Populate repo references
+			var references []*model.RepoReference
+			for _, refID := range apiKey.RepoRefs {
+				refQuery := bson.M{"_id": refID}
+				refResult, err := c.DB.FindOne(refQuery, "repo_references")
+				if err != nil {
+					continue
+				}
 
-		apiKeyWithRefs := &model.APIKeyWithReferences{
-			APIKey:     apiKey,
-			References: references,
+				var ref model.RepoReference
+				refBytes, _ := bson.Marshal(refResult)
+				if err := bson.Unmarshal(refBytes, &ref); err != nil {
+					continue
+				}
+				references = append(references, &ref)
+			}
+
+			apiKeyWithRefs := &model.APIKeyWithReferences{
+				APIKey:     apiKey,
+				References: references,
+			}
+			apiKeys = append(apiKeys, apiKeyWithRefs)
 		}
-		apiKeys = append(apiKeys, apiKeyWithRefs)
+	}
+
+	appendResults(results)
+	for page := 2; page <= int(totalPages); page++ {
+		_, _, pageResults, err := c.DB.FindAllWithPagination(query, page, c.GetCollectionName())
+		if err != nil {
+			return nil, err
+		}
+		appendResults(pageResults)
 	}
 
 	return apiKeys, nil
