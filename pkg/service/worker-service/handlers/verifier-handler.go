@@ -723,7 +723,7 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 			helper.LogInfo(keyCtx, "Re-validating key %s for provider: %s", k.ID.Hex(), k.Provider)
 			newStatus, credits, err := h.ValidateKeyWithCredits(k, correlationID)
 			if err != nil {
-				helper.LogError(keyCtx, "Re-validation error for key %s", err, k.ID.Hex())
+				// helper.LogError(keyCtx, "Re-validation error for key %s", err, k.ID.Hex())
 				// Don't change status on error during re-validation
 				return
 			}
