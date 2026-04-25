@@ -684,7 +684,8 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 		return fmt.Errorf("failed to retrieve valid keys: %v", err)
 	}
 
-	validNoCreditsKeys, err := h.apiKeyController.FindByStatus(model.StatusValidNoCredits)
+	//TODO: change back to StatusValidNoCredits
+	validNoCreditsKeys, err := h.apiKeyController.FindByStatus(model.StatusInvalid)
 	if err != nil {
 		helper.LogError(ctx, "Failed to retrieve ValidNoCredits keys from MongoDB", err)
 	} else {
