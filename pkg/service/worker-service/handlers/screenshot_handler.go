@@ -17,12 +17,13 @@ import (
 )
 
 type ScreenshotHandler struct {
-	processedCount int
-	failedCount    int
-	llmService     *service.LLMService
-	apiKey         string
-	modelName      string
-	qdrantClient   *vectorstore.QdrantClient
+	processedCount       int
+	failedCount          int
+	llmService           *service.LLMService
+	multimodalLLMService *service.MultimodalLLMService
+	apiKey               string
+	modelName            string
+	qdrantClient         *vectorstore.QdrantClient
 }
 
 func NewScreenshotHandler() *ScreenshotHandler {
@@ -36,12 +37,13 @@ func NewScreenshotHandler() *ScreenshotHandler {
 	}
 
 	return &ScreenshotHandler{
-		processedCount: 0,
-		failedCount:    0,
-		llmService:     service.NewLLMService(),
-		apiKey:         os.Getenv("OPENROUTER_API_KEY"),
-		modelName:      getEnvOrDefault("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"),
-		qdrantClient:   qdrantClient,
+		processedCount:       0,
+		failedCount:          0,
+		llmService:           service.NewLLMService(),
+		multimodalLLMService: service.NewMultimodalLLMService(),
+		apiKey:               os.Getenv("OPENROUTER_API_KEY"),
+		modelName:            getEnvOrDefault("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"),
+		qdrantClient:         qdrantClient,
 	}
 }
 
@@ -191,8 +193,18 @@ func (h *ScreenshotHandler) analyzeScreenshot(metadata *ScreenshotMetadata, imag
 		Messages:    messages,
 	}
 
-	// Send request to LLM
-	response, err := h.llmService.SendChatCompletion(req)
+	// Send request to LLM - use multimodal service if image data is present
+	var response *model.ChatCompletionResponse
+	var err error
+
+	if imageData != "" {
+		log.Printf("Using multimodal LLM service for vision analysis")
+		response, err = h.multimodalLLMService.SendChatCompletion(req)
+	} else {
+		log.Printf("Using standard LLM service for text-only analysis")
+		response, err = h.llmService.SendChatCompletion(req)
+	}
+
 	if err != nil {
 		if h.llmService.IsCreditExhaustedError(err) {
 			seed := fmt.Sprintf("%s|%s|%s|%s", metadata.DeviceName, metadata.Timestamp, metadata.ActiveProcessName, metadata.ActiveWindowTitle)
