@@ -202,9 +202,14 @@ Extract all visible information. If any field is not visible, use null.`
 
 	// Parse JSON response
 	var scoreboardData map[string]interface{}
-	if err := json.Unmarshal([]byte(response.Message.Content), &scoreboardData); err != nil {
+	contentStr, ok := response.Message.Content.(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid content type: expected string")
+	}
+
+	if err := json.Unmarshal([]byte(contentStr), &scoreboardData); err != nil {
 		// Try to extract JSON from response
-		jsonStr := extractJSON(response.Message.Content)
+		jsonStr := extractJSON(contentStr)
 		if err := json.Unmarshal([]byte(jsonStr), &scoreboardData); err != nil {
 			return nil, fmt.Errorf("failed to parse scoreboard data: %w", err)
 		}
@@ -256,7 +261,7 @@ func (h *CricketHandler) generateCommentary(eventType string, data map[string]in
 
 	//append a dummy text to prompt
 	prompt += " Throw in some humor and sarcasm as well. We need to entertain the users on discord, also with some hard hitting facts. Keep it 50-80 words."
-	
+
 	commentary, err := h.llmService.GenerateText(prompt)
 	if err != nil {
 		return "", err
