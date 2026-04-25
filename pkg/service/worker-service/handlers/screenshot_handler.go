@@ -47,7 +47,6 @@ func NewScreenshotHandler() *ScreenshotHandler {
 
 // Process handles screenshot processing tasks
 func (h *ScreenshotHandler) Process(data map[string]interface{}) error {
-	log.Println("Processing screenshot task:", data)
 
 	// Extract screenshot metadata
 	metadata, err := h.extractMetadata(data)
@@ -150,23 +149,46 @@ func (h *ScreenshotHandler) analyzeScreenshot(metadata *ScreenshotMetadata, imag
 	// Build analysis prompt
 	prompt := h.buildAnalysisPrompt(metadata, imageData)
 
-	// Create LLM request
+	// Create LLM request with vision support if image data is present
+	messages := []model.ChatMessage{
+		{
+			Role:    "system",
+			Content: getSystemPrompt(),
+		},
+	}
+
+	// If image data is present, create a vision message with multimodal content
+	if imageData != "" {
+		messages = append(messages, model.ChatMessage{
+			Role: "user",
+			Content: []model.ContentPart{
+				{
+					Type: "text",
+					Text: prompt,
+				},
+				{
+					Type: "image_url",
+					ImageURL: &model.ImageURL{
+						URL: "data:image/jpeg;base64," + imageData,
+					},
+				},
+			},
+		})
+	} else {
+		// No image, just text prompt
+		messages = append(messages, model.ChatMessage{
+			Role:    "user",
+			Content: prompt,
+		})
+	}
+
 	req := model.ChatCompletionRequest{
 		Provider:    "openrouter",
 		Model:       h.modelName,
 		APIKey:      h.apiKey,
 		Temperature: 0.3,
 		MaxTokens:   1000,
-		Messages: []model.ChatMessage{
-			{
-				Role:    "system",
-				Content: getSystemPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
+		Messages:    messages,
 	}
 
 	// Send request to LLM
@@ -181,8 +203,17 @@ func (h *ScreenshotHandler) analyzeScreenshot(metadata *ScreenshotMetadata, imag
 		return nil, fmt.Errorf("LLM request failed: %w", err)
 	}
 
+	// Extract content as string (handle interface{} type)
+	var contentStr string
+	switch content := response.Message.Content.(type) {
+	case string:
+		contentStr = content
+	default:
+		contentStr = fmt.Sprintf("%v", content)
+	}
+
 	// Parse response into structured analysis
-	analysis := h.parseAnalysisResponse(response.Message.Content, metadata)
+	analysis := h.parseAnalysisResponse(contentStr, metadata)
 
 	return analysis, nil
 }
@@ -499,7 +530,7 @@ func inferActivity(processName, windowTitle string) string {
 }
 
 func categorizeActivity(processName string) string {
-	
+
 	switch {
 	case contains(processName, "code", "visual studio", "intellij", "pycharm"):
 		return "development"

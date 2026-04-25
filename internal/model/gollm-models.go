@@ -4,8 +4,20 @@ import "time"
 
 // ChatMessage represents a single message in a chat conversation
 type ChatMessage struct {
-	Role    string `json:"role" bson:"role"`       // "system", "user", or "assistant"
-	Content string `json:"content" bson:"content"` // The message content
+	Role    string      `json:"role" bson:"role"`       // "system", "user", or "assistant"
+	Content interface{} `json:"content" bson:"content"` // String for text, []ContentPart for multimodal
+}
+
+// ContentPart represents a part of multimodal content (text or image)
+type ContentPart struct {
+	Type     string    `json:"type"`                // "text" or "image_url"
+	Text     string    `json:"text,omitempty"`      // Text content (for type="text")
+	ImageURL *ImageURL `json:"image_url,omitempty"` // Image URL (for type="image_url")
+}
+
+// ImageURL represents an image URL in a content part
+type ImageURL struct {
+	URL string `json:"url"` // Image URL (can be data:image/jpeg;base64,... or http://...)
 }
 
 // ChatCompletionRequest represents a request for chat-based LLM completion

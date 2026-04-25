@@ -228,13 +228,34 @@ func (s *LLMService) buildPromptFromMessages(messages []model.ChatMessage) strin
 	var promptBuilder strings.Builder
 
 	for _, msg := range messages {
+		var contentStr string
+
+		// Handle both string and multimodal content
+		switch content := msg.Content.(type) {
+		case string:
+			contentStr = content
+		case []model.ContentPart:
+			// For multimodal content, extract text parts only
+			// (images will be handled separately by vision-capable models)
+			for _, part := range content {
+				if part.Type == "text" {
+					contentStr += part.Text + " "
+				} else if part.Type == "image_url" {
+					contentStr += "[Image attached] "
+				}
+			}
+		default:
+			// Try to convert to string
+			contentStr = fmt.Sprintf("%v", content)
+		}
+
 		switch msg.Role {
 		case "system":
-			promptBuilder.WriteString(fmt.Sprintf("System: %s\n\n", msg.Content))
+			promptBuilder.WriteString(fmt.Sprintf("System: %s\n\n", contentStr))
 		case "user":
-			promptBuilder.WriteString(fmt.Sprintf("User: %s\n\n", msg.Content))
+			promptBuilder.WriteString(fmt.Sprintf("User: %s\n\n", contentStr))
 		case "assistant":
-			promptBuilder.WriteString(fmt.Sprintf("Assistant: %s\n\n", msg.Content))
+			promptBuilder.WriteString(fmt.Sprintf("Assistant: %s\n\n", contentStr))
 		}
 	}
 
@@ -298,7 +319,22 @@ func (s *LLMService) ParseATSScoreResponse(response string) (map[string]interfac
 func calculateTokens(messages []model.ChatMessage) int {
 	totalChars := 0
 	for _, msg := range messages {
-		totalChars += len(msg.Content)
+		switch content := msg.Content.(type) {
+		case string:
+			totalChars += len(content)
+		case []model.ContentPart:
+			for _, part := range content {
+				if part.Type == "text" {
+					totalChars += len(part.Text)
+				}
+				// Images count as ~85 tokens (rough estimate for base64 images)
+				if part.Type == "image_url" {
+					totalChars += 340 // 85 tokens * 4 chars/token
+				}
+			}
+		default:
+			totalChars += len(fmt.Sprintf("%v", content))
+		}
 	}
 	// Rough estimate: 1 token ≈ 4 characters
 	return totalChars / 4
