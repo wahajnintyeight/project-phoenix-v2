@@ -245,7 +245,23 @@ func (g *GoLLMController) TextCompletion(w http.ResponseWriter, r *http.Request)
 func calculateTokens(messages []model.ChatMessage) int {
 	totalChars := 0
 	for _, msg := range messages {
-		totalChars += len(msg.Content)
+		// Handle interface{} content type
+		switch content := msg.Content.(type) {
+		case string:
+			totalChars += len(content)
+		case []model.ContentPart:
+			for _, part := range content {
+				if part.Type == "text" {
+					totalChars += len(part.Text)
+				}
+				// Images count as ~85 tokens
+				if part.Type == "image_url" {
+					totalChars += 340 // 85 tokens * 4 chars/token
+				}
+			}
+		default:
+			totalChars += len(fmt.Sprintf("%v", content))
+		}
 	}
 	// Rough estimate: 1 token ≈ 4 characters
 	return totalChars / 4
@@ -324,7 +340,16 @@ func (g *GoLLMController) ScanResumeATS(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Try to parse the response as ATS score JSON
-	atsScore, parseErr := g.LLMService.ParseATSScoreResponse(response.Message.Content)
+	// Extract content as string (handle interface{} type)
+	var contentStr string
+	switch content := response.Message.Content.(type) {
+	case string:
+		contentStr = content
+	default:
+		contentStr = fmt.Sprintf("%v", content)
+	}
+
+	atsScore, parseErr := g.LLMService.ParseATSScoreResponse(contentStr)
 	if parseErr != nil {
 		log.Printf("Warning: Could not parse ATS score JSON: %v", parseErr)
 		// Return raw response if parsing fails
