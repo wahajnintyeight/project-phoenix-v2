@@ -302,14 +302,14 @@ func (h *ScreenshotHandler) parseAnalysisResponse(content string, metadata *Scre
 	jsonStr := extractJSON(content)
 
 	var llmResponse struct {
-		Summary           string `json:"summary"`
-		Application       string `json:"application"`
-		Activity          string `json:"activity"`
-		TimeVisible       string `json:"time_visible"`
-		UserState         string `json:"user_state"`
-		ProductivityLevel string `json:"productivity_level"`
-		Category          string `json:"category"`
-		Observations      string `json:"observations"`
+		Summary           string      `json:"summary"`
+		Application       string      `json:"application"`
+		Activity          string      `json:"activity"`
+		TimeVisible       string      `json:"time_visible"`
+		UserState         string      `json:"user_state"`
+		ProductivityLevel string      `json:"productivity_level"`
+		Category          string      `json:"category"`
+		Observations      interface{} `json:"observations"`
 	}
 
 	// Try to parse JSON
@@ -329,6 +329,26 @@ func (h *ScreenshotHandler) parseAnalysisResponse(content string, metadata *Scre
 		}
 	}
 
+	// Convert observations to string (handle both string and array types)
+	var observationsStr string
+	switch obs := llmResponse.Observations.(type) {
+	case string:
+		observationsStr = obs
+	case []interface{}:
+		// Convert array to comma-separated string
+		var parts []string
+		for _, item := range obs {
+			if str, ok := item.(string); ok {
+				parts = append(parts, str)
+			} else {
+				parts = append(parts, fmt.Sprintf("%v", item))
+			}
+		}
+		observationsStr = strings.Join(parts, ", ")
+	default:
+		observationsStr = fmt.Sprintf("%v", obs)
+	}
+
 	// Return parsed analysis
 	return &ScreenshotAnalysis{
 		Application:       llmResponse.Application,
@@ -338,7 +358,7 @@ func (h *ScreenshotHandler) parseAnalysisResponse(content string, metadata *Scre
 		Category:          llmResponse.Category,
 		TimeVisible:       llmResponse.TimeVisible,
 		Summary:           llmResponse.Summary,
-		Observations:      llmResponse.Observations,
+		Observations:      observationsStr,
 		RawLLMResponse:    content,
 		ConfidenceScore:   0.95,
 	}
