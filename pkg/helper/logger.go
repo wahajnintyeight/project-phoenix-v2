@@ -45,3 +45,8 @@ func LogError(ctx LogContext, message string, err error, args ...interface{}) {
 func GenerateCorrelationID() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
+
+// LogDebug logs a debug message (simple wrapper for log.Printf)
+func LogDebug(message string, args ...interface{}) {
+	log.Printf("[DEBUG] "+message, args...)
+}

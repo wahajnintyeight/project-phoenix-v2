@@ -21,6 +21,7 @@ const (
 	ProviderAnthropic  = "Anthropic"
 	ProviderGoogle     = "Google"
 	ProviderOpenRouter = "OpenRouter"
+	ProviderMoonshot   = "Moonshot"
 )
 
 type APIKey struct {

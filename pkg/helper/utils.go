@@ -209,3 +209,8 @@ func StringToObjectID(id string) interface{} {
 	// The MongoDB driver will handle the conversion
 	return id
 }
+
+// NewError creates a new error with the given message
+func NewError(message string) error {
+	return fmt.Errorf("%s", message)
+}

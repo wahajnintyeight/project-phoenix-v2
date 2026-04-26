@@ -95,6 +95,16 @@
       ]
     },
     {
+      "provider": "Moonshot",
+      "enabled": true,
+      "queries":[
+        {
+          "pattern": "\"sk-\" ",
+          "description": "Moonshot keys"
+        }
+      ]
+    },
+    {
       "provider": "Other",
       "enabled": true,
       "queries": [
