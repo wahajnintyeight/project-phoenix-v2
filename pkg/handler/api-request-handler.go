@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
+	"time"
 
 	"net/http"
 	"project-phoenix/v2/internal/controllers"
@@ -661,11 +663,21 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Build query for both Valid and ValidNoCredits statuses
-		query := bson.M{
-			"status": bson.M{
-				"$in": []string{model.StatusValid, model.StatusValidNoCredits},
-			},
+		// Get status filter from query string
+		statusFilter := r.URL.Query().Get("status")
+
+		// Build query based on status filter
+		var query bson.M
+		if statusFilter != "" {
+			// Filter by specific status
+			query = bson.M{"status": statusFilter}
+		} else {
+			// Default: show both Valid and ValidNoCredits statuses
+			query = bson.M{
+				"status": bson.M{
+					"$in": []string{model.StatusValid, model.StatusValidNoCredits},
+				},
+			}
 		}
 
 		// Add provider filter if specified
@@ -727,10 +739,21 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
 		apiKeyController := controller.(*controllers.APIKeyController)
 
+		// Check if stats are cached in session
+		cachedStats, cacheValid := getStatsFromCache(r)
+		if cacheValid {
+			log.Println("Returning cached stats")
+			response.SendResponse(w, int(enum.DATA_FETCHED), cachedStats)
+			break
+		}
+
+		// Fetch fresh stats
 		stats, e := apiKeyController.GetStatistics()
 		if e != nil {
 			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
 		} else {
+			// Cache stats in session for 30 minutes
+			cacheStatsInSession(w, r, stats)
 			response.SendResponse(w, int(enum.DATA_FETCHED), stats)
 		}
 		break
@@ -755,5 +778,71 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		break
 	default:
 		http.NotFound(w, r)
+	}
+}
+
+// Stats cache helpers
+type CachedStats struct {
+	Stats     *controllers.APIKeyStats
+	CachedAt  time.Time
+	ExpiresAt time.Time
+}
+
+var statsCache = make(map[string]*CachedStats)
+var statsCacheMutex sync.RWMutex
+
+const statsCacheDuration = 30 * time.Minute
+
+func getStatsFromCache(r *http.Request) (*controllers.APIKeyStats, bool) {
+	sessionID := r.Header.Get("sessionId")
+	if sessionID == "" {
+		return nil, false
+	}
+
+	statsCacheMutex.RLock()
+	defer statsCacheMutex.RUnlock()
+
+	cached, exists := statsCache[sessionID]
+	if !exists {
+		return nil, false
+	}
+
+	// Check if cache has expired
+	if time.Now().After(cached.ExpiresAt) {
+		return nil, false
+	}
+
+	return cached.Stats, true
+}
+
+func cacheStatsInSession(w http.ResponseWriter, r *http.Request, stats *controllers.APIKeyStats) {
+	sessionID := r.Header.Get("sessionId")
+	if sessionID == "" {
+		return
+	}
+
+	statsCacheMutex.Lock()
+	defer statsCacheMutex.Unlock()
+
+	now := time.Now()
+	statsCache[sessionID] = &CachedStats{
+		Stats:     stats,
+		CachedAt:  now,
+		ExpiresAt: now.Add(statsCacheDuration),
+	}
+
+	// Clean up expired cache entries
+	go cleanupExpiredStatsCache()
+}
+
+func cleanupExpiredStatsCache() {
+	statsCacheMutex.Lock()
+	defer statsCacheMutex.Unlock()
+
+	now := time.Now()
+	for sessionID, cached := range statsCache {
+		if now.After(cached.ExpiresAt) {
+			delete(statsCache, sessionID)
+		}
 	}
 }

@@ -266,7 +266,7 @@ func (c *APIKeyController) FindAllWithPaginationAndReferences(query bson.M, page
 	opts := options.Find()
 	opts.SetLimit(pageSize)
 	opts.SetSkip(pageSize * int64(page-1))
-	opts.SetSort(bson.D{{Key: "validated_at", Value: -1}}) // Sort by created_at descending
+	opts.SetSort(bson.D{{Key: "created_at", Value: -1}}) // Sort by created_at descending
 
 	cursor, err := collection.Find(ctx, query, opts)
 	if err != nil {
