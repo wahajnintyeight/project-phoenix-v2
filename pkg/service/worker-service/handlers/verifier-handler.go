@@ -116,19 +116,8 @@ func (h *VerifierHandler) Process(data map[string]interface{}) error {
 	h.processedCount++
 	if status == model.StatusValid {
 		h.validCount++
-
-		// Send Discord notification ONLY for valid keys with credits (not for invalid or no credits)
-		if h.discordNotifier != nil && key.NotifiedAt == nil {
-			stats := h.GetStats()
-			if err := h.discordNotifier.SendAPIKeyValidation(key.Provider, status, credits, stats); err != nil {
-				helper.LogError(ctx, "Failed to send Discord notification", err)
-			} else {
-				// Mark as notified
-				if err := h.apiKeyController.UpdateNotifiedAt(keyID); err != nil {
-					helper.LogError(ctx, "Failed to update notified_at timestamp", err)
-				}
-			}
-		}
+		// Send Discord notification for valid keys with credits
+		h.sendValidKeyNotification(key, status, credits, correlationID)
 	} else if status == model.StatusInvalid {
 		h.invalidCount++
 	}
@@ -144,6 +133,50 @@ func (h *VerifierHandler) GetStats() map[string]int {
 		"processed": h.processedCount,
 		"valid":     h.validCount,
 		"invalid":   h.invalidCount,
+	}
+}
+
+// sendValidKeyNotification sends Discord notification for valid keys (DRY helper)
+// Only sends if:
+// 1. Discord notifier is configured
+// 2. Key has not been notified before (NotifiedAt is nil)
+// 3. Status is Valid (with credits)
+func (h *VerifierHandler) sendValidKeyNotification(key *model.APIKey, status string, credits map[string]interface{}, correlationID string) {
+	ctx := helper.LogContext{
+		ServiceName:   "worker-service",
+		Operation:     "VerifierHandler.sendValidKeyNotification",
+		CorrelationID: correlationID,
+	}
+
+	// Skip if no Discord notifier configured
+	if h.discordNotifier == nil {
+		return
+	}
+
+	// Skip if already notified
+	if key.NotifiedAt != nil {
+		helper.LogInfo(ctx, "Skipping notification for key %s (already notified)", key.ID.Hex())
+		return
+	}
+
+	// Get web scraper URL from environment
+	webScraperURL := os.Getenv("PHOENIX_WEB_SCRAPER")
+	if webScraperURL == "" {
+		webScraperURL = "https://v0-phoenix-scraper.vercel.app/" // Default fallback
+	}
+
+	// Send notification
+	stats := h.GetStats()
+	if err := h.discordNotifier.SendAPIKeyValidation(key.Provider, status, credits, stats, webScraperURL); err != nil {
+		helper.LogError(ctx, "Failed to send Discord notification", err)
+		return
+	}
+
+	// Mark as notified
+	if err := h.apiKeyController.UpdateNotifiedAt(key.ID); err != nil {
+		helper.LogError(ctx, "Failed to update notified_at timestamp", err)
+	} else {
+		helper.LogInfo(ctx, "Discord notification sent for key %s", key.ID.Hex())
 	}
 }
 
@@ -280,6 +313,7 @@ func (h *VerifierHandler) ValidateGoogleKey(keyValue string, correlationID strin
 	status, err := h.executeRequestWithRetry(req, correlationID)
 	return status, err
 }
+
 // ValidateOpenRouterKey validates an OpenRouter API key using the credits endpoint
 func (h *VerifierHandler) ValidateOpenRouterKey(keyValue string, correlationID string) (string, error) {
 	status, _, err := h.ValidateOpenRouterKeyWithCredits(keyValue, correlationID)
@@ -535,18 +569,9 @@ func (h *VerifierHandler) RunValidationCycle(broker interface{}) error {
 			h.processedCount++
 			if status == model.StatusValid || status == model.StatusValidNoCredits {
 				h.validCount++
-
-				// Send Discord notification ONLY for valid keys with credits (not for invalid or no credits)
-				if h.discordNotifier != nil && status == model.StatusValid && k.NotifiedAt == nil {
-					stats := h.GetStats()
-					if err := h.discordNotifier.SendAPIKeyValidation(k.Provider, status, credits, stats); err != nil {
-						helper.LogError(keyCtx, "Failed to send Discord notification", err)
-					} else {
-						// Mark as notified
-						if err := h.apiKeyController.UpdateNotifiedAt(k.ID); err != nil {
-							helper.LogError(keyCtx, "Failed to update notified_at timestamp", err)
-						}
-					}
+				// Send Discord notification for valid keys with credits
+				if status == model.StatusValid {
+					h.sendValidKeyNotification(k, status, credits, correlationID)
 				}
 			} else if status == model.StatusInvalid {
 				h.invalidCount++
@@ -741,20 +766,9 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 					return
 				}
 
-				// Send Discord notification ONLY if:
-				// 1. New status is Valid (with credits, not ValidNoCredits)
-				// 2. Key was not already notified (NotifiedAt is nil)
-				// This prevents duplicate notifications during re-validation
-				if h.discordNotifier != nil && newStatus == model.StatusValid && k.NotifiedAt == nil {
-					stats := h.GetStats()
-					if err := h.discordNotifier.SendAPIKeyValidation(k.Provider, newStatus, credits, stats); err != nil {
-						helper.LogError(keyCtx, "Failed to send Discord notification", err)
-					} else {
-						// Mark as notified
-						if err := h.apiKeyController.UpdateNotifiedAt(k.ID); err != nil {
-							helper.LogError(keyCtx, "Failed to update notified_at timestamp", err)
-						}
-					}
+				// Send Discord notification if key became valid (with credits)
+				if newStatus == model.StatusValid {
+					h.sendValidKeyNotification(k, newStatus, credits, correlationID)
 				}
 
 				// Publish status change event

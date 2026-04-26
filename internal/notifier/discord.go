@@ -394,7 +394,7 @@ func (n *DiscordNotifier) SendSystemAlert(title, message, level string) error {
 }
 
 // SendAPIKeyValidation sends a formatted notification when an API key is validated
-func (n *DiscordNotifier) SendAPIKeyValidation(provider, status string, credits map[string]interface{}, stats map[string]int) error {
+func (n *DiscordNotifier) SendAPIKeyValidation(provider, status string, credits map[string]interface{}, stats map[string]int, webScraperURL string) error {
 	color := 0x95a5a6 // Gray
 	badge := "🔑"
 	statusLabel := status
@@ -429,6 +429,11 @@ func (n *DiscordNotifier) SendAPIKeyValidation(provider, status string, credits 
 				description += fmt.Sprintf("\n\n💰 **Credits:** $%.2f available | $%.2f used", totalCredits, totalUsage)
 			}
 		}
+	}
+
+	// Add web scraper URL if provided
+	if webScraperURL != "" {
+		description += fmt.Sprintf("\n\n🌐 **All keys available at:** %s", webScraperURL)
 	}
 
 	fields := []DiscordEmbedField{
