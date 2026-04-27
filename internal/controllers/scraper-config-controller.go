@@ -145,9 +145,10 @@ func (c *ScraperConfigController) SeedDefaultQueries() error {
 		}
 
 		for _, pattern := range providerPatterns.Queries {
-			// Check if query already exists
+			// Check if query already exists (check both pattern AND provider)
 			existingQuery := bson.M{
 				"query_pattern": pattern.Pattern,
+				"provider":      providerPatterns.Provider,
 			}
 			existing, err := c.DB.FindOne(existingQuery, c.GetCollectionName())
 			if err != nil || existing == nil {
