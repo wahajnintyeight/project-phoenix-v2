@@ -77,11 +77,11 @@ graph TB
     Phoenix --> ScS
     
     style Phoenix fill:#ff6b6b,color:#fff
-    style WebApp1 fill:#4ecdc4
-    style WebApp2 fill:#45b7d1
-    style WebApp3 fill:#96ceb4
-    style WebApp4 fill:#feca57
-    style WebApp5 fill:#ff9ff3
+    style WebApp1 fill:#ffffff,color:#000000,stroke:#333333
+    style WebApp2 fill:#ffffff,color:#000000,stroke:#333333
+    style WebApp3 fill:#ffffff,color:#000000,stroke:#333333
+    style WebApp4 fill:#ffffff,color:#000000,stroke:#333333
+    style WebApp5 fill:#ffffff,color:#000000,stroke:#333333
 ```
 
 ## 🏗️ Detailed Architecture Overview
@@ -125,11 +125,11 @@ graph TB
         Logs[Structured Logging]
     end
     
-    style AG fill:#e1f5fe
-    style AGG fill:#e1f5fe
-    style RMQ fill:#fff3e0
-    style MongoDB fill:#e8f5e8
-    style Redis fill:#ffebee
+    style AG fill:#ffffff,color:#000000,stroke:#333333
+    style AGG fill:#ffffff,color:#000000,stroke:#333333
+    style RMQ fill:#ffffff,color:#000000,stroke:#333333
+    style MongoDB fill:#ffffff,color:#000000,stroke:#333333
+    style Redis fill:#ffffff,color:#000000,stroke:#333333
 ```
 
 ## 🎯 Core Microservices
