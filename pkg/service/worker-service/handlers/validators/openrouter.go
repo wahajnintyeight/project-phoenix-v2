@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,6 +30,7 @@ func (v *OpenRouterValidator) GetProviderName() string {
 }
 
 // Validate validates an OpenRouter API key and returns credits info
+// First validates the key by calling the chat completions API, then fetches credits
 func (v *OpenRouterValidator) Validate(keyValue string, correlationID string) (string, map[string]interface{}, error) {
 	ctx := helper.LogContext{
 		ServiceName:   "worker-service",
@@ -36,63 +38,110 @@ func (v *OpenRouterValidator) Validate(keyValue string, correlationID string) (s
 		CorrelationID: correlationID,
 	}
 
-	url := "https://openrouter.ai/api/v1/credits"
+	// Step 1: Validate the key by calling chat completions API
+	chatURL := "https://openrouter.ai/api/v1/chat/completions"
+	chatPayload := []byte(`{
+		"messages": [
+			{"content": "You are a helpful assistant.", "role": "system"},
+			{"content": "What is the capital of France?", "role": "user"}
+		],
+		"max_tokens": 150,
+		"model": "~openai/gpt-latest",
+		"temperature": 0.7
+	}`)
 
-	req, err := http.NewRequest("GET", url, nil)
+	chatReq, err := http.NewRequest("POST", chatURL, bytes.NewBuffer(chatPayload))
 	if err != nil {
 		return model.StatusError, nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+keyValue)
-	req.Header.Set("Content-Type", "application/json")
+	chatReq.Header.Set("Authorization", "Bearer "+keyValue)
+	chatReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := v.HTTPClient.Do(req)
+	chatResp, err := v.HTTPClient.Do(chatReq)
 	if err != nil {
-		helper.LogError(ctx, "HTTP request error", err)
+		helper.LogError(ctx, "Chat completions HTTP request error", err)
 		return model.StatusError, nil, err
 	}
-	defer resp.Body.Close()
+	defer chatResp.Body.Close()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	chatBodyBytes, err := io.ReadAll(chatResp.Body)
 	if err != nil {
-		helper.LogError(ctx, "Failed to read response body", err)
+		helper.LogError(ctx, "Failed to read chat completions response body", err)
 		return model.StatusError, nil, err
 	}
 
 	if v.DebugMode {
-		v.logResponse(req, resp)
-		helper.LogDebug("  Body: %s", string(bodyBytes))
+		v.logResponse(chatReq, chatResp)
+		helper.LogDebug("  Chat Body: %s", string(chatBodyBytes))
 	}
 
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+	// Check if the key is invalid
+	if chatResp.StatusCode == 401 || chatResp.StatusCode == 403 {
 		return model.StatusInvalid, nil, nil
 	}
 
-	if resp.StatusCode != 200 {
-		return model.StatusError, nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	// Only proceed to credits check if chat completions returned 200
+	if chatResp.StatusCode != 200 {
+		return model.StatusError, nil, fmt.Errorf("chat completions unexpected status code: %d", chatResp.StatusCode)
 	}
 
-	var creditsResp struct {
+	helper.LogInfo(ctx, "OpenRouter key validated via chat completions API")
+
+	// Step 2: Fetch credits information
+	creditsURL := "https://openrouter.ai/api/v1/credits"
+
+	creditsReq, err := http.NewRequest("GET", creditsURL, nil)
+	if err != nil {
+		return model.StatusError, nil, err
+	}
+
+	creditsReq.Header.Set("Authorization", "Bearer "+keyValue)
+	creditsReq.Header.Set("Content-Type", "application/json")
+
+	creditsResp, err := v.HTTPClient.Do(creditsReq)
+	if err != nil {
+		helper.LogError(ctx, "Credits HTTP request error", err)
+		return model.StatusError, nil, err
+	}
+	defer creditsResp.Body.Close()
+
+	creditsBodyBytes, err := io.ReadAll(creditsResp.Body)
+	if err != nil {
+		helper.LogError(ctx, "Failed to read credits response body", err)
+		return model.StatusError, nil, err
+	}
+
+	if v.DebugMode {
+		v.logResponse(creditsReq, creditsResp)
+		helper.LogDebug("  Credits Body: %s", string(creditsBodyBytes))
+	}
+
+	if creditsResp.StatusCode != 200 {
+		return model.StatusError, nil, fmt.Errorf("credits unexpected status code: %d", creditsResp.StatusCode)
+	}
+
+	var creditsData struct {
 		Data struct {
 			TotalCredits *float64 `json:"total_credits"`
 			TotalUsage   *float64 `json:"total_usage"`
 		} `json:"data"`
 	}
 
-	if err := json.Unmarshal(bodyBytes, &creditsResp); err != nil {
+	if err := json.Unmarshal(creditsBodyBytes, &creditsData); err != nil {
 		helper.LogError(ctx, "Failed to parse credits response", err)
 		return model.StatusError, nil, err
 	}
 
-	if creditsResp.Data.TotalCredits == nil {
+	if creditsData.Data.TotalCredits == nil {
 		helper.LogError(ctx, "OpenRouter API returned 200 but missing total_credits field", nil)
 		return model.StatusError, nil, fmt.Errorf("missing total_credits in response")
 	}
 
-	totalCredits := *creditsResp.Data.TotalCredits
+	totalCredits := *creditsData.Data.TotalCredits
 	totalUsage := float64(0)
-	if creditsResp.Data.TotalUsage != nil {
-		totalUsage = *creditsResp.Data.TotalUsage
+	if creditsData.Data.TotalUsage != nil {
+		totalUsage = *creditsData.Data.TotalUsage
 	}
 
 	credits := map[string]interface{}{
