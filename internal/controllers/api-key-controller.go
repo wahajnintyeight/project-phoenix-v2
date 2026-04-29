@@ -216,6 +216,38 @@ func (c *APIKeyController) FindPendingKeys() ([]*model.APIKey, error) {
 	return c.FindByStatus(model.StatusPending)
 }
 
+// FindAll retrieves all API keys from the database
+func (c *APIKeyController) FindAll() ([]*model.APIKey, error) {
+	query := bson.M{}
+	totalPages, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
+	if err != nil {
+		return nil, err
+	}
+
+	var apiKeys []*model.APIKey
+	appendResults := func(pageResults []bson.M) {
+		for _, result := range pageResults {
+			var apiKey model.APIKey
+			bsonBytes, _ := bson.Marshal(result)
+			if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
+				continue
+			}
+			apiKeys = append(apiKeys, &apiKey)
+		}
+	}
+
+	appendResults(results)
+	for page := 2; page <= int(totalPages); page++ {
+		_, _, pageResults, err := c.DB.FindAllWithPagination(query, page, c.GetCollectionName())
+		if err != nil {
+			return nil, err
+		}
+		appendResults(pageResults)
+	}
+
+	return apiKeys, nil
+}
+
 // FindAllWithPagination retrieves API keys with pagination
 func (c *APIKeyController) FindAllWithPagination(query bson.M, page int) (int64, int, []*model.APIKey, error) {
 	totalPages, currentPage, results, err := c.DB.FindAllWithPagination(query, page, c.GetCollectionName())

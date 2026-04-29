@@ -378,30 +378,22 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 		CorrelationID: correlationID,
 	}
 
-	helper.LogInfo(ctx, "Starting re-validation cycle for valid keys")
+	helper.LogInfo(ctx, "Starting re-validation cycle for all keys")
 
-	// Retrieve all valid keys (including ValidNoCredits)
-	helper.LogInfo(ctx, "Retrieving valid keys from MongoDB")
-	validKeys, err := h.apiKeyController.FindByStatus(model.StatusValid)
+	// Retrieve all keys regardless of status
+	helper.LogInfo(ctx, "Retrieving all keys from MongoDB")
+	allKeys, err := h.apiKeyController.FindAll()
 	if err != nil {
-		helper.LogError(ctx, "Failed to retrieve valid keys from MongoDB", err)
-		return fmt.Errorf("failed to retrieve valid keys: %v", err)
+		helper.LogError(ctx, "Failed to retrieve keys from MongoDB", err)
+		return fmt.Errorf("failed to retrieve keys: %v", err)
 	}
 
-	//TODO: change back to StatusValidNoCredits
-	validNoCreditsKeys, err := h.apiKeyController.FindByStatus(model.StatusInvalid)
-	if err != nil {
-		helper.LogError(ctx, "Failed to retrieve ValidNoCredits keys from MongoDB", err)
-	} else {
-		validKeys = append(validKeys, validNoCreditsKeys...)
-	}
-
-	if len(validKeys) == 0 {
-		helper.LogInfo(ctx, "No valid keys to re-validate")
+	if len(allKeys) == 0 {
+		helper.LogInfo(ctx, "No keys to re-validate")
 		return nil
 	}
 
-	helper.LogInfo(ctx, "Found %d valid keys to re-validate", len(validKeys))
+	helper.LogInfo(ctx, "Found %d keys to re-validate", len(allKeys))
 
 	// Re-validate keys concurrently
 	var wg sync.WaitGroup
@@ -410,7 +402,7 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 	revalidatedCount := 0
 	statusChangedCount := 0
 
-	for _, key := range validKeys {
+	for _, key := range allKeys {
 		wg.Add(1)
 		go func(k *model.APIKey) {
 			defer wg.Done()
