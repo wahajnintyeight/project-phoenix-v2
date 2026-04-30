@@ -378,7 +378,7 @@ func testOpenRouterModelWithRequest(keyValue, model string) providerResult {
 				"role":    "user",
 			},
 		},
-		"max_tokens":  150,
+		"max_tokens":  800,
 		"model":       model,
 		"temperature": 0.7,
 	}
