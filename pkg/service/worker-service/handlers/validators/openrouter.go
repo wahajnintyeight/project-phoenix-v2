@@ -77,7 +77,7 @@ func (v *OpenRouterValidator) Validate(keyValue string, correlationID string) (s
 	}
 
 	// Check if the key is invalid
-	if chatResp.StatusCode == 401 || chatResp.StatusCode == 403 {
+	if chatResp.StatusCode == 401 || chatResp.StatusCode == 403 || chatResp.StatusCode == 402 {
 		return model.StatusInvalid, nil, nil
 	}
 

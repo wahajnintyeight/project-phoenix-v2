@@ -16,6 +16,7 @@ import (
 	"project-phoenix/v2/pkg/helper"
 	"project-phoenix/v2/pkg/service/worker-service/handlers/validators"
 
+	"go-micro.dev/v4/broker"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -308,24 +309,23 @@ func (h *VerifierHandler) PublishKeyValidated(key *model.APIKey, status string, 
 		return nil // Continue operation even if marshal fails
 	}
 
-	// Type assert broker to the correct type
-	if b, ok := brokerObj.(interface {
-		Publish(string, interface{}) error
-	}); ok {
-		msg := map[string]interface{}{
-			"Body": data,
+	// Type assert broker to go-micro Broker interface
+	if b, ok := brokerObj.(broker.Broker); ok {
+		msg := &broker.Message{
+			Body: data,
 		}
+
 		helper.LogInfo(ctx, "Publishing message to RabbitMQ topic: keys.validated")
 		if err := b.Publish("keys.validated", msg); err != nil {
 			helper.LogError(ctx, "Failed to publish message to RabbitMQ, continuing operation", err)
 			return nil // Log error but continue operation
 		}
+		helper.LogInfo(ctx, "Published key validated event for key: %s with status: %s", key.ID.Hex(), status)
 	} else {
-		helper.LogInfo(ctx, "Warning: broker does not support Publish method, skipping publish")
+		helper.LogInfo(ctx, "Broker type assertion failed, skipping publish")
 		return nil // Continue operation
 	}
 
-	helper.LogInfo(ctx, "Published key validated event for key: %s with status: %s", key.ID.Hex(), status)
 	return nil
 }
 
@@ -419,7 +419,7 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 			helper.LogInfo(keyCtx, "Re-validating key %s for provider: %s", k.ID.Hex(), k.Provider)
 			newStatus, credits, err := h.ValidateKeyWithCredits(k, correlationID)
 			if err != nil {
-				// helper.LogError(keyCtx, "Re-validation error for key %s", err, k.ID.Hex())
+				helper.LogError(keyCtx, "Re-validation error for key %s", err, k.ID.Hex())
 				// Don't change status on error during re-validation
 				return
 			}
@@ -463,7 +463,7 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 
 	wg.Wait()
 
-	helper.LogInfo(ctx, "Re-validation cycle complete. Re-validated: %d, Status changed: %d",
+	fmt.Printf("Re-validation cycle complete. Re-validated: %d, Status changed: %d",
 		revalidatedCount, statusChangedCount)
 
 	return nil
