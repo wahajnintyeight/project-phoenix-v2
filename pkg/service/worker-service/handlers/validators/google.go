@@ -37,7 +37,7 @@ func (v *GoogleValidator) Validate(keyValue string, correlationID string) (strin
 			{
 				"parts": [
 					{
-						"text": "Hello"
+						"text": "PING"
 					}
 				]
 			}
