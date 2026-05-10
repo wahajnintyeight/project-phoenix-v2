@@ -17,11 +17,12 @@ const (
 
 // Provider constants
 const (
-	ProviderOpenAI     = "OpenAI"
-	ProviderAnthropic  = "Anthropic"
-	ProviderGoogle     = "Google"
-	ProviderOpenRouter = "OpenRouter"
-	ProviderMoonshot   = "Moonshot"
+	ProviderOpenAI      = "OpenAI"
+	ProviderAnthropic   = "Anthropic"
+	ProviderGoogle      = "Google"
+	ProviderOpenRouter  = "OpenRouter"
+	ProviderMoonshot    = "Moonshot"
+	ProviderHuggingFace = "HuggingFace"
 )
 
 type APIKey struct {

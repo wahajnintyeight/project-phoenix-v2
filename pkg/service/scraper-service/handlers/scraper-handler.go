@@ -54,11 +54,12 @@ type ScraperHandler struct {
 
 // Key extraction patterns for different providers
 var KeyPatterns = map[string]*regexp.Regexp{
-	model.ProviderOpenAI:     regexp.MustCompile(`sk-[a-zA-Z0-9]{48}`),
-	model.ProviderAnthropic:  regexp.MustCompile(`sk-ant-[a-zA-Z0-9\-]{95,}`),
-	model.ProviderGoogle:     regexp.MustCompile(`AIza[0-9A-Za-z\-_]{35}`),
-	model.ProviderOpenRouter: regexp.MustCompile(`sk-or-v1-[a-zA-Z0-9]{64}`),
-	model.ProviderMoonshot:   regexp.MustCompile(`sk-[a-zA-Z0-9]{48,}`), // Moonshot keys follow similar pattern to OpenAI
+	model.ProviderOpenAI:      regexp.MustCompile(`sk-[a-zA-Z0-9]{48}`),
+	model.ProviderAnthropic:   regexp.MustCompile(`sk-ant-[a-zA-Z0-9\-]{95,}`),
+	model.ProviderGoogle:      regexp.MustCompile(`AIza[0-9A-Za-z\-_]{35}`),
+	model.ProviderOpenRouter:  regexp.MustCompile(`sk-or-v1-[a-zA-Z0-9]{64}`),
+	model.ProviderMoonshot:    regexp.MustCompile(`sk-[a-zA-Z0-9]{48,}`), // Moonshot keys follow similar pattern to OpenAI
+	model.ProviderHuggingFace: regexp.MustCompile(`(?:hf_[a-zA-Z0-9]{20,}|api_org_[a-zA-Z0-9]{20,})`),
 }
 
 // NewScraperHandler creates a new scraper handler

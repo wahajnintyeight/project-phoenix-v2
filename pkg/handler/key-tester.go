@@ -8,10 +8,11 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
-
 	"project-phoenix/v2/internal/model"
+
 )
 
 // KeyTestRequest is the request body for the /validate-key endpoint.
@@ -125,6 +126,9 @@ func testKey(keyValue, provider, model string) KeyTestResult {
 		return buildResult(provider, result)
 	case "OpenRouter":
 		result := testOpenRouterKey(keyValue, model)
+		return buildResult(provider, result)
+	case "HuggingFace":
+		result := testHuggingFaceKey(keyValue)
 		return buildResult(provider, result)
 	default:
 		return KeyTestResult{
@@ -317,6 +321,114 @@ func testOpenRouterKey(keyValue, model string) providerResult {
 		status = "ValidNoCredits"
 	}
 	return providerResult{Status: status, Credits: credits, Response: responseMessage}
+}
+
+// testHuggingFaceKey validates via Hub whoami-v2, then Inference Router chat completions (non-streaming ping).
+func testHuggingFaceKey(keyValue string) providerResult {
+	req, err := http.NewRequest("GET", "https://huggingface.co/api/whoami-v2", nil)
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	req.Header.Set("Authorization", "Bearer "+keyValue)
+
+	resp, err := keyTesterHTTPClient.Do(req)
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+
+	responseMessage := extractProviderResponse(bodyBytes)
+
+	switch resp.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests:
+		return providerResult{Status: "Invalid", Response: responseMessage}
+	case http.StatusOK:
+		// continue to router test
+	default:
+		return providerResult{
+			Status:   "Error",
+			Response: responseMessage,
+			Err:      fmt.Errorf("whoami returned HTTP %d", resp.StatusCode),
+		}
+	}
+
+	var w struct {
+		Name     string `json:"name"`
+		Fullname string `json:"fullname"`
+		Type     string `json:"type"`
+	}
+	credits := map[string]interface{}{}
+	if err := json.Unmarshal(bodyBytes, &w); err == nil {
+		credits["hub_user"] = w.Name
+		credits["fullname"] = w.Fullname
+		credits["account_type"] = w.Type
+	}
+
+	routerURL := "https://router.huggingface.co/v1/chat/completions"
+	if u := os.Getenv("HF_ROUTER_CHAT_URL"); u != "" {
+		routerURL = u
+	}
+	modelName := "moonshotai/Kimi-K2.6"
+	if m := os.Getenv("HF_ROUTER_TEST_MODEL"); m != "" {
+		modelName = m
+	}
+
+	chatPayload, err := json.Marshal(map[string]interface{}{
+		"model": modelName,
+		"messages": []map[string]string{
+			{"role": "user", "content": "ping"},
+		},
+		"max_tokens": 1,
+		"stream":     false,
+	})
+	if err != nil {
+		return providerResult{Status: "Error", Credits: credits, Err: err}
+	}
+
+	chatReq, err := http.NewRequest("POST", routerURL, bytes.NewReader(chatPayload))
+	if err != nil {
+		return providerResult{Status: "Error", Credits: credits, Err: err}
+	}
+	chatReq.Header.Set("Authorization", "Bearer "+keyValue)
+	chatReq.Header.Set("Content-Type", "application/json")
+
+	chatResp, err := keyTesterHTTPClient.Do(chatReq)
+	if err != nil {
+		return providerResult{Status: "Error", Credits: credits, Err: err}
+	}
+	defer chatResp.Body.Close()
+
+	chatBody, err := io.ReadAll(chatResp.Body)
+	if err != nil {
+		return providerResult{Status: "Error", Credits: credits, Err: err}
+	}
+
+	chatMsg := extractProviderResponse(chatBody)
+	combinedResponse := responseMessage
+	if chatMsg != "" {
+		combinedResponse = fmt.Sprintf("whoami: %s | router: %s", responseMessage, chatMsg)
+	}
+
+	switch chatResp.StatusCode {
+	case http.StatusOK:
+		credits["router_chat_ok"] = true
+		credits["router_model"] = modelName
+		return providerResult{Status: "Valid", Credits: credits, Response: combinedResponse}
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests, http.StatusBadRequest:
+		return providerResult{Status: "Invalid", Credits: credits, Response: combinedResponse}
+	default:
+		return providerResult{
+			Status:   "Error",
+			Credits:  credits,
+			Response: combinedResponse,
+			Err:      fmt.Errorf("router chat returned HTTP %d", chatResp.StatusCode),
+		}
+	}
 }
 
 func fetchOpenRouterModels(apiKey string) providerResult {

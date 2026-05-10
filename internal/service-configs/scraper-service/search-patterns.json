@@ -105,6 +105,28 @@
       ]
     },
     {
+      "provider": "HuggingFace",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"hf_\" ",
+          "description": "Hugging Face user access tokens in code or .env"
+        },
+        {
+          "pattern": "\"HUGGING_FACE_HUB_TOKEN\" ",
+          "description": "Hugging Face hub token environment variable"
+        },
+        {
+          "pattern": "\"HF_TOKEN\" ",
+          "description": "HF_TOKEN shorthand"
+        },
+        {
+          "pattern": "\"api_org_\" ",
+          "description": "Hugging Face organization API tokens"
+        }
+      ]
+    },
+    {
       "provider": "Other",
       "enabled": true,
       "queries": [
@@ -115,10 +137,6 @@
         {
           "pattern": "\"fw_\" ",
           "description": "Fireworks AI keys"
-        },
-        {
-          "pattern": "\"hf_\" ",
-          "description": "HuggingFace keys"
         },
         {
           "pattern": "\"API_KEY\" ",
