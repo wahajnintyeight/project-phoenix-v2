@@ -133,6 +133,7 @@ func (s *APIGatewayService) registerRoutes() {
 	openRoutesWithSession := []string{
 		s.serviceConfig.EndpointPrefix + "/login",
 		s.serviceConfig.EndpointPrefix + "/googleLogin",
+		s.serviceConfig.EndpointPrefix + "/visits",
 		s.serviceConfig.EndpointPrefix + "/capture-screen",
 		s.serviceConfig.EndpointPrefix + "/scan-devices",
 		s.serviceConfig.EndpointPrefix + "/ping",
