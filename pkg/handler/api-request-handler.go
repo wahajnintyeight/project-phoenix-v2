@@ -757,6 +757,19 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 			response.SendResponse(w, int(enum.DATA_FETCHED), stats)
 		}
 		break
+	case apiRequestHandlerObj.Endpoint + "/visits":
+		log.Println("List Visits")
+		controller := controllers.GetControllerInstance(enum.VisitController, enum.MONGODB)
+		visitController := controller.(*controllers.VisitController)
+
+		data, err := visitController.ListVisits(r)
+		if err != nil {
+			response.SendErrorResponse(w, int(enum.VISITS_NOT_FETCHED), "Unable to fetch visits")
+			break
+		}
+
+		response.SendResponse(w, int(enum.VISITS_FETCHED), data)
+		break
 	case apiRequestHandlerObj.Endpoint + "/config/queries":
 		log.Println("List Search Queries")
 		// TODO: Add authentication later

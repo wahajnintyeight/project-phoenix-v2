@@ -198,7 +198,7 @@ func (s *APIGatewayService) registerRoutes() {
 			}
 
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, sessionId")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, sessionId, project-type")
 			w.Header().Set("Access-Control-Max-Age", "3600")
 
 			// Handle preflight requests

@@ -3,16 +3,18 @@ package controllers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"project-phoenix/v2/internal/cache"
 	"project-phoenix/v2/internal/db"
-	"project-phoenix/v2/pkg/helper"
+	"project-phoenix/v2/internal/enum"
 	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type SessionController struct {
@@ -54,24 +56,50 @@ func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Reques
 		return "", fmt.Errorf("database not initialized")
 	}
 
+	projectType := enum.ParseProjectType(r.Header.Get("project-type"))
+	clientIP := GetClientIP(r)
+
+	if projectType.IsValid() {
+		controller := GetControllerInstance(enum.VisitController, enum.MONGODB)
+		if controller != nil {
+			go func(ip string, pt enum.ProjectType) {
+				if err := controller.(*VisitController).TrackVisit(ip, pt); err != nil {
+					log.Printf("SessionController | CreateSession | track visit failed: %v", err)
+				}
+			}(clientIP, projectType)
+		}
+	}
+
 	// Add mutex lock to prevent concurrent session creation
 	sc.SessionMutex.Lock()
 	defer sc.SessionMutex.Unlock()
 
 	filter := bson.M{
+		"ip": clientIP,
 		"createdAt": bson.M{
 			"$gte": time.Now().Add(-20 * time.Second),
 		},
 	}
+
+	if projectType.IsValid() {
+		filter["projectType"] = string(projectType)
+	}
+
 	lastSession, err := sc.DB.FindOne(filter, sc.GetCollectionName())
 	if err == nil && lastSession != nil {
-		sessionData := map[string]interface{}{}
-		e := helper.MapToStruct(lastSession, &sessionData)
-		if e != nil {
-			log.Println("Error while converting map to struct", e)
-			return "", e
+		if existingSessionID, ok := lastSession["sessionID"].(string); ok && existingSessionID != "" {
+			w.Header().Set("sessionId", existingSessionID)
+			return existingSessionID, nil
 		}
-		return sessionData["sessionID"].(string), nil
+
+		if existingSessionID, ok := lastSession["sessionId"].(string); ok && existingSessionID != "" {
+			w.Header().Set("sessionId", existingSessionID)
+			return existingSessionID, nil
+		}
+	}
+
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		log.Printf("SessionController | CreateSession | recent session lookup failed: %v", err)
 	}
 
 	// Create new session if no recent one found
@@ -82,8 +110,10 @@ func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Reques
 	}
 
 	sessionData := map[string]interface{}{
-		"sessionID": sessionID,
-		"createdAt": time.Now(),
+		"sessionID":   sessionID,
+		"createdAt":   time.Now(),
+		"ip":          clientIP,
+		"projectType": string(projectType),
 	}
 	log.Println("Session Data", sessionData)
 

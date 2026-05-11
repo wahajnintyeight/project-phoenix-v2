@@ -18,4 +18,5 @@ const (
 	APIKeyController
 	ScraperConfigController
 	FileExtensionController
+	VisitController
 )

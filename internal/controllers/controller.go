@@ -35,6 +35,7 @@ var (
 	apiKeyControllerInstance          *APIKeyController
 	scraperConfigControllerInstance   *ScraperConfigController
 	fileExtensionControllerInstance   *FileExtensionController
+	visitControllerInstance           *VisitController
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
@@ -286,6 +287,24 @@ func GetControllerInstance(controllerType enum.ControllerType, dbType enum.DBTyp
 			}
 		}
 		return fileExtensionControllerInstance
+	case enum.VisitController:
+		if visitControllerInstance == nil {
+			log.Println("Initialize Visit Controller")
+			dbInstance, err := db.GetDBInstance(dbType)
+			if err != nil {
+				log.Println("Error while getting DB Instance: ", err)
+				return nil
+			}
+
+			visitControllerInstance = &VisitController{
+				DB: dbInstance,
+			}
+
+			if e := visitControllerInstance.PerformIndexing(); e != nil {
+				log.Println("Error while indexing: ", e)
+			}
+		}
+		return visitControllerInstance
 	default:
 		log.Println("Unknown controller type: ", controllerType)
 		return nil

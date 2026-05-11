@@ -101,6 +101,8 @@ var responseMessage = map[int]string{
 	1091: "Room Joined",
 	1092: "Room Updated",
 	1093: "Room Not Updated",
+	1094: "Visits Fetched",
+	1095: "Visits Not Fetched",
 }
 
 type MessageResponse struct {
@@ -115,7 +117,7 @@ func SendResponse(w http.ResponseWriter, responseCode int, response interface{})
 	json.NewEncoder(w).Encode(extractMessage(responseCode, response))
 }
 
-func SendErrorResponse(w http.ResponseWriter, responseCode int, response interface{}){
+func SendErrorResponse(w http.ResponseWriter, responseCode int, response interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	json.NewEncoder(w).Encode(extractMessage(responseCode, response))
