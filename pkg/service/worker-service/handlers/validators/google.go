@@ -28,7 +28,7 @@ func (v *GoogleValidator) GetProviderName() string {
 // Validate validates a Google AI API key
 func (v *GoogleValidator) Validate(keyValue string, correlationID string) (string, map[string]interface{}, error) {
 	url := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=%s",
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=%s",
 		keyValue,
 	)
 
@@ -41,7 +41,13 @@ func (v *GoogleValidator) Validate(keyValue string, correlationID string) (strin
 					}
 				]
 			}
-		]
+		],
+		"generationConfig": {
+			"maxOutputTokens": 32000,
+			"thinkingConfig": {
+				"thinkingLevel": "MEDIUM"
+			}
+    	}
 	}`
 
 	req, err := http.NewRequest("POST", url, strings.NewReader(payload))
