@@ -58,15 +58,16 @@ func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Reques
 
 	projectType := enum.ParseProjectType(r.Header.Get("project-type"))
 	clientIP := GetClientIP(r)
+	userAgent := GetUserAgent(r)
 
 	if projectType.IsValid() {
 		controller := GetControllerInstance(enum.VisitController, enum.MONGODB)
 		if controller != nil {
-			go func(ip string, pt enum.ProjectType) {
-				if err := controller.(*VisitController).TrackVisit(ip, pt); err != nil {
+			go func(ip string, ua string, pt enum.ProjectType) {
+				if err := controller.(*VisitController).TrackVisit(ip, ua, pt); err != nil {
 					log.Printf("SessionController | CreateSession | track visit failed: %v", err)
 				}
-			}(clientIP, projectType)
+			}(clientIP, userAgent, projectType)
 		}
 	}
 

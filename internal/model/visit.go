@@ -12,6 +12,7 @@ type Visit struct {
 	Country     string             `bson:"country" json:"country"`
 	CountryCode string             `bson:"country_code" json:"country_code"`
 	ProjectType string             `bson:"project_type" json:"project_type"`
+	UserAgent   string             `bson:"user_agent" json:"user_agent"`
 	CreatedAt   time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt   time.Time          `bson:"updated_at" json:"updated_at"`
 }

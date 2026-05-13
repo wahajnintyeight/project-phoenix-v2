@@ -46,7 +46,7 @@ func (c *VisitController) PerformIndexing() error {
 	return nil
 }
 
-func (c *VisitController) TrackVisit(ip string, projectType enum.ProjectType) error {
+func (c *VisitController) TrackVisit(ip string, userAgent string, projectType enum.ProjectType) error {
 	if c.DB == nil {
 		return fmt.Errorf("db not initialized")
 	}
@@ -59,6 +59,8 @@ func (c *VisitController) TrackVisit(ip string, projectType enum.ProjectType) er
 	if normalizedIP == "" || isPrivateIP(normalizedIP) {
 		return nil
 	}
+
+	normalizedUserAgent := strings.TrimSpace(userAgent)
 
 	query := bson.M{
 		"ip":           normalizedIP,
@@ -81,6 +83,7 @@ func (c *VisitController) TrackVisit(ip string, projectType enum.ProjectType) er
 		Country:     country,
 		CountryCode: countryCode,
 		ProjectType: string(projectType),
+		UserAgent:   normalizedUserAgent,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -143,6 +146,10 @@ func GetClientIP(r *http.Request) string {
 	}
 
 	return strings.TrimSpace(r.RemoteAddr)
+}
+
+func GetUserAgent(r *http.Request) string {
+	return strings.TrimSpace(r.Header.Get("User-Agent"))
 }
 
 func isPrivateIP(ip string) bool {
