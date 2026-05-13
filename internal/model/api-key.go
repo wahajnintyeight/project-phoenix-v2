@@ -23,6 +23,7 @@ const (
 	ProviderOpenRouter  = "OpenRouter"
 	ProviderMoonshot    = "Moonshot"
 	ProviderHuggingFace = "HuggingFace"
+	ProviderDeepSeek    = "DeepSeek"
 )
 
 type APIKey struct {

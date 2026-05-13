@@ -127,6 +127,32 @@
       ]
     },
     {
+      "provider": "DeepSeek",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"sk-\" ",
+          "description": "DeepSeek API keys (sk- prefix) in .env or config files"
+        },
+        {
+          "pattern": "\"DEEPSEEK_API_KEY\" ",
+          "description": "DeepSeek environment variable"
+        },
+        {
+          "pattern": "\"deepseek_api_key\" ",
+          "description": "DeepSeek lowercase variant"
+        },
+        {
+          "pattern": "\"deepseek key\" ",
+          "description": "DeepSeek natural language reference"
+        },
+        {
+          "pattern": "\"DEEPSEEK_KEY\" ",
+          "description": "DeepSeek key shorthand"
+        }
+      ]
+    },
+    {
       "provider": "Other",
       "enabled": true,
       "queries": [

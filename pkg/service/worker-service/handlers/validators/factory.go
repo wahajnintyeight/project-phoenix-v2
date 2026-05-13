@@ -33,6 +33,7 @@ func (f *ValidatorFactory) registerValidators() {
 	f.Register(NewOpenRouterValidator(f.debugMode))
 	f.Register(NewMoonshotValidator(f.debugMode))
 	f.Register(NewHuggingFaceValidator(f.debugMode))
+	f.Register(NewDeepSeekValidator(f.debugMode))
 }
 
 // Register adds a validator to the factory

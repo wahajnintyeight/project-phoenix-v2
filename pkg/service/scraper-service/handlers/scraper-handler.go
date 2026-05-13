@@ -60,6 +60,7 @@ var KeyPatterns = map[string]*regexp.Regexp{
 	model.ProviderOpenRouter:  regexp.MustCompile(`sk-or-v1-[a-zA-Z0-9]{64}`),
 	model.ProviderMoonshot:    regexp.MustCompile(`sk-[a-zA-Z0-9]{48,}`), // Moonshot keys follow similar pattern to OpenAI
 	model.ProviderHuggingFace: regexp.MustCompile(`(?:hf_[a-zA-Z0-9]{20,}|api_org_[a-zA-Z0-9]{20,})`),
+	model.ProviderDeepSeek:    regexp.MustCompile(`sk-[a-zA-Z0-9]{32,}`),
 }
 
 // NewScraperHandler creates a new scraper handler
