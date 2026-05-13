@@ -394,7 +394,8 @@ func (n *DiscordNotifier) SendSystemAlert(title, message, level string) error {
 }
 
 // SendAPIKeyValidation sends a formatted notification when an API key is validated
-func (n *DiscordNotifier) SendAPIKeyValidation(provider, status string, credits map[string]interface{}, stats map[string]int, webScraperURL string) error {
+// mentionEveryone: if true, adds @everyone mention to notify all channel members
+func (n *DiscordNotifier) SendAPIKeyValidation(provider, status string, credits map[string]interface{}, stats map[string]int, webScraperURL string, mentionEveryone bool) error {
 	color := 0x95a5a6 // Gray
 	badge := "🔑"
 	statusLabel := status
@@ -469,6 +470,7 @@ func (n *DiscordNotifier) SendAPIKeyValidation(provider, status string, credits 
 	payload := DiscordWebhookPayload{
 		Username:  "Phoenix Key Verifier",
 		AvatarURL: "https://cdn.discordapp.com/emojis/1234567890.png", // Optional: Add a custom avatar
+		Content:   "",                                                 // Will be set below if mentionEveryone is true
 		Embeds: []DiscordEmbed{
 			{
 				Title:       title,
@@ -481,6 +483,11 @@ func (n *DiscordNotifier) SendAPIKeyValidation(provider, status string, credits 
 				},
 			},
 		},
+	}
+
+	// Add @everyone mention if requested (only notifies channel members)
+	if mentionEveryone {
+		payload.Content = "@everyone"
 	}
 
 	return n.Send(payload)

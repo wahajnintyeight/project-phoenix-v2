@@ -161,9 +161,9 @@ func (h *VerifierHandler) sendValidKeyNotification(key *model.APIKey, status str
 		webScraperURL = "https://v0-phoenix-scraper.vercel.app/" // Default fallback
 	}
 
-	// Send notification
+	// Send notification with @everyone mention (notifies all channel members)
 	stats := h.GetStats()
-	if err := h.discordNotifier.SendAPIKeyValidation(key.Provider, status, credits, stats, webScraperURL); err != nil {
+	if err := h.discordNotifier.SendAPIKeyValidation(key.Provider, status, credits, stats, webScraperURL, true); err != nil {
 		helper.LogError(ctx, "Failed to send Discord notification", err)
 		return
 	}
@@ -172,8 +172,38 @@ func (h *VerifierHandler) sendValidKeyNotification(key *model.APIKey, status str
 	if err := h.apiKeyController.UpdateNotifiedAt(key.ID); err != nil {
 		helper.LogError(ctx, "Failed to update notified_at timestamp", err)
 	} else {
-		helper.LogInfo(ctx, "Discord notification sent for key %s", key.ID.Hex())
+		helper.LogInfo(ctx, "Discord notification sent for key %s with @everyone mention", key.ID.Hex())
 	}
+}
+
+// sendRevalidationNotification sends Discord notification when a key becomes valid again during revalidation
+// Always sends with @everyone mention regardless of NotifiedAt status
+func (h *VerifierHandler) sendRevalidationNotification(key *model.APIKey, oldStatus, newStatus string, credits map[string]interface{}, correlationID string) {
+	ctx := helper.LogContext{
+		ServiceName:   "worker-service",
+		Operation:     "VerifierHandler.sendRevalidationNotification",
+		CorrelationID: correlationID,
+	}
+
+	// Skip if no Discord notifier configured
+	if h.discordNotifier == nil {
+		return
+	}
+
+	// Get web scraper URL from environment
+	webScraperURL := os.Getenv("PHOENIX_WEB_SCRAPER")
+	if webScraperURL == "" {
+		webScraperURL = "https://v0-phoenix-scraper.vercel.app/" // Default fallback
+	}
+
+	// Send notification with @everyone mention (notifies all channel members)
+	stats := h.GetStats()
+	if err := h.discordNotifier.SendAPIKeyValidation(key.Provider, newStatus, credits, stats, webScraperURL, true); err != nil {
+		helper.LogError(ctx, "Failed to send Discord revalidation notification", err)
+		return
+	}
+
+	helper.LogInfo(ctx, "Discord revalidation notification sent for key %s (status changed: %s -> %s) with @everyone mention", key.ID.Hex(), oldStatus, newStatus)
 }
 
 // ValidateKey routes to provider-specific validators
@@ -431,6 +461,8 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 				statusChangedCount++
 				helper.LogInfo(keyCtx, "Status changed for key %s: %s -> %s", k.ID.Hex(), k.Status, newStatus)
 
+				oldStatus := k.Status
+
 				// Update key status and credits
 				if updateErr := h.apiKeyController.UpdateStatusAndCredits(k.ID, newStatus, credits); updateErr != nil {
 					helper.LogError(keyCtx, "Failed to update key status in MongoDB", updateErr)
@@ -438,8 +470,9 @@ func (h *VerifierHandler) RunRevalidationCycle(broker interface{}) error {
 				}
 
 				// Send Discord notification if key became valid (with credits)
+				// This includes cases where key was previously Invalid/Error and is now Valid
 				if newStatus == model.StatusValid {
-					h.sendValidKeyNotification(k, newStatus, credits, correlationID)
+					h.sendRevalidationNotification(k, oldStatus, newStatus, credits, correlationID)
 				}
 
 				// Publish status change event
