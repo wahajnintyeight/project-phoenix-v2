@@ -9,10 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"project-phoenix/v2/internal/model"
 	"strings"
 	"time"
-	"project-phoenix/v2/internal/model"
-
 )
 
 // KeyTestRequest is the request body for the /validate-key endpoint.
@@ -127,6 +126,9 @@ func testKey(keyValue, provider, model string) KeyTestResult {
 	case "OpenRouter":
 		result := testOpenRouterKey(keyValue, model)
 		return buildResult(provider, result)
+	case "DeepSeek":
+		result := testDeepSeekKey(keyValue, model)
+		return buildResult(provider, result)
 	case "HuggingFace":
 		result := testHuggingFaceKey(keyValue)
 		return buildResult(provider, result)
@@ -171,6 +173,31 @@ func testOpenAIKey(keyValue, model string) providerResult {
 	}
 
 	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(body))
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	req.Header.Set("Authorization", "Bearer "+keyValue)
+	req.Header.Set("Content-Type", "application/json")
+
+	return doProviderRequest(req)
+}
+
+// testDeepSeekKey validates a DeepSeek key. Uses the provided model or defaults to deepseek-v4-flash.
+func testDeepSeekKey(keyValue, model string) providerResult {
+	if model == "" {
+		model = "deepseek-v4-flash"
+	}
+
+	body, err := json.Marshal(map[string]interface{}{
+		"model":      model,
+		"max_tokens": 1,
+		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
+	})
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+
+	req, err := http.NewRequest("POST", "https://api.deepseek.com/chat/completions", bytes.NewBuffer(body))
 	if err != nil {
 		return providerResult{Status: "Error", Err: err}
 	}
