@@ -211,6 +211,7 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 		return fmt.Errorf("error unmarshalling data: %v", err)
 	}
 
+	
 	// Log the received data for debugging
 	// log.Printf("Received message data: %+v", data)
 
