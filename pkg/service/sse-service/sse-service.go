@@ -212,7 +212,7 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 	}
 
 	// Log the received data for debugging
-	log.Printf("Received message data: %+v", data)
+	// log.Printf("Received message data: %+v", data)
 
 	// Check if messageType exists and is not nil
 	messageTypeRaw, ok := data["messageType"]
