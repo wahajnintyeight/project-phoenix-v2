@@ -33,7 +33,7 @@ func buildYtDlpCmd(args ...string) (*exec.Cmd, error) {
 	}
 
 	// Explicitly use Node for JavaScript runtime
-	args = append([]string{"--js-runtime", "node:/usr/bin/node"}, args...)
+	args = append([]string{"--js-runtime", "node:/usr/bin/node", "--remote-components", "ejs:github"}, args...)
 
 	binstr := strings.TrimSpace(os.Getenv("YT_DLP_BIN"))
 	if binstr != "" {
