@@ -153,6 +153,40 @@
       ]
     },
     {
+      "provider": "Z.AI",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"ZHIPU_API_KEY\" ",
+          "description": "Zhipu AI (Z.AI) environment variable"
+        },
+        {
+          "pattern": "\"ZHIPUAI_API_KEY\" ",
+          "description": "ZhipuAI (Z.AI) environment variable"
+        },
+        {
+          "pattern": "\"zhipu_api_key\" ",
+          "description": "Zhipu AI lowercase variant"
+        },
+        {
+          "pattern": "\"api.z.ai\" ",
+          "description": "Z.AI API endpoint references"
+        },
+        {
+          "pattern": "\"z.ai\" ",
+          "description": "Z.AI references in config files"
+        },
+        {
+          "pattern": "\"glm-4\" OR \"glm-5\" ",
+          "description": "GLM model references alongside API keys"
+        },
+        {
+          "pattern": "\"open.bigmodel.cn\" ",
+          "description": "Zhipu AI API endpoint references"
+        }
+      ]
+    },
+    {
       "provider": "Other",
       "enabled": true,
       "queries": [

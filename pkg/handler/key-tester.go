@@ -129,6 +129,9 @@ func testKey(keyValue, provider, model string) KeyTestResult {
 	case "DeepSeek":
 		result := testDeepSeekKey(keyValue, model)
 		return buildResult(provider, result)
+	case "Z.AI":
+		result := testZAIKey(keyValue, model)
+		return buildResult(provider, result)
 	case "HuggingFace":
 		result := testHuggingFaceKey(keyValue)
 		return buildResult(provider, result)
@@ -203,6 +206,34 @@ func testDeepSeekKey(keyValue, model string) providerResult {
 	}
 	req.Header.Set("Authorization", "Bearer "+keyValue)
 	req.Header.Set("Content-Type", "application/json")
+
+	return doProviderRequest(req)
+}
+
+// testZAIKey validates a Z.AI (Zhipu AI) key. Uses the provided model or defaults to glm-5.1.
+func testZAIKey(keyValue, model string) providerResult {
+	if model == "" {
+		model = "glm-5.1"
+	}
+
+	body, err := json.Marshal(map[string]interface{}{
+		"model":       model,
+		"max_tokens":  1,
+		"stream":      false,
+		"temperature": 1,
+		"messages":    []map[string]string{{"role": "user", "content": "PING"}},
+	})
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+
+	req, err := http.NewRequest("POST", "https://api.z.ai/api/paas/v4/chat/completions", bytes.NewBuffer(body))
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	req.Header.Set("Authorization", "Bearer "+keyValue)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept-Language", "en-US,en")
 
 	return doProviderRequest(req)
 }
