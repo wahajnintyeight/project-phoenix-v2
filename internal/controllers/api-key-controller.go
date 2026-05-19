@@ -311,6 +311,49 @@ func (c *APIKeyController) FindAllWithPaginationAndReferences(query bson.M, page
 		return 0, 0, nil, err
 	}
 
+	// Collect all repo reference IDs from the page results
+	refIDSet := make(map[primitive.ObjectID]struct{})
+	for _, result := range results {
+		refIDs, ok := result["repo_refs"]
+		if !ok {
+			continue
+		}
+		refIDList, ok := refIDs.(primitive.A)
+		if !ok {
+			continue
+		}
+		for _, rawID := range refIDList {
+			if id, ok := rawID.(primitive.ObjectID); ok {
+				refIDSet[id] = struct{}{}
+			}
+		}
+	}
+
+	// Batch-fetch all repo references in a single $in query
+	refMap := make(map[primitive.ObjectID]*model.RepoReference)
+	if len(refIDSet) > 0 {
+		allRefIDs := make(primitive.A, 0, len(refIDSet))
+		for id := range refIDSet {
+			allRefIDs = append(allRefIDs, id)
+		}
+		refsCollection := dbConn.Client.Database(os.Getenv("MONGO_DB_NAME")).Collection("repo_references")
+		refsCursor, refsErr := refsCollection.Find(ctx, bson.M{"_id": bson.M{"$in": allRefIDs}})
+		if refsErr == nil {
+			var refs []bson.M
+			if refsErr = refsCursor.All(ctx, &refs); refsErr == nil {
+				for _, refResult := range refs {
+					var ref model.RepoReference
+					refBytes, _ := bson.Marshal(refResult)
+					if bson.Unmarshal(refBytes, &ref) == nil {
+						refMap[ref.ID] = &ref
+					}
+				}
+			}
+			refsCursor.Close(ctx)
+		}
+	}
+
+	// Build results using the pre-fetched reference map
 	var apiKeys []*model.APIKeyWithReferences
 	for _, result := range results {
 		var apiKey model.APIKey
@@ -319,21 +362,11 @@ func (c *APIKeyController) FindAllWithPaginationAndReferences(query bson.M, page
 			continue
 		}
 
-		// Populate repo references
 		var references []*model.RepoReference
 		for _, refID := range apiKey.RepoRefs {
-			refQuery := bson.M{"_id": refID}
-			refResult, err := c.DB.FindOne(refQuery, "repo_references")
-			if err != nil {
-				continue
+			if ref, ok := refMap[refID]; ok {
+				references = append(references, ref)
 			}
-
-			var ref model.RepoReference
-			refBytes, _ := bson.Marshal(refResult)
-			if err := bson.Unmarshal(refBytes, &ref); err != nil {
-				continue
-			}
-			references = append(references, &ref)
 		}
 
 		apiKeyWithRefs := &model.APIKeyWithReferences{

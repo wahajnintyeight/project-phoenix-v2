@@ -8,8 +8,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"project-phoenix/v2/internal/db"
@@ -124,6 +126,82 @@ func (c *VisitController) ListVisits(r *http.Request) (map[string]interface{}, e
 		"current_page": currentPage,
 		"total_pages":  totalPages,
 	}, nil
+}
+
+var (
+	ipWhitelist     []string
+	ipWhitelistOnce sync.Once
+)
+
+func getIPWhitelist() []string {
+	ipWhitelistOnce.Do(func() {
+		raw := strings.TrimSpace(os.Getenv("WHITELISTED_IPS"))
+		if raw == "" {
+			ipWhitelist = []string{}
+			return
+		}
+		parts := strings.Split(raw, ",")
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				ipWhitelist = append(ipWhitelist, p)
+			}
+		}
+	})
+	return ipWhitelist
+}
+
+func IsIPWhitelisted(ip string) bool {
+	whitelist := getIPWhitelist()
+	if len(whitelist) == 0 {
+		return true
+	}
+
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return false
+	}
+
+	for _, pattern := range whitelist {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+
+		if strings.Contains(pattern, "/") {
+			_, cidr, err := net.ParseCIDR(pattern)
+			if err == nil && cidr.Contains(parsedIP) {
+				return true
+			}
+			continue
+		}
+
+		if matchesWildcard(pattern, ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func matchesWildcard(pattern, ip string) bool {
+	patternParts := strings.Split(pattern, ".")
+	ipParts := strings.Split(ip, ".")
+
+	if len(patternParts) != 4 || len(ipParts) != 4 {
+		return false
+	}
+
+	for i := 0; i < 4; i++ {
+		if patternParts[i] == "*" {
+			continue
+		}
+		if patternParts[i] != ipParts[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func GetClientIP(r *http.Request) string {
