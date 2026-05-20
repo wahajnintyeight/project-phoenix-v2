@@ -113,6 +113,7 @@ func (s *APIGatewayService) registerRoutes() {
 		s.serviceConfig.EndpointPrefix + "/gollm/ats/enhance-description",
 		s.serviceConfig.EndpointPrefix + "/gollm/ats/regenerate-item",
 		s.serviceConfig.EndpointPrefix + "/gollm/ats/regenerate-skills",
+		s.serviceConfig.EndpointPrefix + "/keys/repos",
 	}
 	customMiddlewareWrapper := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
