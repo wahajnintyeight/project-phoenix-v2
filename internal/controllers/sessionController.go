@@ -60,11 +60,6 @@ func (sc *SessionController) CreateSession(w http.ResponseWriter, r *http.Reques
 	clientIP := GetClientIP(r)
 	userAgent := GetUserAgent(r)
 
-	if !IsIPWhitelisted(clientIP) {
-		log.Printf("SessionController | CreateSession | IP not whitelisted: %s", clientIP)
-		return "", fmt.Errorf("ip not whitelisted")
-	}
-
 	if projectType.IsValid() {
 		controller := GetControllerInstance(enum.VisitController, enum.MONGODB)
 		if controller != nil {
