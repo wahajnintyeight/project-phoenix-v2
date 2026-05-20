@@ -730,6 +730,35 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		response.SendResponse(w, int(enum.DATA_FETCHED), result)
 		break
+	case apiRequestHandlerObj.Endpoint + "/keys/repos":
+		log.Println("Reveal Repo References for API Key")
+		controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
+		apiKeyController := controller.(*controllers.APIKeyController)
+
+		keyIDStr := r.URL.Query().Get("id")
+		if keyIDStr == "" {
+			response.SendErrorResponse(w, 400, "Missing required query parameter: id")
+			break
+		}
+
+		keyID, err := primitive.ObjectIDFromHex(keyIDStr)
+		if err != nil {
+			response.SendErrorResponse(w, 400, "Invalid API key ID format")
+			break
+		}
+
+		refs, e := apiKeyController.FindRepoReferencesByKeyID(keyID)
+		if e != nil {
+			response.SendErrorResponse(w, int(enum.DATA_NOT_FETCHED), e)
+			break
+		}
+
+		result := map[string]interface{}{
+			"key_id":     keyIDStr,
+			"references": refs,
+		}
+		response.SendResponse(w, int(enum.DATA_FETCHED), result)
+		break
 	case apiRequestHandlerObj.Endpoint + "/stats":
 		log.Println("Get API Key Statistics")
 		// TODO: Add authentication later

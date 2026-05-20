@@ -157,7 +157,7 @@ func (c *APIKeyController) FindByStatus(status string) ([]*model.APIKey, error) 
 	return apiKeys, nil
 }
 
-// FindByStatusWithReferences retrieves all API keys with a specific status and populates repo references
+// FindByStatusWithReferences retrieves all API keys with a specific status (repo references NOT populated for performance)
 func (c *APIKeyController) FindByStatusWithReferences(status string) ([]*model.APIKeyWithReferences, error) {
 	query := bson.M{"status": status}
 	totalPages, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
@@ -174,26 +174,8 @@ func (c *APIKeyController) FindByStatusWithReferences(status string) ([]*model.A
 				continue
 			}
 
-			// Populate repo references
-			var references []*model.RepoReference
-			for _, refID := range apiKey.RepoRefs {
-				refQuery := bson.M{"_id": refID}
-				refResult, err := c.DB.FindOne(refQuery, "repo_references")
-				if err != nil {
-					continue
-				}
-
-				var ref model.RepoReference
-				refBytes, _ := bson.Marshal(refResult)
-				if err := bson.Unmarshal(refBytes, &ref); err != nil {
-					continue
-				}
-				references = append(references, &ref)
-			}
-
 			apiKeyWithRefs := &model.APIKeyWithReferences{
-				APIKey:     apiKey,
-				References: references,
+				APIKey: apiKey,
 			}
 			apiKeys = append(apiKeys, apiKeyWithRefs)
 		}
@@ -268,7 +250,7 @@ func (c *APIKeyController) FindAllWithPagination(query bson.M, page int) (int64,
 	return totalPages, currentPage, apiKeys, nil
 }
 
-// FindAllWithPaginationAndReferences retrieves API keys with pagination and populates repo references
+// FindAllWithPaginationAndReferences retrieves API keys with pagination (repo references NOT populated for performance)
 func (c *APIKeyController) FindAllWithPaginationAndReferences(query bson.M, page int) (int64, int, []*model.APIKeyWithReferences, error) {
 	// Use direct MongoDB access for sorting support
 	dbConn := db.GetConnectionFromPool()
@@ -311,49 +293,7 @@ func (c *APIKeyController) FindAllWithPaginationAndReferences(query bson.M, page
 		return 0, 0, nil, err
 	}
 
-	// Collect all repo reference IDs from the page results
-	refIDSet := make(map[primitive.ObjectID]struct{})
-	for _, result := range results {
-		refIDs, ok := result["repo_refs"]
-		if !ok {
-			continue
-		}
-		refIDList, ok := refIDs.(primitive.A)
-		if !ok {
-			continue
-		}
-		for _, rawID := range refIDList {
-			if id, ok := rawID.(primitive.ObjectID); ok {
-				refIDSet[id] = struct{}{}
-			}
-		}
-	}
-
-	// Batch-fetch all repo references in a single $in query
-	refMap := make(map[primitive.ObjectID]*model.RepoReference)
-	if len(refIDSet) > 0 {
-		allRefIDs := make(primitive.A, 0, len(refIDSet))
-		for id := range refIDSet {
-			allRefIDs = append(allRefIDs, id)
-		}
-		refsCollection := dbConn.Client.Database(os.Getenv("MONGO_DB_NAME")).Collection("repo_references")
-		refsCursor, refsErr := refsCollection.Find(ctx, bson.M{"_id": bson.M{"$in": allRefIDs}})
-		if refsErr == nil {
-			var refs []bson.M
-			if refsErr = refsCursor.All(ctx, &refs); refsErr == nil {
-				for _, refResult := range refs {
-					var ref model.RepoReference
-					refBytes, _ := bson.Marshal(refResult)
-					if bson.Unmarshal(refBytes, &ref) == nil {
-						refMap[ref.ID] = &ref
-					}
-				}
-			}
-			refsCursor.Close(ctx)
-		}
-	}
-
-	// Build results using the pre-fetched reference map
+	// Build results without fetching repo references for better performance
 	var apiKeys []*model.APIKeyWithReferences
 	for _, result := range results {
 		var apiKey model.APIKey
@@ -362,21 +302,45 @@ func (c *APIKeyController) FindAllWithPaginationAndReferences(query bson.M, page
 			continue
 		}
 
-		var references []*model.RepoReference
-		for _, refID := range apiKey.RepoRefs {
-			if ref, ok := refMap[refID]; ok {
-				references = append(references, ref)
-			}
-		}
-
 		apiKeyWithRefs := &model.APIKeyWithReferences{
-			APIKey:     apiKey,
-			References: references,
+			APIKey: apiKey,
 		}
 		apiKeys = append(apiKeys, apiKeyWithRefs)
 	}
 
 	return totalPages, page, apiKeys, nil
+}
+
+// FindRepoReferencesByKeyID fetches all repo references linked to a specific API key
+func (c *APIKeyController) FindRepoReferencesByKeyID(keyID primitive.ObjectID) ([]*model.RepoReference, error) {
+	dbConn := db.GetConnectionFromPool()
+	defer db.ReleaseConnectionToPool(dbConn)
+
+	collection := dbConn.Client.Database(os.Getenv("MONGO_DB_NAME")).Collection("repo_references")
+	ctx := context.Background()
+
+	cursor, err := collection.Find(ctx, bson.M{"api_key_id": keyID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var refs []bson.M
+	if err = cursor.All(ctx, &refs); err != nil {
+		return nil, err
+	}
+
+	var references []*model.RepoReference
+	for _, refResult := range refs {
+		var ref model.RepoReference
+		refBytes, _ := bson.Marshal(refResult)
+		if err := bson.Unmarshal(refBytes, &ref); err != nil {
+			continue
+		}
+		references = append(references, &ref)
+	}
+
+	return references, nil
 }
 
 // Update updates an API key by ID
