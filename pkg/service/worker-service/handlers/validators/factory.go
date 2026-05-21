@@ -60,12 +60,32 @@ func (f *ValidatorFactory) GetSupportedProviders() []string {
 	return providers
 }
 
-// ValidateKey validates a key using the appropriate provider validator
+// ValidateKey validates a key using the appropriate provider validator.
+// If provider is "Other", the key is tested against all registered validators.
 func (f *ValidatorFactory) ValidateKey(provider, keyValue, correlationID string) (string, map[string]interface{}, error) {
+	if provider == "Other" {
+		return f.validateAgainstAll(keyValue, correlationID)
+	}
+
 	validator, err := f.GetValidator(provider)
 	if err != nil {
 		return model.StatusError, nil, err
 	}
 
 	return validator.Validate(keyValue, correlationID)
+}
+
+// validateAgainstAll tries the key against every registered provider validator.
+// Returns the first valid result found, or invalid if none match.
+func (f *ValidatorFactory) validateAgainstAll(keyValue, correlationID string) (string, map[string]interface{}, error) {
+	for _, validator := range f.validators {
+		status, credits, err := validator.Validate(keyValue, correlationID)
+		if err != nil {
+			continue
+		}
+		if status == model.StatusValid {
+			return status, credits, nil
+		}
+	}
+	return model.StatusInvalid, nil, fmt.Errorf("key did not match any known provider")
 }
