@@ -97,10 +97,22 @@
     {
       "provider": "Moonshot",
       "enabled": true,
-      "queries":[
+      "queries": [
         {
           "pattern": "\"sk-\" ",
           "description": "Moonshot keys"
+        },
+        {
+          "pattern": "\"MOONSHOT_API_KEY\" ",
+          "description": "Moonshot environment variable"
+        },
+        {
+          "pattern": "\"api.moonshot.cn\" ",
+          "description": "Moonshot API endpoint with embedded key"
+        },
+        {
+          "pattern": "\"base_url.*moonshot.*api_key\" ",
+          "description": "OpenAI SDK config pointing to Moonshot with inline key"
         }
       ]
     },
@@ -205,6 +217,10 @@
         {
           "pattern": "\"_KEY\" ",
           "description": "Generic key variable - verifier will determine provider"
+        },
+        {
+          "pattern": "\"Authorization: Bearer sk-\" ",
+          "description": "Hardcoded Bearer token for Moonshot/OpenAI-compatible auth"
         }
       ]
     }
