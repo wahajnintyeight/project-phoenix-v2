@@ -111,7 +111,7 @@
           "description": "Moonshot API endpoint with embedded key"
         },
         {
-          "pattern": "\"base_url.*moonshot.*api_key\" ",
+          "pattern": "\"base_url.moonshot.api_key\" ",
           "description": "OpenAI SDK config pointing to Moonshot with inline key"
         }
       ]
@@ -220,6 +220,10 @@
         },
         {
           "pattern": "\"Authorization: Bearer sk-\" ",
+          "description": "Hardcoded Bearer token for Moonshot/OpenAI-compatible auth"
+        },
+        {
+          "pattern": "\"Authorization: Bearer \" ",
           "description": "Hardcoded Bearer token for Moonshot/OpenAI-compatible auth"
         }
       ]
