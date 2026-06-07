@@ -30,8 +30,8 @@ func (v *OpenAIValidator) Validate(keyValue string, correlationID string) (strin
 	url := "https://api.openai.com/v1/chat/completions"
 
 	requestBody := map[string]interface{}{
-		"model":      "gpt-5.4",
-		"max_tokens": 100,
+		"model":      "gpt-5.4-mini",
+		"max_tokens": 1100,
 		"messages": []map[string]string{
 			{"role": "user", "content": "ping"},
 		},
