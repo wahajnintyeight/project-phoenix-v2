@@ -20,6 +20,13 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// discordSkipProviders defines providers for which Discord notifications are suppressed.
+// Add provider constants here to skip notifications for that provider.
+var discordSkipProviders = map[string]bool{
+	model.ProviderGoogle:   true,
+	model.ProviderDeepSeek: true,
+}
+
 type VerifierHandler struct {
 	apiKeyController *controllers.APIKeyController
 	validatorFactory *validators.ValidatorFactory
@@ -149,6 +156,12 @@ func (h *VerifierHandler) sendValidKeyNotification(key *model.APIKey, status str
 		return
 	}
 
+	// Skip Discord notification for suppressed providers (e.g. Google, DeepSeek)
+	if discordSkipProviders[key.Provider] {
+		helper.LogInfo(ctx, "Skipping Discord notification for %s key %s", key.Provider, key.ID.Hex())
+		return
+	}
+
 	// Skip if already notified
 	if key.NotifiedAt != nil {
 		helper.LogInfo(ctx, "Skipping notification for key %s (already notified)", key.ID.Hex())
@@ -187,6 +200,12 @@ func (h *VerifierHandler) sendRevalidationNotification(key *model.APIKey, oldSta
 
 	// Skip if no Discord notifier configured
 	if h.discordNotifier == nil {
+		return
+	}
+
+	// Skip Discord notification for suppressed providers (e.g. Google, DeepSeek)
+	if discordSkipProviders[key.Provider] {
+		helper.LogInfo(ctx, "Skipping Discord revalidation notification for %s key %s", key.Provider, key.ID.Hex())
 		return
 	}
 
