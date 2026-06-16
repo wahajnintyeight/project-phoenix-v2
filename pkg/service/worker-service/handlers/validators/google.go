@@ -30,7 +30,7 @@ func (v *GoogleValidator) GetProviderName() string {
 // Validate validates a Google AI API key and detects free-tier keys via rate-limit probing
 func (v *GoogleValidator) Validate(keyValue string, correlationID string) (string, map[string]interface{}, error) {
 	url := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=%s",
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=%s",
 		keyValue,
 	)
 

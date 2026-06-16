@@ -45,7 +45,7 @@ func (v *OpenRouterValidator) Validate(keyValue string, correlationID string) (s
 			{"content": "You are a helpful assistant.", "role": "system"},
 			{"content": "PING", "role": "user"}
 		],
-		"max_tokens": 20000,
+		"max_tokens": 32000,
 		"model": "~openai/gpt-latest",
 		"temperature": 0.7
 	}`)
