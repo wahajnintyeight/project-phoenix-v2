@@ -45,10 +45,7 @@ func (v *GoogleValidator) Validate(keyValue string, correlationID string) (strin
 			}
 		],
 		"generationConfig": {
-			"maxOutputTokens": 32000,
-			"thinkingConfig": {
-				"thinkingLevel": "MEDIUM"
-			}
+			"maxOutputTokens": 1
     	}
 	}`
 
