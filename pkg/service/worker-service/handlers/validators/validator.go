@@ -58,6 +58,15 @@ func (b *BaseValidator) ExecuteRequestWithRetry(req *http.Request, correlationID
 		if attempt > 0 {
 			helper.LogInfo(ctx, "Retry attempt %d/%d after %v", attempt, maxRetries, retryDelay)
 			time.Sleep(retryDelay)
+
+			if req.GetBody != nil {
+				body, err := req.GetBody()
+				if err != nil {
+					helper.LogError(ctx, "Failed to reset request body", err)
+					return model.StatusError, err
+				}
+				req.Body = body
+			}
 		}
 
 		resp, lastErr = b.HTTPClient.Do(req)
@@ -65,8 +74,6 @@ func (b *BaseValidator) ExecuteRequestWithRetry(req *http.Request, correlationID
 			helper.LogError(ctx, "HTTP request error", lastErr)
 			continue
 		}
-
-		defer resp.Body.Close()
 
 		// Log response if debug mode is enabled
 		if b.DebugMode {
@@ -80,9 +87,11 @@ func (b *BaseValidator) ExecuteRequestWithRetry(req *http.Request, correlationID
 		// Retry on 5xx errors
 		if resp.StatusCode >= 500 && resp.StatusCode < 600 && attempt < maxRetries {
 			helper.LogInfo(ctx, "Received %d status, retrying...", resp.StatusCode)
+			resp.Body.Close()
 			continue
 		}
 
+		resp.Body.Close()
 		return status, nil
 	}
 
