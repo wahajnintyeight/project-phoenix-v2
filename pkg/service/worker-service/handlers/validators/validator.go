@@ -1,7 +1,9 @@
 package validators
 
 import (
+	"errors"
 	"net/http"
+	"net/url"
 	"time"
 
 	"project-phoenix/v2/internal/model"
@@ -34,7 +36,7 @@ type BaseValidator struct {
 func NewBaseValidator(debugMode bool) *BaseValidator {
 	return &BaseValidator{
 		HTTPClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 15 * time.Second,
 		},
 		DebugMode: debugMode,
 	}
@@ -71,8 +73,9 @@ func (b *BaseValidator) ExecuteRequestWithRetry(req *http.Request, correlationID
 
 		resp, lastErr = b.HTTPClient.Do(req)
 		if lastErr != nil {
+			lastErr = sanitizeHTTPError(lastErr)
 			helper.LogError(ctx, "HTTP request error", lastErr)
-			continue
+			return model.StatusError, lastErr
 		}
 
 		// Log response if debug mode is enabled
@@ -102,6 +105,30 @@ func (b *BaseValidator) ExecuteRequestWithRetry(req *http.Request, correlationID
 	}
 
 	return model.StatusError, helper.NewError("max retries exceeded")
+}
+
+func sanitizeHTTPError(err error) error {
+	var urlErr *url.Error
+	if !errors.As(err, &urlErr) {
+		return err
+	}
+
+	safeErr := *urlErr
+	safeErr.URL = sanitizeURL(urlErr.URL)
+	safeErr.Err = sanitizeHTTPError(urlErr.Err)
+	return &safeErr
+}
+
+func sanitizeURL(rawURL string) string {
+	if parsed, parseErr := url.Parse(rawURL); parseErr == nil {
+		q := parsed.Query()
+		if q.Has("key") {
+			q.Set("key", "[REDACTED]")
+			parsed.RawQuery = q.Encode()
+			return parsed.String()
+		}
+	}
+	return rawURL
 }
 
 // DetermineStatusFromResponse determines key status from HTTP response

@@ -116,7 +116,7 @@ func (v *GoogleValidator) detectFreeTier(keyValue string, correlationID string) 
 
 	resp, err := v.HTTPClient.Do(req)
 	if err != nil {
-		helper.LogError(ctx, "Rate-limit probe request failed", err)
+		helper.LogError(ctx, "Rate-limit probe request failed", sanitizeHTTPError(err))
 		return false
 	}
 	defer resp.Body.Close()
