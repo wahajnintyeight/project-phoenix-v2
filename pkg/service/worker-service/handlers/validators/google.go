@@ -87,7 +87,7 @@ func (v *GoogleValidator) detectFreeTier(keyValue string, correlationID string) 
 	}
 
 	url := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=%s",
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=%s",
 		keyValue,
 	)
 
