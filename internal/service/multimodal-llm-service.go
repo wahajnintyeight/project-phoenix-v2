@@ -22,7 +22,7 @@ type MultimodalLLMService struct {
 func NewMultimodalLLMService() *MultimodalLLMService {
 	return &MultimodalLLMService{
 		client: &http.Client{
-			Timeout: 120 * time.Second, // Longer timeout for vision models
+			Timeout: 180 * time.Second, // Longer timeout for vision models
 		},
 	}
 }
@@ -71,7 +71,7 @@ func (s *MultimodalLLMService) containsImages(messages []model.ChatMessage) bool
 
 // sendOpenRouterRequest sends request to OpenRouter (OpenAI-compatible format)
 func (s *MultimodalLLMService) sendOpenRouterRequest(req model.ChatCompletionRequest, hasImages bool) (*model.ChatCompletionResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	// Build OpenRouter-compatible request
@@ -195,7 +195,7 @@ func (s *MultimodalLLMService) sendOpenRouterRequest(req model.ChatCompletionReq
 
 // sendAnthropicRequest sends request to Anthropic (native format)
 func (s *MultimodalLLMService) sendAnthropicRequest(req model.ChatCompletionRequest, hasImages bool) (*model.ChatCompletionResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	// Extract system message
@@ -304,7 +304,7 @@ func (s *MultimodalLLMService) sendAnthropicRequest(req model.ChatCompletionRequ
 
 // sendOpenAIRequest sends request to OpenAI (native format)
 func (s *MultimodalLLMService) sendOpenAIRequest(req model.ChatCompletionRequest, hasImages bool) (*model.ChatCompletionResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	// Build OpenAI-compatible request
