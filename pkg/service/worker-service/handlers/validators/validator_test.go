@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"project-phoenix/v2/internal/model"
 )
@@ -87,6 +88,12 @@ func TestExecuteRequestWithRetryDoesNotRetryTransportTimeout(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "%5BREDACTED%5D") {
 		t.Fatalf("error = %q, want redacted key", err)
+	}
+}
+
+func TestZAIValidatorUsesLongerTimeout(t *testing.T) {
+	if got := NewZAIValidator(false).HTTPClient.Timeout; got != 50*time.Second {
+		t.Fatalf("timeout = %v, want 50s", got)
 	}
 }
 

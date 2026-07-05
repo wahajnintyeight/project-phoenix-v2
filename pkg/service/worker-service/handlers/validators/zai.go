@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"project-phoenix/v2/internal/model"
 )
@@ -15,8 +16,10 @@ type ZAIValidator struct {
 
 // NewZAIValidator creates a new Z.AI validator
 func NewZAIValidator(debugMode bool) *ZAIValidator {
+	base := NewBaseValidator(debugMode)
+	base.HTTPClient.Timeout = 50 * time.Second
 	return &ZAIValidator{
-		BaseValidator: NewBaseValidator(debugMode),
+		BaseValidator: base,
 	}
 }
 
