@@ -211,7 +211,6 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 		return fmt.Errorf("error unmarshalling data: %v", err)
 	}
 
-	
 	// Log the received data for debugging
 	// log.Printf("Received message data: %+v", data)
 
@@ -245,7 +244,6 @@ func (sse *SSEService) HandleCaptureDeviceData(p microBroker.Event) error {
 	if err != nil {
 		return fmt.Errorf("error converting device data to map: %v", err)
 	}
-
 
 	controller := controllers.GetControllerInstance(enum.CaptureScreenController, enum.MONGODB)
 	captureScreenController := controller.(*controllers.CaptureScreenController)
@@ -733,6 +731,7 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 		log.Printf("Starting direct audio stream for %s", filename)
 
 		bytesWritten, err := io.Copy(w, stdout)
+		waitErr := cmd.Wait()
 
 		// Handle errors - broken pipe is normal when client disconnects
 		if err != nil {
@@ -747,6 +746,16 @@ func (sse *SSEService) handleDirectStream(w http.ResponseWriter, r *http.Request
 				"downloadId": downloadId,
 				"status":     "error",
 				"message":    fmt.Sprintf("Stream failed: %v", err),
+				"type":       "download_error",
+			})
+			return
+		}
+		if waitErr != nil {
+			log.Printf("Audio stream failed for %s: yt-dlp exited with error: %v (bytes=%d)", downloadId, waitErr, bytesWritten)
+			sse.sseHandler.BroadcastToRoute(routeKey, map[string]interface{}{
+				"downloadId": downloadId,
+				"status":     "error",
+				"message":    fmt.Sprintf("yt-dlp failed: %v", waitErr),
 				"type":       "download_error",
 			})
 			return
