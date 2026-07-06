@@ -1,7 +1,9 @@
 package validators
 
 import (
+	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -75,6 +77,9 @@ func (b *BaseValidator) ExecuteRequestWithRetry(req *http.Request, correlationID
 		if lastErr != nil {
 			lastErr = sanitizeHTTPError(lastErr)
 			helper.LogError(ctx, "HTTP request error", lastErr)
+			if isRetryableHTTPError(lastErr) && attempt < maxRetries {
+				continue
+			}
 			return model.StatusError, lastErr
 		}
 
@@ -105,6 +110,15 @@ func (b *BaseValidator) ExecuteRequestWithRetry(req *http.Request, correlationID
 	}
 
 	return model.StatusError, helper.NewError("max retries exceeded")
+}
+
+func isRetryableHTTPError(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func sanitizeHTTPError(err error) error {

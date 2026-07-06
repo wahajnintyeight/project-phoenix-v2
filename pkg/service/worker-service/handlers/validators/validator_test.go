@@ -56,11 +56,18 @@ func TestExecuteRequestWithRetryResetsRequestBody(t *testing.T) {
 	}
 }
 
-func TestExecuteRequestWithRetryDoesNotRetryTransportTimeout(t *testing.T) {
+func TestExecuteRequestWithRetryRetriesTransportTimeout(t *testing.T) {
 	var calls int32
 	validator := NewBaseValidator(false)
 	validator.HTTPClient.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
-		atomic.AddInt32(&calls, 1)
+		if atomic.AddInt32(&calls, 1) == 1 {
+			return nil, &url.Error{
+				Op:  "Post",
+				URL: "https://generativelanguage.googleapis.com/v1beta/models/test:generateContent?key=secret",
+				Err: context.DeadlineExceeded,
+			}
+		}
+
 		return nil, &url.Error{
 			Op:  "Post",
 			URL: "https://generativelanguage.googleapis.com/v1beta/models/test:generateContent?key=secret",
@@ -80,8 +87,8 @@ func TestExecuteRequestWithRetryDoesNotRetryTransportTimeout(t *testing.T) {
 	if status != model.StatusError {
 		t.Fatalf("status = %q, want %q", status, model.StatusError)
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
-		t.Fatalf("calls = %d, want 1", got)
+	if got := atomic.LoadInt32(&calls); got != 4 {
+		t.Fatalf("calls = %d, want 4", got)
 	}
 	if strings.Contains(err.Error(), "secret") {
 		t.Fatalf("error leaked key: %v", err)
