@@ -260,7 +260,7 @@ func DownloadYoutubeVideoToBuffer(videoLink string, videoId string, format strin
 			"--extractor-args", "youtubepot-bgutilhttp:base_url=" + potURL,
 		}, args...)
 	}
-	
+
 	cmd, err := buildYtDlpCmd(args...)
 	if err != nil {
 		return nil, err
@@ -384,29 +384,22 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 		return nil, nil, fmt.Errorf("videoURL is required")
 	}
 
-	// Build format selector with bitrate preference
-	formatSelector := "bestaudio"
-	extractedBitrate := getBitrate(bitrate) // quality parameter used as bitrate for audio
+	// Stream a native audio-only format. Post-processing cannot be relied on when
+	// writing to stdout, and it can produce zero-byte responses on extractor errors.
+	formatSelector := "bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/bestaudio"
 
-	// Direct yt-dlp streaming - no ffmpeg transcoding
 	ytdlpArgs := []string{
+		"--format", formatSelector,
 		"--no-playlist",
 		"--no-mtime",
-		"--extract-audio",
-		"--audio-format", "mp3",
-		"--extractor-args", "youtube:player_client=default,mweb",
+		"--extractor-args", "youtube:player_client=web_safari,mweb",
 		"--force-ipv4",
-		"--postprocessor-args", "ffmpeg:-b:a " + extractedBitrate,
 		"--socket-timeout", "30",
-		"--audio-quality", extractedBitrate,
-		"--remote-components", "ejs:github",
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 		"-o", "-",
 		videoURL,
 	}
 
-
-	
 	logger.Printf("YT-DLP POT URL: %s", os.Getenv("YT_DLP_POT_URL"))
 	if potURL := os.Getenv("YT_DLP_POT_URL"); potURL != "" {
 		ytdlpArgs = append([]string{
@@ -465,18 +458,6 @@ func StreamYoutubeAudioDirect(videoURL string, bitrate string, progressCallback 
 					}
 				}
 			}
-		}
-	}()
-
-	// Cleanup on exit
-	go func() {
-		err := ytdlpCmd.Wait()
-		if err != nil {
-			logger.Printf("yt-dlp exited with error: %v", err)
-			return
-		}
-		if progressCallback != nil {
-			progressCallback(100)
 		}
 	}()
 
