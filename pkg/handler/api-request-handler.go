@@ -46,6 +46,7 @@ func (apiHandler APIRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	requestMethod := r.Method
 	apiHandler.GetEndpoint()
 	log.Println("Serve HTTP | Method: ", requestMethod)
+	
 	switch requestMethod {
 	case "PUT":
 		apiHandler.PUTRoutes(w, r)

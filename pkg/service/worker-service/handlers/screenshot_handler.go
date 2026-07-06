@@ -396,6 +396,7 @@ func generateFallbackSummary(metadata *ScreenshotMetadata) string {
 
 // logAnalysis logs the analysis results
 func (h *ScreenshotHandler) logAnalysis(metadata *ScreenshotMetadata, analysis *ScreenshotAnalysis) {
+	
 	log.Printf("=== Screenshot Analysis ===")
 	log.Printf("Device: %s", metadata.DeviceName)
 	log.Printf("Application: %s", analysis.Application)
