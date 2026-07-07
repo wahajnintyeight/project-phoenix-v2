@@ -1,14 +1,19 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"project-phoenix/v2/internal/controllers"
+	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
 	"project-phoenix/v2/internal/service"
 	"project-phoenix/v2/internal/vectorstore"
@@ -23,6 +28,9 @@ type ScreenshotHandler struct {
 	multimodalLLMService *service.MultimodalLLMService
 	apiKey               string
 	modelName            string
+	geminiAPIKey         string
+	geminiModelName      string
+	apiKeyController     *controllers.APIKeyController
 	qdrantClient         *vectorstore.QdrantClient
 }
 
@@ -43,8 +51,20 @@ func NewScreenshotHandler() *ScreenshotHandler {
 		multimodalLLMService: service.NewMultimodalLLMService(),
 		apiKey:               os.Getenv("OPENROUTER_API_KEY"),
 		modelName:            getEnvOrDefault("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"),
+		geminiAPIKey:         getEnvOrDefault("GEMINI_API_KEY", os.Getenv("GOOGLE_API_KEY")),
+		geminiModelName:      getEnvOrDefault("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+		apiKeyController:     getAPIKeyController(),
 		qdrantClient:         qdrantClient,
 	}
+}
+
+func getAPIKeyController() *controllers.APIKeyController {
+	controller := controllers.GetControllerInstance(enum.APIKeyController, enum.MONGODB)
+	if apiKeyController, ok := controller.(*controllers.APIKeyController); ok {
+		return apiKeyController
+	}
+	log.Println("Warning: API key controller unavailable; Gemini will use env key fallback")
+	return nil
 }
 
 // Process handles screenshot processing tasks
@@ -151,6 +171,21 @@ func (h *ScreenshotHandler) analyzeScreenshot(metadata *ScreenshotMetadata, imag
 	// Build analysis prompt
 	prompt := h.buildAnalysisPrompt(metadata, imageData)
 
+	if imageData != "" {
+		geminiAPIKeys := h.getGeminiAPIKeys()
+		for i, apiKey := range geminiAPIKeys {
+			log.Printf("Using Gemini API for vision analysis (key %d/%d)", i+1, len(geminiAPIKeys))
+			content, err := h.analyzeScreenshotWithGemini(prompt, imageData, apiKey)
+			if err == nil {
+				return h.parseAnalysisResponse(content, metadata), nil
+			}
+			log.Printf("Gemini analysis failed with key %d/%d: %v", i+1, len(geminiAPIKeys), err)
+		}
+		if len(geminiAPIKeys) > 0 {
+			log.Printf("All Gemini keys failed, falling back to OpenRouter")
+		}
+	}
+
 	// Create LLM request with vision support if image data is present
 	messages := []model.ChatMessage{
 		{
@@ -228,6 +263,111 @@ func (h *ScreenshotHandler) analyzeScreenshot(metadata *ScreenshotMetadata, imag
 	analysis := h.parseAnalysisResponse(contentStr, metadata)
 
 	return analysis, nil
+}
+
+func (h *ScreenshotHandler) getGeminiAPIKeys() []string {
+	keys := make([]string, 0)
+	seen := make(map[string]bool)
+	if h.apiKeyController != nil {
+		mongoKeys, err := h.apiKeyController.FindAllValidByProvider(model.ProviderGoogle)
+		if err == nil {
+			for _, key := range mongoKeys {
+				keyValue := strings.TrimSpace(key.KeyValue)
+				if keyValue != "" && !seen[keyValue] {
+					keys = append(keys, keyValue)
+					seen[keyValue] = true
+				}
+			}
+		}
+		if err != nil {
+			log.Printf("No valid Google key found in MongoDB for Gemini: %v", err)
+		}
+	}
+	envKey := strings.TrimSpace(h.geminiAPIKey)
+	if envKey != "" && !seen[envKey] {
+		keys = append(keys, envKey)
+	}
+	return keys
+}
+
+func (h *ScreenshotHandler) analyzeScreenshotWithGemini(prompt, imageData string, apiKey string) (string, error) {
+	payload := map[string]interface{}{
+		"contents": []map[string]interface{}{
+			{
+				"role": "user",
+				"parts": []map[string]interface{}{
+					{
+						"inlineData": map[string]string{
+							"mimeType": "image/jpeg",
+							"data":     imageData,
+						},
+					},
+					{"text": prompt},
+				},
+			},
+		},
+		"generationConfig": map[string]interface{}{
+			"thinkingConfig": map[string]string{
+				"thinkingLevel": "MINIMAL",
+			},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", h.geminiModelName, apiKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("gemini returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var parsed struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return "", err
+	}
+	if len(parsed.Candidates) == 0 || len(parsed.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("gemini returned no content")
+	}
+
+	var parts []string
+	for _, part := range parsed.Candidates[0].Content.Parts {
+		if strings.TrimSpace(part.Text) != "" {
+			parts = append(parts, part.Text)
+		}
+	}
+	if len(parts) == 0 {
+		return "", fmt.Errorf("gemini returned empty text")
+	}
+	return strings.Join(parts, "\n"), nil
 }
 
 // buildAnalysisPrompt creates the analysis prompt
@@ -396,7 +536,7 @@ func generateFallbackSummary(metadata *ScreenshotMetadata) string {
 
 // logAnalysis logs the analysis results
 func (h *ScreenshotHandler) logAnalysis(metadata *ScreenshotMetadata, analysis *ScreenshotAnalysis) {
-	
+
 	log.Printf("=== Screenshot Analysis ===")
 	log.Printf("Device: %s", metadata.DeviceName)
 	log.Printf("Application: %s", analysis.Application)

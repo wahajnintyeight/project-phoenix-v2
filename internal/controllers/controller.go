@@ -39,7 +39,7 @@ var (
 )
 
 func getControllerKey(controllerType enum.ControllerType, dbType enum.DBType) string {
-	return fmt.Sprintf("%s-%s", controllerType, dbType)
+	return fmt.Sprintf("%v-%v", controllerType, dbType)
 }
 
 func registerControllerInstance(key string, instance Controller) {

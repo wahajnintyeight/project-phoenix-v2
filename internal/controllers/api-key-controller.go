@@ -125,9 +125,26 @@ func (c *APIKeyController) FindByKeyValue(keyValue string) (*model.APIKey, error
 	return c.FindOne(query)
 }
 
+func (c *APIKeyController) FindValidByProvider(provider string) (*model.APIKey, error) {
+	return c.FindOne(bson.M{
+		"provider": provider,
+		"status":   model.StatusValid,
+	})
+}
+
+func (c *APIKeyController) FindAllValidByProvider(provider string) ([]*model.APIKey, error) {
+	return c.findAllByQuery(bson.M{
+		"provider": provider,
+		"status":   model.StatusValid,
+	})
+}
+
 // FindByStatus retrieves all API keys with a specific status
 func (c *APIKeyController) FindByStatus(status string) ([]*model.APIKey, error) {
-	query := bson.M{"status": status}
+	return c.findAllByQuery(bson.M{"status": status})
+}
+
+func (c *APIKeyController) findAllByQuery(query bson.M) ([]*model.APIKey, error) {
 	totalPages, _, results, err := c.DB.FindAllWithPagination(query, 1, c.GetCollectionName())
 	if err != nil {
 		return nil, err
