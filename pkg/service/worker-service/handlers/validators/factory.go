@@ -35,6 +35,7 @@ func (f *ValidatorFactory) registerValidators() {
 	f.Register(NewHuggingFaceValidator(f.debugMode))
 	f.Register(NewDeepSeekValidator(f.debugMode))
 	f.Register(NewZAIValidator(f.debugMode))
+	f.Register(NewXAIValidator(f.debugMode))
 }
 
 // Register adds a validator to the factory

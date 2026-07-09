@@ -25,6 +25,7 @@ const (
 	ProviderHuggingFace = "HuggingFace"
 	ProviderDeepSeek    = "DeepSeek"
 	ProviderZAI         = "Z.AI"
+	ProviderXAI         = "xAI"
 )
 
 type APIKey struct {

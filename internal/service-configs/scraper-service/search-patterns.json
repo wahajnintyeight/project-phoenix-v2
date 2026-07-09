@@ -199,6 +199,28 @@
       ]
     },
     {
+      "provider": "xAI",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"xai-\" ",
+          "description": "xAI API keys"
+        },
+        {
+          "pattern": "\"XAI_API_KEY\" ",
+          "description": "xAI environment variable"
+        },
+        {
+          "pattern": "\"api.x.ai\" ",
+          "description": "xAI API endpoint references"
+        },
+        {
+          "pattern": "\"grok\" \"api_key\" ",
+          "description": "Grok API key references"
+        }
+      ]
+    },
+    {
       "provider": "Other",
       "enabled": true,
       "queries": [
