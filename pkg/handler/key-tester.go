@@ -132,6 +132,9 @@ func testKey(keyValue, provider, model string) KeyTestResult {
 	case "Z.AI":
 		result := testZAIKey(keyValue, model)
 		return buildResult(provider, result)
+	case "xAI":
+		result := testXAIKey(keyValue)
+		return buildResult(provider, result)
 	case "HuggingFace":
 		result := testHuggingFaceKey(keyValue)
 		return buildResult(provider, result)
@@ -597,6 +600,15 @@ func testOpenRouterModelWithRequest(keyValue, model string) providerResult {
 			Err:      fmt.Errorf("provider returned HTTP %d", resp.StatusCode),
 		}
 	}
+}
+
+func testXAIKey(keyValue string) providerResult {
+	req, err := http.NewRequest(http.MethodGet, "https://api.x.ai/v1/models", nil)
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	req.Header.Set("Authorization", "Bearer "+keyValue)
+	return doProviderRequest(req)
 }
 
 // doProviderRequest executes a one-shot request and maps the HTTP status to a key status string.
