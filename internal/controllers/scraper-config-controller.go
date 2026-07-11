@@ -206,6 +206,12 @@ func (c *ScraperConfigController) seedFallbackQueries() error {
 			Enabled:      true,
 			CreatedAt:    time.Now(),
 		},
+		{
+			QueryPattern: `"sk-s" extension:env`,
+			Provider:     model.ProviderMiMo,
+			Enabled:      true,
+			CreatedAt:    time.Now(),
+		},
 	}
 
 	for _, query := range defaultQueries {

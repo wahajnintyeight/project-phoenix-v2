@@ -135,6 +135,9 @@ func testKey(keyValue, provider, model string) KeyTestResult {
 	case "xAI":
 		result := testXAIKey(keyValue)
 		return buildResult(provider, result)
+	case "MiMo":
+		result := testMiMoKey(keyValue, model)
+		return buildResult(provider, result)
 	case "HuggingFace":
 		result := testHuggingFaceKey(keyValue)
 		return buildResult(provider, result)
@@ -608,6 +611,31 @@ func testXAIKey(keyValue string) providerResult {
 		return providerResult{Status: "Error", Err: err}
 	}
 	req.Header.Set("Authorization", "Bearer "+keyValue)
+	return doProviderRequest(req)
+}
+
+// testMiMoKey validates a MiMo key. Uses the provided model or defaults to mimo-v2.5.
+func testMiMoKey(keyValue, model string) providerResult {
+	if strings.TrimSpace(model) == "" {
+		model = "mimo-v2.5"
+	}
+
+	body, err := json.Marshal(map[string]interface{}{
+		"model":      model,
+		"max_tokens": 1,
+		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
+	})
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+
+	req, err := http.NewRequest("POST", "https://api.xiaomimimo.com/v1/chat/completions", bytes.NewBuffer(body))
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	req.Header.Set("api-key", keyValue)
+	req.Header.Set("Content-Type", "application/json")
+
 	return doProviderRequest(req)
 }
 

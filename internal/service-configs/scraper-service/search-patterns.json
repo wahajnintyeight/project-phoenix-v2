@@ -221,6 +221,28 @@
       ]
     },
     {
+      "provider": "MiMo",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"sk-s\" ",
+          "description": "MiMo API keys"
+        },
+        {
+          "pattern": "\"MIMO_API_KEY\" ",
+          "description": "MiMo environment variable"
+        },
+        {
+          "pattern": "\"mimo_api_key\" ",
+          "description": "MiMo lowercase environment variable"
+        },
+        {
+          "pattern": "\"mimo_key\" ",
+          "description": "MiMo shorthand environment variable"
+        }
+      ]
+    },
+    {
       "provider": "Other",
       "enabled": true,
       "queries": [
