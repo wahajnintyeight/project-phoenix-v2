@@ -212,6 +212,11 @@ func (c *ScraperConfigController) seedFallbackQueries() error {
 			Enabled:      true,
 			CreatedAt:    time.Now(),
 		},
+		{QueryPattern: `"MINIMAX_API_KEY" extension:env`, Provider: model.ProviderMiniMax, Enabled: true, CreatedAt: time.Now()},
+		{QueryPattern: `"HY3_API_KEY" extension:env`, Provider: model.ProviderTencent, Enabled: true, CreatedAt: time.Now()},
+		{QueryPattern: `"STEP_API_KEY" extension:env`, Provider: model.ProviderStepFun, Enabled: true, CreatedAt: time.Now()},
+		{QueryPattern: `"DASHSCOPE_API_KEY" extension:env`, Provider: model.ProviderQwen, Enabled: true, CreatedAt: time.Now()},
+		{QueryPattern: `"MISTRAL_API_KEY" extension:env`, Provider: model.ProviderMistral, Enabled: true, CreatedAt: time.Now()},
 	}
 
 	for _, query := range defaultQueries {

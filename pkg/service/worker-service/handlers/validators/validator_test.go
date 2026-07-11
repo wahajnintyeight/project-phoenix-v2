@@ -104,6 +104,21 @@ func TestZAIValidatorUsesLongerTimeout(t *testing.T) {
 	}
 }
 
+func TestFactoryRegistersNewCodingProviders(t *testing.T) {
+	factory := NewValidatorFactory(false)
+	for _, provider := range []string{
+		model.ProviderMiniMax,
+		model.ProviderTencent,
+		model.ProviderStepFun,
+		model.ProviderQwen,
+		model.ProviderMistral,
+	} {
+		if _, err := factory.GetValidator(provider); err != nil {
+			t.Fatalf("provider %s is not registered: %v", provider, err)
+		}
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {

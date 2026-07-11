@@ -243,6 +243,104 @@
       ]
     },
     {
+      "provider": "MiniMax",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"MINIMAX_API_KEY\" ",
+          "description": "MiniMax environment variable"
+        },
+        {
+          "pattern": "\"minimax_api_key\" ",
+          "description": "MiniMax lowercase environment variable"
+        },
+        {
+          "pattern": "\"api.minimax.io\" ",
+          "description": "MiniMax API endpoint references"
+        }
+      ]
+    },
+    {
+      "provider": "Tencent",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"sk-tp-\" ",
+          "description": "Tencent Token Plan API keys"
+        },
+        {
+          "pattern": "\"HY3_API_KEY\" ",
+          "description": "Tencent Hy3 environment variable"
+        },
+        {
+          "pattern": "\"HUNYUAN_API_KEY\" ",
+          "description": "Tencent Hunyuan environment variable"
+        },
+        {
+          "pattern": "\"tokenhub.tencentmaas.com\" ",
+          "description": "Tencent TokenHub endpoint references"
+        }
+      ]
+    },
+    {
+      "provider": "StepFun",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"STEP_API_KEY\" ",
+          "description": "StepFun environment variable"
+        },
+        {
+          "pattern": "\"STEPFUN_API_KEY\" ",
+          "description": "StepFun alternate environment variable"
+        },
+        {
+          "pattern": "\"api.stepfun.com\" ",
+          "description": "StepFun API endpoint references"
+        }
+      ]
+    },
+    {
+      "provider": "Qwen",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"sk-sp-\" ",
+          "description": "Qwen Coding Plan API keys"
+        },
+        {
+          "pattern": "\"DASHSCOPE_API_KEY\" ",
+          "description": "Alibaba Model Studio environment variable"
+        },
+        {
+          "pattern": "\"BAILIAN_API_KEY\" ",
+          "description": "Alibaba Bailian environment variable"
+        },
+        {
+          "pattern": "\"dashscope-intl.aliyuncs.com\" ",
+          "description": "Qwen international API endpoint references"
+        }
+      ]
+    },
+    {
+      "provider": "Mistral",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"MISTRAL_API_KEY\" ",
+          "description": "Mistral environment variable"
+        },
+        {
+          "pattern": "\"mistral_api_key\" ",
+          "description": "Mistral lowercase environment variable"
+        },
+        {
+          "pattern": "\"api.mistral.ai\" ",
+          "description": "Mistral API endpoint references"
+        }
+      ]
+    },
+    {
       "provider": "Other",
       "enabled": true,
       "queries": [

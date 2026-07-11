@@ -27,6 +27,11 @@ const (
 	ProviderZAI         = "Z.AI"
 	ProviderXAI         = "xAI"
 	ProviderMiMo        = "MiMo"
+	ProviderMiniMax     = "MiniMax"
+	ProviderTencent     = "Tencent"
+	ProviderStepFun     = "StepFun"
+	ProviderQwen        = "Qwen"
+	ProviderMistral     = "Mistral"
 )
 
 type APIKey struct {

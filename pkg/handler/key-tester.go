@@ -138,6 +138,16 @@ func testKey(keyValue, provider, model string) KeyTestResult {
 	case "MiMo":
 		result := testMiMoKey(keyValue, model)
 		return buildResult(provider, result)
+	case "MiniMax":
+		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "MiniMax-M2.7", "https://api.minimax.io/v1/chat/completions", "max_completion_tokens"))
+	case "Tencent":
+		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "hy3", "https://tokenhub-intl.tencentmaas.com/v1/chat/completions", "max_tokens"))
+	case "StepFun":
+		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "step-3.7-flash", "https://api.stepfun.com/v1/chat/completions", "max_tokens"))
+	case "Qwen":
+		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "qwen3.7-max", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", "max_tokens"))
+	case "Mistral":
+		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "mistral-medium-3-5", "https://api.mistral.ai/v1/chat/completions", "max_tokens"))
 	case "HuggingFace":
 		result := testHuggingFaceKey(keyValue)
 		return buildResult(provider, result)
@@ -636,6 +646,29 @@ func testMiMoKey(keyValue, model string) providerResult {
 	req.Header.Set("api-key", keyValue)
 	req.Header.Set("Content-Type", "application/json")
 
+	return doProviderRequest(req)
+}
+
+func testOpenAICompatibleKey(keyValue, modelName, defaultModel, url, tokenKey string) providerResult {
+	if strings.TrimSpace(modelName) == "" {
+		modelName = defaultModel
+	}
+
+	body, err := json.Marshal(map[string]interface{}{
+		"model":    modelName,
+		"messages": []map[string]string{{"role": "user", "content": "Reply OK"}},
+		tokenKey:   16,
+	})
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(keyValue))
+	req.Header.Set("Content-Type", "application/json")
 	return doProviderRequest(req)
 }
 

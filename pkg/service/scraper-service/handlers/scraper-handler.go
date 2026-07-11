@@ -64,6 +64,11 @@ var KeyPatterns = map[string]*regexp.Regexp{
 	model.ProviderZAI:         regexp.MustCompile(`[a-zA-Z0-9]{20,}\.[a-zA-Z0-9]{10,}`),
 	model.ProviderXAI:         regexp.MustCompile(`xai-[a-zA-Z0-9]{20,}`),
 	model.ProviderMiMo:        regexp.MustCompile(`sk-s[a-zA-Z0-9]{20,}`),
+	model.ProviderMiniMax:     regexp.MustCompile(`eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+`),
+	model.ProviderTencent:     regexp.MustCompile(`sk-tp-[a-zA-Z0-9_-]{20,}`),
+	model.ProviderStepFun:     regexp.MustCompile(`sk-[a-zA-Z0-9_-]{20,}`),
+	model.ProviderQwen:        regexp.MustCompile(`sk-(sp-)?[a-zA-Z0-9_-]{20,}`),
+	model.ProviderMistral:     regexp.MustCompile(`[a-zA-Z0-9]{32}`),
 }
 
 // NewScraperHandler creates a new scraper handler
