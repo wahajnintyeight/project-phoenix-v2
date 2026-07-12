@@ -41,7 +41,7 @@ func (f *ValidatorFactory) registerValidators() {
 	f.Register(NewOpenAICompatibleValidator(model.ProviderTencent, "https://tokenhub-intl.tencentmaas.com/v1/chat/completions", "hy3", "max_tokens", f.debugMode))
 	f.Register(NewOpenAICompatibleValidator(model.ProviderStepFun, "https://api.stepfun.com/v1/chat/completions", "step-3.7-flash", "max_tokens", f.debugMode))
 	f.Register(NewOpenAICompatibleValidator(model.ProviderQwen, "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen3.7-max", "max_tokens", f.debugMode))
-	f.Register(NewOpenAICompatibleValidator(model.ProviderMistral, "https://api.mistral.ai/v1/chat/completions", "mistral-medium-3-5", "max_tokens", f.debugMode))
+	f.Register(NewOpenAICompatibleValidator(model.ProviderMistral, "https://api.mistral.ai/v1/chat/completions", "mistral-large-latest", "max_tokens", f.debugMode))
 }
 
 // Register adds a validator to the factory

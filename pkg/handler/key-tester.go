@@ -147,7 +147,7 @@ func testKey(keyValue, provider, model string) KeyTestResult {
 	case "Qwen":
 		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "qwen3.7-max", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", "max_tokens"))
 	case "Mistral":
-		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "mistral-medium-3-5", "https://api.mistral.ai/v1/chat/completions", "max_tokens"))
+		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "mistral-large-latest", "https://api.mistral.ai/v1/chat/completions", "max_tokens"))
 	case "HuggingFace":
 		result := testHuggingFaceKey(keyValue)
 		return buildResult(provider, result)
