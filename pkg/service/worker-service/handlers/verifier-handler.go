@@ -386,8 +386,8 @@ func (h *VerifierHandler) EnforceValidKeyLimit(correlationID string) error {
 		CorrelationID: correlationID,
 	}
 
-	// Get max valid keys from environment (default: 50)
-	maxValidKeys := 50
+	// Get max valid keys from environment (default: 300)
+	maxValidKeys := 300
 	if maxKeysStr := os.Getenv("MAX_VALID_KEYS"); maxKeysStr != "" {
 		if parsed, err := strconv.Atoi(maxKeysStr); err == nil {
 			maxValidKeys = parsed

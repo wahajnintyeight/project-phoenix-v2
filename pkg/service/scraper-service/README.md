@@ -71,7 +71,7 @@ The system consists of two main components:
    - Keys with "Pending" status are validated against provider APIs
    - Status updated to Valid, Invalid, ValidNoCredits, or Error
    - RabbitMQ message published to `keys.validated` topic
-   - Oldest valid keys deleted when count exceeds 50
+   - Oldest valid keys deleted when count exceeds 300
 
 ## Components
 
@@ -101,7 +101,7 @@ The system consists of two main components:
 - Validate API keys against provider endpoints
 - Update key status in MongoDB
 - Publish validation results to RabbitMQ
-- Enforce 50-key limit for valid keys
+- Enforce 300-key limit for valid keys
 - Retry failed validations with fixed delay
 
 **Provider Endpoints**:
@@ -318,7 +318,7 @@ WORKER_SERVICE_PORT=8082
 SCRAPING_INTERVAL_MINUTES=20
 VALIDATION_INTERVAL_MINUTES=60
 GITHUB_RATE_LIMIT_DELAY_SECONDS=5
-MAX_VALID_KEYS=50
+MAX_VALID_KEYS=300
 
 # Logging Configuration
 LOG_LEVEL=INFO

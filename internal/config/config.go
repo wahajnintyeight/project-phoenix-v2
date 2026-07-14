@@ -82,7 +82,7 @@ func LoadConfig() (*Config, error) {
 	// Parse max valid keys
 	maxValidKeysStr := os.Getenv("MAX_VALID_KEYS")
 	if maxValidKeysStr == "" {
-		maxValidKeysStr = "50" // Default
+		maxValidKeysStr = "300" // Default
 	}
 	maxValidKeys, err := strconv.Atoi(maxValidKeysStr)
 	if err != nil {
