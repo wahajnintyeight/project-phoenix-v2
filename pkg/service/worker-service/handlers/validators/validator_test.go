@@ -141,6 +141,30 @@ func TestZAIValidatorUsesLongerTimeout(t *testing.T) {
 	}
 }
 
+func TestZAIValidatorAllowsHTTP2(t *testing.T) {
+	transport, ok := NewZAIValidator(false).HTTPClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("expected HTTP transport")
+	}
+	if !transport.ForceAttemptHTTP2 {
+		t.Fatal("expected ZAI validator to allow HTTP/2")
+	}
+}
+
+func TestMistralValidatorDisablesHTTP2(t *testing.T) {
+	validator := NewOpenAICompatibleValidator(model.ProviderMistral, "https://api.mistral.ai/v1/chat/completions", "mistral-large-latest", "max_tokens", false)
+	transport, ok := validator.HTTPClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("expected HTTP transport")
+	}
+	if transport.ForceAttemptHTTP2 {
+		t.Fatal("expected Mistral validator to disable HTTP/2")
+	}
+	if transport.TLSNextProto == nil {
+		t.Fatal("expected Mistral validator to disable HTTP/2 via TLSNextProto")
+	}
+}
+
 func TestFactoryRegistersNewCodingProviders(t *testing.T) {
 	factory := NewValidatorFactory(false)
 	for _, provider := range []string{

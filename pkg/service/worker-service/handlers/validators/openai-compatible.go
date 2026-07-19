@@ -18,13 +18,19 @@ type OpenAICompatibleValidator struct {
 }
 
 func NewOpenAICompatibleValidator(provider, url, modelName, tokenKey string, debugMode bool) *OpenAICompatibleValidator {
-	return &OpenAICompatibleValidator{
+	validator := &OpenAICompatibleValidator{
 		BaseValidator: NewBaseValidator(debugMode),
 		provider:      provider,
 		url:           url,
 		model:         modelName,
 		tokenKey:      tokenKey,
 	}
+
+	if provider == model.ProviderMistral {
+		validator.HTTPClient.Transport = newHTTP1OnlyValidatorTransport()
+	}
+
+	return validator
 }
 
 func (v *OpenAICompatibleValidator) GetProviderName() string {

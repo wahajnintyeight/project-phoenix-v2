@@ -49,11 +49,16 @@ func NewBaseValidator(debugMode bool) *BaseValidator {
 
 func newValidatorTransport() *http.Transport {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.ForceAttemptHTTP2 = false
-	transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
 	transport.MaxConnsPerHost = 4
 	transport.MaxIdleConnsPerHost = 2
 	transport.IdleConnTimeout = 30 * time.Second
+	return transport
+}
+
+func newHTTP1OnlyValidatorTransport() *http.Transport {
+	transport := newValidatorTransport()
+	transport.ForceAttemptHTTP2 = false
+	transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
 	return transport
 }
 
