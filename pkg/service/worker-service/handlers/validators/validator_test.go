@@ -2,6 +2,7 @@ package validators
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -95,6 +96,42 @@ func TestExecuteRequestWithRetryRetriesTransportTimeout(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "%5BREDACTED%5D") {
 		t.Fatalf("error = %q, want redacted key", err)
+	}
+}
+
+func TestExecuteRequestWithRetryRetriesHTTP2GoAway(t *testing.T) {
+	var calls int32
+	validator := NewBaseValidator(false)
+	validator.HTTPClient.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			return nil, &url.Error{
+				Op:  "Post",
+				URL: "https://api.mistral.ai/v1/chat/completions",
+				Err: errors.New("http2: server sent GOAWAY and closed the connection; LastStreamID=1779, ErrCode=ENHANCE_YOUR_CALM, debug=\"\""),
+			}
+		}
+
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader("{}")),
+		}, nil
+	})
+
+	req, err := http.NewRequest("POST", "https://api.mistral.ai/v1/chat/completions", strings.NewReader(`{"ping":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := validator.ExecuteRequestWithRetry(req, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != model.StatusValid {
+		t.Fatalf("status = %q, want %q", status, model.StatusValid)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("calls = %d, want 2", got)
 	}
 }
 

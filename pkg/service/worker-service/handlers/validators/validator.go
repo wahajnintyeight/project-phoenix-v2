@@ -2,10 +2,12 @@ package validators
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"project-phoenix/v2/internal/model"
@@ -38,10 +40,21 @@ type BaseValidator struct {
 func NewBaseValidator(debugMode bool) *BaseValidator {
 	return &BaseValidator{
 		HTTPClient: &http.Client{
-			Timeout: 15 * time.Second,
+			Timeout:   15 * time.Second,
+			Transport: newValidatorTransport(),
 		},
 		DebugMode: debugMode,
 	}
+}
+
+func newValidatorTransport() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ForceAttemptHTTP2 = false
+	transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+	transport.MaxConnsPerHost = 4
+	transport.MaxIdleConnsPerHost = 2
+	transport.IdleConnTimeout = 30 * time.Second
+	return transport
 }
 
 // ExecuteRequestWithRetry executes HTTP request with retry logic for 5xx errors
@@ -118,7 +131,13 @@ func isRetryableHTTPError(err error) bool {
 	}
 
 	var netErr net.Error
-	return errors.As(err, &netErr) && netErr.Timeout()
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	errText := err.Error()
+	return strings.Contains(errText, "http2: server sent GOAWAY") ||
+		strings.Contains(errText, "ErrCode=ENHANCE_YOUR_CALM")
 }
 
 func sanitizeHTTPError(err error) error {
