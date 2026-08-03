@@ -30,7 +30,7 @@ func (v *AnthropicValidator) Validate(keyValue string, correlationID string) (st
 	url := "https://api.anthropic.com/v1/messages"
 
 	requestBody := map[string]interface{}{
-		"model":      "claude-opus-4-6",
+		"model":      "claude-sonnet-4-6",
 		"max_tokens": 1024,
 		"messages": []map[string]string{
 			{"role": "user", "content": "test"},
