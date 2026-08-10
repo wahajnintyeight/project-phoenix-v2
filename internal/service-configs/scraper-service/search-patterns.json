@@ -341,6 +341,28 @@
       ]
     },
     {
+      "provider": "BytePlus",
+      "enabled": true,
+      "queries": [
+        {
+          "pattern": "\"ark-\" ",
+          "description": "BytePlus ModelArk API keys"
+        },
+        {
+          "pattern": "\"ARK_API_KEY\" ",
+          "description": "BytePlus ModelArk environment variable"
+        },
+        {
+          "pattern": "\"ark.ap-southeast.bytepluses.com\" ",
+          "description": "BytePlus ModelArk AP endpoint references"
+        },
+        {
+          "pattern": "\"ark.eu-west.bytepluses.com\" ",
+          "description": "BytePlus ModelArk EU endpoint references"
+        }
+      ]
+    },
+    {
       "provider": "Other",
       "enabled": true,
       "queries": [

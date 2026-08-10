@@ -32,6 +32,7 @@ const (
 	ProviderStepFun     = "StepFun"
 	ProviderQwen        = "Qwen"
 	ProviderMistral     = "Mistral"
+	ProviderBytePlus    = "BytePlus"
 )
 
 type APIKey struct {

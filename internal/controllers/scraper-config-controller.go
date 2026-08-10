@@ -217,6 +217,7 @@ func (c *ScraperConfigController) seedFallbackQueries() error {
 		{QueryPattern: `"STEP_API_KEY" extension:env`, Provider: model.ProviderStepFun, Enabled: true, CreatedAt: time.Now()},
 		{QueryPattern: `"DASHSCOPE_API_KEY" extension:env`, Provider: model.ProviderQwen, Enabled: true, CreatedAt: time.Now()},
 		{QueryPattern: `"MISTRAL_API_KEY" extension:env`, Provider: model.ProviderMistral, Enabled: true, CreatedAt: time.Now()},
+		{QueryPattern: `"ark-" extension:env`, Provider: model.ProviderBytePlus, Enabled: true, CreatedAt: time.Now()},
 	}
 
 	for _, query := range defaultQueries {

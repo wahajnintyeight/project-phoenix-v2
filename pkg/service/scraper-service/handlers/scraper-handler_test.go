@@ -8,11 +8,12 @@ import (
 
 func TestNewProviderKeyPatterns(t *testing.T) {
 	tests := map[string]string{
-		model.ProviderMiniMax: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.signature_value",
-		model.ProviderTencent: "sk-tp-1234567890abcdefghijklmnop",
-		model.ProviderStepFun: "sk-1234567890abcdefghijklmnop",
-		model.ProviderQwen:    "sk-sp-1234567890abcdefghijklmnop",
-		model.ProviderMistral: "1234567890abcdefghijklmnopqrstuv",
+		model.ProviderMiniMax:  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.signature_value",
+		model.ProviderTencent:  "sk-tp-1234567890abcdefghijklmnop",
+		model.ProviderStepFun:  "sk-1234567890abcdefghijklmnop",
+		model.ProviderQwen:     "sk-sp-1234567890abcdefghijklmnop",
+		model.ProviderMistral:  "1234567890abcdefghijklmnopqrstuv",
+		model.ProviderBytePlus: "ark-1234567890abcdefghijklmnop",
 	}
 
 	for provider, key := range tests {

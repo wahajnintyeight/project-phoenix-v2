@@ -173,6 +173,7 @@ func TestFactoryRegistersNewCodingProviders(t *testing.T) {
 		model.ProviderStepFun,
 		model.ProviderQwen,
 		model.ProviderMistral,
+		model.ProviderBytePlus,
 	} {
 		if _, err := factory.GetValidator(provider); err != nil {
 			t.Fatalf("provider %s is not registered: %v", provider, err)
