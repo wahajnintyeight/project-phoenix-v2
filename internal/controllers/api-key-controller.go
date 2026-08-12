@@ -2,12 +2,15 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
+	"project-phoenix/v2/internal/cache"
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/model"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -28,6 +31,11 @@ type APIKeyStats struct {
 	LastScrapedAt   *time.Time     `json:"last_scraped_at,omitempty"`
 	LastValidatedAt *time.Time     `json:"last_validated_at,omitempty"`
 }
+
+const (
+	activeValidProviderCountsCacheKey = "api_keys:active_valid_provider_counts"
+	activeValidProviderCountsCacheTTL = 5 * time.Hour
+)
 
 func (c *APIKeyController) GetCollectionName() string {
 	return "api_keys"
@@ -94,6 +102,9 @@ func (c *APIKeyController) Create(key *model.APIKey) (primitive.ObjectID, error)
 	result, err := c.DB.Create(key, c.GetCollectionName())
 	if err != nil {
 		return primitive.NilObjectID, err
+	}
+	if key.Status == model.StatusValid || key.Status == model.StatusValidNoCredits {
+		c.invalidateActiveValidProviderCountsCache()
 	}
 
 	if id, ok := result["_id"].(primitive.ObjectID); ok {
@@ -364,6 +375,11 @@ func (c *APIKeyController) FindRepoReferencesByKeyID(keyID primitive.ObjectID) (
 func (c *APIKeyController) Update(id primitive.ObjectID, update bson.M) error {
 	query := bson.M{"_id": id}
 	_, err := c.DB.Update(query, update, c.GetCollectionName())
+	if err == nil {
+		if _, hasStatus := update["status"]; hasStatus {
+			c.invalidateActiveValidProviderCountsCache()
+		}
+	}
 	return err
 }
 
@@ -374,7 +390,10 @@ func (c *APIKeyController) UpdateStatus(id primitive.ObjectID, status string) er
 		"status":       status,
 		"validated_at": now,
 	}
-	return c.Update(id, update)
+	if err := c.Update(id, update); err != nil {
+		return err
+	}
+	return nil
 }
 
 // UpdateStatusAndCredits updates the status and credits information of an API key
@@ -390,7 +409,81 @@ func (c *APIKeyController) UpdateStatusAndCredits(id primitive.ObjectID, status 
 		update["credits"] = credits
 	}
 
-	return c.Update(id, update)
+	if err := c.Update(id, update); err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetActiveValidProviderCounts returns the number of active valid keys for each
+// provider. The aggregate is cached because it is used by the stats endpoint
+// and does not need to be recalculated on every request.
+func (c *APIKeyController) GetActiveValidProviderCounts() (map[string]int, error) {
+	if redisCache := cache.GetInstance(); redisCache != nil {
+		if client, ok := redisCache.GetClient().(*redis.Client); ok && client != nil {
+			cached, err := client.Get(context.Background(), activeValidProviderCountsCacheKey).Result()
+			if err == nil {
+				var counts map[string]int
+				if unmarshalErr := json.Unmarshal([]byte(cached), &counts); unmarshalErr == nil {
+					return counts, nil
+				}
+			} else if err != redis.Nil {
+				log.Printf("Warning: Failed to read active valid provider counts from Redis: %v", err)
+			}
+		}
+	}
+
+	dbConn := db.GetConnectionFromPool()
+	defer db.ReleaseConnectionToPool(dbConn)
+
+	collection := dbConn.Client.Database(os.Getenv("MONGO_DB_NAME")).Collection(c.GetCollectionName())
+	cursor, err := collection.Find(context.Background(), bson.M{
+		"status": bson.M{"$in": []string{model.StatusValid, model.StatusValidNoCredits}},
+	}, options.Find().SetProjection(bson.M{"provider": 1}))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.Background())
+
+	counts := make(map[string]int)
+	for cursor.Next(context.Background()) {
+		var result struct {
+			Provider string `bson:"provider"`
+		}
+		if err := cursor.Decode(&result); err != nil {
+			return nil, err
+		}
+		counts[result.Provider]++
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	if redisCache := cache.GetInstance(); redisCache != nil {
+		if client, ok := redisCache.GetClient().(*redis.Client); ok && client != nil {
+			if encoded, marshalErr := json.Marshal(counts); marshalErr == nil {
+				if err := client.Set(context.Background(), activeValidProviderCountsCacheKey, encoded, activeValidProviderCountsCacheTTL).Err(); err != nil {
+					log.Printf("Warning: Failed to cache active valid provider counts in Redis: %v", err)
+				}
+			}
+		}
+	}
+
+	return counts, nil
+}
+
+func (c *APIKeyController) invalidateActiveValidProviderCountsCache() {
+	redisCache := cache.GetInstance()
+	if redisCache == nil {
+		return
+	}
+	client, ok := redisCache.GetClient().(*redis.Client)
+	if !ok || client == nil {
+		return
+	}
+	if err := client.Del(context.Background(), activeValidProviderCountsCacheKey).Err(); err != nil {
+		log.Printf("Warning: Failed to invalidate active valid provider counts cache: %v", err)
+	}
 }
 
 // UpdateNotifiedAt updates the notified_at timestamp for a key
@@ -532,6 +625,11 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 	stats := &APIKeyStats{
 		ByProvider: make(map[string]int),
 	}
+	if providerCounts, err := c.GetActiveValidProviderCounts(); err == nil {
+		stats.ByProvider = providerCounts
+	} else {
+		log.Printf("Warning: Failed to get active valid provider counts: %v", err)
+	}
 
 	// Count total keys using CountDocuments instead of pagination
 	query := bson.M{}
@@ -582,9 +680,7 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 			stats.ErrorKeys++
 		}
 
-		if apiKey.Status == model.StatusValid || apiKey.Status == model.StatusValidNoCredits {
-			stats.ByProvider[apiKey.Provider]++
-		}
+		// ByProvider is populated from the Redis-backed aggregate above.
 
 		// Track most recent validation timestamp
 		if apiKey.ValidatedAt != nil {
@@ -677,6 +773,7 @@ func (c *APIKeyController) DeleteOldestValidKeys(keepCount int) error {
 		}
 	}
 
+	c.invalidateActiveValidProviderCountsCache()
 	log.Printf("Deleted %d oldest valid keys to enforce limit of %d", deleteCount, keepCount)
 	return nil
 }

@@ -46,7 +46,7 @@ func (apiHandler APIRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	requestMethod := r.Method
 	apiHandler.GetEndpoint()
 	log.Println("Serve HTTP | Method: ", requestMethod)
-	
+
 	switch requestMethod {
 	case "PUT":
 		apiHandler.PUTRoutes(w, r)
@@ -772,6 +772,12 @@ func GETRoutes(w http.ResponseWriter, r *http.Request) {
 		// Check if stats are cached in session
 		cachedStats, cacheValid := getStatsFromCache(r)
 		if cacheValid {
+			// Keep the relatively expensive statistics snapshot cached in the
+			// session, but refresh the Redis-backed provider aggregate so a newly
+			// valid key is reflected immediately after the aggregate is invalidated.
+			if providerCounts, err := apiKeyController.GetActiveValidProviderCounts(); err == nil {
+				cachedStats.ByProvider = providerCounts
+			}
 			log.Println("Returning cached stats")
 			response.SendResponse(w, int(enum.DATA_FETCHED), cachedStats)
 			break
