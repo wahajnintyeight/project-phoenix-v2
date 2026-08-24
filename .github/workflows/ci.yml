@@ -180,56 +180,53 @@ jobs:
               .
           done
 
-      - name: Deploy to VPS
+      - name: Deploy locally on VPS
         if: steps.list.outputs.none == 'false'
-        uses: appleboy/ssh-action@v1.2.0
         env:
-          PATHS: "${{ steps.list.outputs.paths }}"
-          BRANCH: "${{ github.ref_name }}"
-          GHCR_TOKEN: "${{ secrets.PAT }}"
-          USER: ${{ github.actor }}
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
-          envs: PATHS,BRANCH,GHCR_TOKEN,USER
-          script: |
-            set -e
-            cd /var/www/project-phoenix-v2
-            
-            git pull --ff-only origin "$BRANCH"
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$USER" --password-stdin
+          PATHS: ${{ steps.list.outputs.paths }}
+        run: |
+          set -euo pipefail
 
-            IFS=' ' read -r -a paths <<< "$PATHS"
-            deploy_targets=()
-            
-            for path in "${paths[@]}"; do
-              svc=$(basename "$path")
-              case "$svc" in
-                apigateway)       deploy_targets+=("api-gateway") ;;
-                apigateway-grpc)  deploy_targets+=("api-gateway-grpc") ;;
-                socketservice)    deploy_targets+=("socket-service") ;;
-                sse-service)      deploy_targets+=("sse-service") ;;
-                worker-service)   deploy_targets+=("worker-service") ;;
-                scraper-service)  deploy_targets+=("scraper-service") ;;
-              esac
-            done
+          IFS=' ' read -r -a paths <<< "$PATHS"
+          deploy_targets=()
 
-            if [ ${#deploy_targets[@]} -gt 0 ]; then
-               echo "Starting zero-downtime rolling update for: ${deploy_targets[*]}"
+          for path in "${paths[@]}"; do
+            case "$(basename "$path")" in
+              apigateway)       deploy_targets+=("api-gateway") ;;
+              apigateway-grpc)  deploy_targets+=("api-gateway-grpc") ;;
+              socketservice)    deploy_targets+=("socket-service") ;;
+              sse-service)      deploy_targets+=("sse-service") ;;
+              worker-service)   deploy_targets+=("worker-service") ;;
+              scraper-service)  deploy_targets+=("scraper-service") ;;
+            esac
+          done
 
-               # Pull fresh images (other services keep running)
-               docker compose -p project-phoenix-v2 pull "${deploy_targets[@]}"
-               
-               # Rolling restart: restart only changed services, one at a time if needed
-               for target in "${deploy_targets[@]}"; do
-                 echo "Restarting $target..."
-                 docker compose -p project-phoenix-v2 up -d --no-deps --wait "$target"
-               done
-               
-               echo "All services updated"
-               docker compose -p project-phoenix-v2 ps
-               
-               # Cleanup old images only for ppv2 services
-               docker images -a ghcr.io/wahajnintyeight/* | grep '<none>' | awk '{print $3}' | sort -u | xargs -r docker rmi -f 2>/dev/null || true
-            fi
+          if [ ${#deploy_targets[@]} -eq 0 ]; then
+            echo "No deployable targets"
+            exit 0
+          fi
+
+          compose=(
+            docker compose
+            --project-name project-phoenix-v2
+            --project-directory /var/www/project-phoenix-v2
+            --env-file /var/www/project-phoenix-v2/.env
+            --file "$GITHUB_WORKSPACE/docker-compose.yml"
+          )
+
+          echo "Deploying locally: ${deploy_targets[*]}"
+          "${compose[@]}" pull "${deploy_targets[@]}"
+
+          for target in "${deploy_targets[@]}"; do
+            echo "Restarting $target..."
+            "${compose[@]}" up -d --no-deps --wait "$target"
+          done
+
+          "${compose[@]}" ps
+
+          # Remove only dangling images from this application's registry namespace.
+          docker images -a ghcr.io/wahajnintyeight/* \
+            --filter dangling=true \
+            --format '{{.ID}}' \
+            | sort -u \
+            | xargs -r docker rmi 2>/dev/null || true
