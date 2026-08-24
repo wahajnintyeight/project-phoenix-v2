@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: Rebuild and deploy all enabled services
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -19,6 +25,8 @@ jobs:
     # on the private self-hosted runner.
     if: >-
       github.repository == 'wahajnintyeight/project-phoenix-v2' &&
+      github.actor == 'wahajnintyeight' &&
+      github.triggering_actor == 'wahajnintyeight' &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: self-hosted
@@ -29,53 +37,63 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Detect changes
         id: changes
         uses: dorny/paths-filter@v3
         with:
+          token: ${{ github.token }}
           filters: |
             apigateway:
               - 'pkg/service/apigateway/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
+              - 'go.sum'
             apigateway_grpc:
               - 'pkg/service/apigateway-grpc/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
+              - 'go.sum'
             datacommunicator:
               - 'pkg/service/datacommunicator/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
+              - 'go.sum'
             locationservice:
               - 'pkg/service/locationservice/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
+              - 'go.sum'
             socketservice:
               - 'pkg/service/socketservice/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
+              - 'go.sum'
             sse_service:
               - 'pkg/service/sse-service/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
+              - 'go.sum'
             worker_service:
               - 'pkg/service/worker-service/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
+              - 'go.sum'
             scraper_service:
               - 'pkg/service/scraper-service/**'
               - 'pkg/**'
               - 'internal/**'
               - 'go.mod'
+              - 'go.sum'
 
       - name: Set up QEMU & Buildx
         uses: docker/setup-buildx-action@v3
@@ -83,7 +101,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.x'
+          go-version: '1.25.x'
 
       - name: Prepare Go modules (tidy and vendor)
         run: |
@@ -92,7 +110,6 @@ jobs:
           go mod vendor
 
       - name: Login to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -104,15 +121,27 @@ jobs:
         run: |
           # Map filters to service folder names
           changed=()
-          [ "${{ steps.changes.outputs.apigateway }}" = "true" ] && changed+=("pkg/service/apigateway")
-          [ "${{ steps.changes.outputs.apigateway_grpc }}" = "true" ] && changed+=("pkg/service/apigateway-grpc")
-          # Skipped temporarily by request
-          # [ "${{ steps.changes.outputs.datacommunicator }}" = "true" ] && changed+=("pkg/service/datacommunicator")
-          # [ "${{ steps.changes.outputs.locationservice }}" = "true" ] && changed+=("pkg/service/locationservice")
-          [ "${{ steps.changes.outputs.socketservice }}" = "true" ] && changed+=("pkg/service/socketservice")
-          [ "${{ steps.changes.outputs.sse_service }}" = "true" ] && changed+=("pkg/service/sse-service")
-          [ "${{ steps.changes.outputs.worker_service }}" = "true" ] && changed+=("pkg/service/worker-service")
-          [ "${{ steps.changes.outputs.scraper_service }}" = "true" ] && changed+=("pkg/service/scraper-service")
+          force_rebuild='${{ inputs.force_rebuild || false }}'
+
+          if [ "$force_rebuild" = "true" ]; then
+             changed+=(
+               "pkg/service/apigateway"
+               "pkg/service/apigateway-grpc"
+               "pkg/service/socketservice"
+               "pkg/service/sse-service"
+               "pkg/service/worker-service"
+               "pkg/service/scraper-service"
+             )
+          else
+             [ "${{ steps.changes.outputs.apigateway }}" = "true" ] && changed+=("pkg/service/apigateway")
+             [ "${{ steps.changes.outputs.apigateway_grpc }}" = "true" ] && changed+=("pkg/service/apigateway-grpc")
+             [ "${{ steps.changes.outputs.socketservice }}" = "true" ] && changed+=("pkg/service/socketservice")
+             [ "${{ steps.changes.outputs.sse_service }}" = "true" ] && changed+=("pkg/service/sse-service")
+             [ "${{ steps.changes.outputs.worker_service }}" = "true" ] && changed+=("pkg/service/worker-service")
+             [ "${{ steps.changes.outputs.scraper_service }}" = "true" ] && changed+=("pkg/service/scraper-service")
+          fi
+
+          echo "Detected targets: ${changed[*]:-none}"
           
           if [ ${#changed[@]} -eq 0 ]; then
              echo "none=true" >> $GITHUB_OUTPUT
@@ -144,7 +173,7 @@ jobs:
           done
 
       - name: Deploy to VPS
-        if: steps.list.outputs.none == 'false' && github.event_name != 'pull_request'
+        if: steps.list.outputs.none == 'false'
         uses: appleboy/ssh-action@v1.2.0
         env:
           PATHS: "${{ steps.list.outputs.paths }}"
@@ -160,7 +189,7 @@ jobs:
             set -e
             cd /var/www/project-phoenix-v2
             
-            git pull origin "$BRANCH" || true
+            git pull --ff-only origin "$BRANCH"
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$USER" --password-stdin
 
             IFS=' ' read -r -a paths <<< "$PATHS"
@@ -184,7 +213,7 @@ jobs:
                docker compose -p ppv2 pull bgutil
                docker compose -p ppv2 up -d bgutil
                # Pull fresh images (other services keep running)
-               docker compose pull "${deploy_targets[@]}"
+               docker compose -p ppv2 pull "${deploy_targets[@]}"
                
                # Rolling restart: restart only changed services, one at a time if needed
                for target in "${deploy_targets[@]}"; do
