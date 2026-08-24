@@ -1,0 +1,3 @@
+# Deployment workflows can execute on the production self-hosted runner.
+# Require the repository owner to review every workflow change.
+/.github/workflows/* @wahajnintyeight
