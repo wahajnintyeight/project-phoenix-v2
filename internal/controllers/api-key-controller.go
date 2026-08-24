@@ -61,6 +61,7 @@ func (c *APIKeyController) PerformIndexing() error {
 		{{Key: "provider", Value: 1}},
 		{{Key: "created_at", Value: -1}},
 		{{Key: "validated_at", Value: -1}},
+		{{Key: "status", Value: 1}, {Key: "provider", Value: 1}, {Key: "created_at", Value: -1}},
 	}
 
 	for _, index := range indexes {
@@ -419,9 +420,11 @@ func (c *APIKeyController) UpdateStatusAndCredits(id primitive.ObjectID, status 
 // provider. The aggregate is cached because it is used by the stats endpoint
 // and does not need to be recalculated on every request.
 func (c *APIKeyController) GetActiveValidProviderCounts() (map[string]int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	if redisCache := cache.GetInstance(); redisCache != nil {
 		if client, ok := redisCache.GetClient().(*redis.Client); ok && client != nil {
-			cached, err := client.Get(context.Background(), activeValidProviderCountsCacheKey).Result()
+			cached, err := client.Get(ctx, activeValidProviderCountsCacheKey).Result()
 			if err == nil {
 				var counts map[string]int
 				if unmarshalErr := json.Unmarshal([]byte(cached), &counts); unmarshalErr == nil {
@@ -437,23 +440,28 @@ func (c *APIKeyController) GetActiveValidProviderCounts() (map[string]int, error
 	defer db.ReleaseConnectionToPool(dbConn)
 
 	collection := dbConn.Client.Database(os.Getenv("MONGO_DB_NAME")).Collection(c.GetCollectionName())
-	cursor, err := collection.Find(context.Background(), bson.M{
-		"status": bson.M{"$in": []string{model.StatusValid, model.StatusValidNoCredits}},
-	}, options.Find().SetProjection(bson.M{"provider": 1}))
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.M{
+			"status": bson.M{"$in": []string{model.StatusValid, model.StatusValidNoCredits}},
+		}}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$provider", "count": bson.M{"$sum": 1}}}},
+	}
+	cursor, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(ctx)
 
 	counts := make(map[string]int)
-	for cursor.Next(context.Background()) {
+	for cursor.Next(ctx) {
 		var result struct {
-			Provider string `bson:"provider"`
+			Provider string `bson:"_id"`
+			Count    int    `bson:"count"`
 		}
 		if err := cursor.Decode(&result); err != nil {
 			return nil, err
 		}
-		counts[result.Provider]++
+		counts[result.Provider] = result.Count
 	}
 	if err := cursor.Err(); err != nil {
 		return nil, err
@@ -462,7 +470,7 @@ func (c *APIKeyController) GetActiveValidProviderCounts() (map[string]int, error
 	if redisCache := cache.GetInstance(); redisCache != nil {
 		if client, ok := redisCache.GetClient().(*redis.Client); ok && client != nil {
 			if encoded, marshalErr := json.Marshal(counts); marshalErr == nil {
-				if err := client.Set(context.Background(), activeValidProviderCountsCacheKey, encoded, activeValidProviderCountsCacheTTL).Err(); err != nil {
+				if err := client.Set(ctx, activeValidProviderCountsCacheKey, encoded, activeValidProviderCountsCacheTTL).Err(); err != nil {
 					log.Printf("Warning: Failed to cache active valid provider counts in Redis: %v", err)
 				}
 			}
@@ -631,78 +639,58 @@ func (c *APIKeyController) GetStatistics() (*APIKeyStats, error) {
 		log.Printf("Warning: Failed to get active valid provider counts: %v", err)
 	}
 
-	// Count total keys using CountDocuments instead of pagination
-	query := bson.M{}
 	dbConn := db.GetConnectionFromPool()
 	defer db.ReleaseConnectionToPool(dbConn)
 
 	collection := dbConn.Client.Database(os.Getenv("MONGO_DB_NAME")).Collection(c.GetCollectionName())
-
-	// Get total count
-	totalCount, err := collection.CountDocuments(context.Background(), query)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// Return only the counters and two timestamps instead of loading every key.
+	pipeline := mongo.Pipeline{bson.D{{Key: "$group", Value: bson.M{
+		"_id":            nil,
+		"total":          bson.M{"$sum": 1},
+		"valid":          bson.M{"$sum": bson.M{"$cond": []interface{}{bson.M{"$in": []interface{}{"$status", []string{model.StatusValid, model.StatusValidNoCredits}}}, 1, 0}}},
+		"invalid":        bson.M{"$sum": bson.M{"$cond": []interface{}{bson.M{"$eq": []interface{}{"$status", model.StatusInvalid}}, 1, 0}}},
+		"pending":        bson.M{"$sum": bson.M{"$cond": []interface{}{bson.M{"$eq": []interface{}{"$status", model.StatusPending}}, 1, 0}}},
+		"errors":         bson.M{"$sum": bson.M{"$cond": []interface{}{bson.M{"$eq": []interface{}{"$status", model.StatusError}}, 1, 0}}},
+		"last_validated": bson.M{"$max": "$validated_at"},
+		"last_created":   bson.M{"$max": "$created_at"},
+	}}}}
+	var aggregate struct {
+		Total         int        `bson:"total"`
+		Valid         int        `bson:"valid"`
+		Invalid       int        `bson:"invalid"`
+		Pending       int        `bson:"pending"`
+		Errors        int        `bson:"errors"`
+		LastValidated *time.Time `bson:"last_validated"`
+		LastCreated   *time.Time `bson:"last_created"`
+	}
+	cursor, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
-	stats.TotalKeys = int(totalCount)
-
-	// Fetch all keys without pagination limit
-	cursor, err := collection.Find(context.Background(), query)
-	if err != nil {
+	defer cursor.Close(ctx)
+	if cursor.Next(ctx) {
+		if err := cursor.Decode(&aggregate); err != nil {
+			return nil, err
+		}
+	}
+	if err = cursor.Err(); err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.Background())
-
-	var allKeys []bson.M
-	if err = cursor.All(context.Background(), &allKeys); err != nil {
-		return nil, err
-	}
-
-	// Count by status and valid-only provider totals
-	var lastValidated *time.Time
-	var lastScraped *time.Time
-	for _, result := range allKeys {
-		var apiKey model.APIKey
-		bsonBytes, _ := bson.Marshal(result)
-		if err := bson.Unmarshal(bsonBytes, &apiKey); err != nil {
-			continue
-		}
-
-		switch apiKey.Status {
-		case model.StatusValid:
-			stats.ValidKeys++
-		case model.StatusValidNoCredits:
-			stats.ValidKeys++ // Count ValidNoCredits as valid keys
-		case model.StatusInvalid:
-			stats.InvalidKeys++
-		case model.StatusPending:
-			stats.PendingKeys++
-		case model.StatusError:
-			stats.ErrorKeys++
-		}
-
-		// ByProvider is populated from the Redis-backed aggregate above.
-
-		// Track most recent validation timestamp
-		if apiKey.ValidatedAt != nil {
-			if lastValidated == nil || apiKey.ValidatedAt.After(*lastValidated) {
-				lastValidated = apiKey.ValidatedAt
-			}
-		}
-
-		// Track most recent scrape/discovery timestamp
-		if lastScraped == nil || apiKey.CreatedAt.After(*lastScraped) {
-			lastScraped = &apiKey.CreatedAt
-		}
-	}
-
-	stats.LastValidatedAt = lastValidated
+	stats.TotalKeys = aggregate.Total
+	stats.ValidKeys = aggregate.Valid
+	stats.InvalidKeys = aggregate.Invalid
+	stats.PendingKeys = aggregate.Pending
+	stats.ErrorKeys = aggregate.Errors
+	stats.LastValidatedAt = aggregate.LastValidated
 
 	// Use the persisted last_scraped_at from scraper metadata instead of deriving from key CreatedAt
 	if lastScrapedAt, err := c.GetLastScrapedAt(); err == nil && lastScrapedAt != nil {
 		stats.LastScrapedAt = lastScrapedAt
 	} else {
 		// Fallback to derived value if metadata not yet available
-		stats.LastScrapedAt = lastScraped
+		stats.LastScrapedAt = aggregate.LastCreated
 	}
 
 	return stats, nil

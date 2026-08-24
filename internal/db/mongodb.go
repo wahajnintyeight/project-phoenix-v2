@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"reflect"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
@@ -163,7 +165,9 @@ func (m *MongoDB) FindAllWithPagination(query interface{}, page int, collectionN
 		page = 1
 	}
 	// Calculate the total number of documents
-	totalDocs, err := collection.CountDocuments(context.Background(), query)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	totalDocs, err := collection.CountDocuments(ctx, query)
 	if err != nil {
 		log.Println(err)
 		return 0, 0, nil, err
@@ -177,15 +181,18 @@ func (m *MongoDB) FindAllWithPagination(query interface{}, page int, collectionN
 
 	// Fetch documents with pagination
 	opts := options.Find().SetLimit(pageSize).SetSkip(pageSize * int64(page-1))
-	cursor, err := collection.Find(context.Background(), query, opts)
+	// Stable ordering allows MongoDB to use the created_at indexes used by the
+	// list endpoints and avoids returning a different page between requests.
+	opts.SetSort(bson.D{{Key: "created_at", Value: -1}})
+	cursor, err := collection.Find(ctx, query, opts)
 	if err != nil {
 		log.Println(err)
 		return 0, 0, nil, err
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(ctx)
 
 	var results []bson.M
-	if err = cursor.All(context.Background(), &results); err != nil {
+	if err = cursor.All(ctx, &results); err != nil {
 		log.Println(err)
 		return 0, 0, nil, err
 	}
@@ -299,27 +306,22 @@ func (m *MongoDB) ValidateIndexing(collectionName string, indexKeys interface{})
 	defer ReleaseConnectionToPool(conn)
 	collection := conn.db.Collection(collectionName)
 	indexView, e := collection.Indexes().List(context.Background())
-	//first check if the index exist
 	if e != nil {
-		log.Println("Error while fetching indexes: ", e)
-		//if there is no index, create them
-		indexModel := mongo.IndexModel{
-			Keys: indexKeys,
-		}
-		_, err := collection.Indexes().CreateOne(context.Background(), indexModel)
-		if err != nil {
-			log.Println("Error while creating index: ", err)
-			return err
-		}
-		return nil
+		return fmt.Errorf("list indexes for %s: %w", collectionName, e)
 	}
 	for indexView.Next(context.Background()) {
 		var index bson.M
-		indexView.Decode(&index)
-		if index["key"] == indexKeys {
+		if err := indexView.Decode(&index); err != nil {
+			return err
+		}
+		if reflect.DeepEqual(index["key"], indexKeys) {
 			log.Println("Index already exists")
 			return nil
 		}
+	}
+	_, createErr := collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{Keys: indexKeys})
+	if createErr != nil {
+		return fmt.Errorf("create index for %s: %w", collectionName, createErr)
 	}
 	return nil
 }
@@ -348,7 +350,7 @@ func (m *MongoDB) ValidateUniqueIndexing(collectionName string, indexKeys interf
 	for indexView.Next(context.Background()) {
 		var index bson.M
 		indexView.Decode(&index)
-		if index["key"] == indexKeys {
+		if reflect.DeepEqual(index["key"], indexKeys) {
 			// Check if it's unique
 			if unique, ok := index["unique"].(bool); ok && unique {
 				log.Println("Unique index already exists")

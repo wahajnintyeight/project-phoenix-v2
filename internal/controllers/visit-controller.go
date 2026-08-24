@@ -40,6 +40,9 @@ func (c *VisitController) PerformIndexing() error {
 	if err := c.DB.ValidateIndexing(c.GetCollectionName(), bson.D{{Key: "created_at", Value: -1}}); err != nil {
 		return err
 	}
+	if err := c.DB.ValidateIndexing(c.GetCollectionName(), bson.D{{Key: "project_type", Value: 1}, {Key: "created_at", Value: -1}}); err != nil {
+		return err
+	}
 
 	if err := c.DB.ValidateUniqueIndexing(c.GetCollectionName(), bson.D{{Key: "ip", Value: 1}, {Key: "project_type", Value: 1}}); err != nil {
 		return err

@@ -33,17 +33,24 @@ func GetInstance() *Redis {
 		redisUser := os.Getenv("REDIS_USER")
 		redisPort := os.Getenv("REDIS_PORT")
 		client := redis.NewClient(&redis.Options{
-			Addr:     redisHost + ":" + redisPort,
-			Password: redisPassword,
-			Username: redisUser,
+			Addr:         redisHost + ":" + redisPort,
+			Password:     redisPassword,
+			Username:     redisUser,
+			DialTimeout:  500 * time.Millisecond,
+			ReadTimeout:  500 * time.Millisecond,
+			WriteTimeout: 500 * time.Millisecond,
+			PoolSize:     10,
 		})
-		redisObj.client = client
 
-		pingRes, err := client.Ping(context.Background()).Result()
+		pingCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		pingRes, err := client.Ping(pingCtx).Result()
+		cancel()
 		if err != nil {
 			log.Println("Unable to connect to Redis: ", err)
+			_ = client.Close()
 			return
 		} else {
+			redisObj.client = client
 			log.Println("Initialized Redis Connection | Ping Response: ", pingRes)
 		}
 	})
