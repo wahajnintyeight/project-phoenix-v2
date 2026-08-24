@@ -2,19 +2,34 @@ name: Build and Deploy (changed only)
 
 on:
   push:
-    branches: [main, master, develop]
-  pull_request:
-    branches: [main, master, develop]
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    # This job is intentionally deployment-only. Never execute fork or PR code
+    # on the private self-hosted runner.
+    if: >-
+      github.repository == 'wahajnintyeight/project-phoenix-v2' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: self-hosted
+    environment: production
     timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Detect changes
         id: changes
