@@ -59,6 +59,18 @@ func newHTTP1OnlyValidatorTransport() *http.Transport {
 	transport := newValidatorTransport()
 	transport.ForceAttemptHTTP2 = false
 	transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+
+	// Clearing TLSNextProto disables Go's HTTP/2 round tripper, but a cloned
+	// default transport can still advertise h2 through its TLS ALPN settings.
+	// If the server selects h2 in that case, net/http tries to parse the HTTP/2
+	// SETTINGS frame as an HTTP/1 response. Advertise HTTP/1.1 explicitly so
+	// the negotiated protocol matches the configured round tripper.
+	if transport.TLSClientConfig == nil {
+		transport.TLSClientConfig = &tls.Config{}
+	} else {
+		transport.TLSClientConfig = transport.TLSClientConfig.Clone()
+	}
+	transport.TLSClientConfig.NextProtos = []string{"http/1.1"}
 	return transport
 }
 

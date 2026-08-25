@@ -163,6 +163,12 @@ func TestMistralValidatorDisablesHTTP2(t *testing.T) {
 	if transport.TLSNextProto == nil {
 		t.Fatal("expected Mistral validator to disable HTTP/2 via TLSNextProto")
 	}
+	if transport.TLSClientConfig == nil {
+		t.Fatal("expected Mistral validator to configure TLS ALPN")
+	}
+	if got := transport.TLSClientConfig.NextProtos; len(got) != 1 || got[0] != "http/1.1" {
+		t.Fatalf("TLS ALPN protocols = %v, want [http/1.1]", got)
+	}
 }
 
 func TestFactoryRegistersNewCodingProviders(t *testing.T) {
