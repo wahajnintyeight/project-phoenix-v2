@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"project-phoenix/v2/internal/cache"
@@ -71,28 +72,11 @@ func (c *APIKeyController) PerformIndexing() error {
 		}
 	}
 
-	// This ensures no duplicate references for the same file path, repo URL, and API key
-	repoRefUniqueIndex := bson.D{
-		{Key: "api_key_id", Value: 1},
-		{Key: "file_path", Value: 1},
-		{Key: "repo_url", Value: 1},
-	}
-	if err := c.DB.ValidateUniqueIndexing("repo_references", repoRefUniqueIndex); err != nil {
-		log.Println("Error creating unique compound index on repo_references:", err)
+	// Keep only the API key relationship and file URL indexed in this
+	// collection; legacy metadata indexes are removed by the migration script.
+	if err := c.DB.ValidateIndexing("repo_references", bson.D{{Key: "api_key_id", Value: 1}, {Key: "file_url", Value: 1}}); err != nil {
+		log.Println("Error creating index on repo_references:", err)
 		return err
-	}
-
-	// Create additional indexes on repo_references for query performance
-	repoRefIndexes := []bson.D{
-		{{Key: "api_key_id", Value: 1}},
-		{{Key: "found_at", Value: -1}},
-	}
-
-	for _, index := range repoRefIndexes {
-		if err := c.DB.ValidateIndexing("repo_references", index); err != nil {
-			log.Println("Error creating index on repo_references:", err)
-			return err
-		}
 	}
 
 	return nil
@@ -547,13 +531,16 @@ func (c *APIKeyController) UpsertByKeyValue(key *model.APIKey) (primitive.Object
 }
 
 // AddRepoReference creates a repository reference and adds its ID to an API key's repo_refs array
-// Only creates a new reference if one doesn't already exist for the same file path and API key
+// Only creates a new reference if one doesn't already exist for the file URL.
 func (c *APIKeyController) AddRepoReference(keyID primitive.ObjectID, ref *model.RepoReference) error {
+	if ref == nil || ref.FileURL == "" {
+		return fmt.Errorf("repo reference file URL is required")
+	}
+
 	// Check if this reference already exists for this API key
 	existingRefQuery := bson.M{
 		"api_key_id": keyID,
-		"file_path":  ref.FilePath,
-		"repo_url":   ref.RepoURL,
+		"file_url":   ref.FileURL,
 	}
 
 	existingRef, err := c.DB.FindOne(existingRefQuery, "repo_references")
@@ -579,6 +566,7 @@ func (c *APIKeyController) AddRepoReference(keyID primitive.ObjectID, ref *model
 	}
 
 	// Create the repository reference (it doesn't exist yet)
+	ref.APIKeyID = keyID
 	result, err := c.DB.Create(ref, "repo_references")
 	if err != nil {
 		// Check if it's a duplicate key error (race condition)

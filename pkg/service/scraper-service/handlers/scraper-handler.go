@@ -673,13 +673,8 @@ func (h *ScraperHandler) StoreDiscoveredKey(keyValue string, provider string, re
 
 	// Add repository reference
 	repoRef := &model.RepoReference{
-		APIKeyID:  keyID,
-		RepoURL:   repoInfo.RepoURL,
-		RepoOwner: repoInfo.RepoOwner,
-		RepoName:  repoInfo.RepoName,
-		FileURL:   repoInfo.FileURL,
-		FilePath:  repoInfo.FilePath,
-		FoundAt:   time.Now(),
+		APIKeyID: keyID,
+		FileURL:  repoInfo.FileURL,
 	}
 
 	helper.LogInfo(ctx, "Adding repository reference to MongoDB")
