@@ -19,6 +19,7 @@ import (
 	"github.com/google/go-github/v60/github"
 	"go-micro.dev/v4/broker"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // RepoInfo contains repository information for discovered keys
@@ -641,6 +642,26 @@ func (h *ScraperHandler) StoreDiscoveredKey(keyValue string, provider string, re
 		ServiceName:   "scraper-service",
 		Operation:     "StoreDiscoveredKey",
 		CorrelationID: correlationID,
+	}
+
+	// Mistral discovery is intentionally disabled. Keep only keys that were
+	// already validated; never admit a newly scraped Mistral key into the DB.
+	if provider == model.ProviderMistral {
+		existingKey, err := h.apiKeyController.FindByKeyValue(keyValue)
+		if err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				helper.LogInfo(ctx, "Skipping new Mistral key; only existing validated keys are allowed")
+				return nil
+			}
+
+			helper.LogError(ctx, "Failed to check existing Mistral key", err)
+			return fmt.Errorf("failed to check existing Mistral key: %w", err)
+		}
+
+		if existingKey.Status != model.StatusValid && existingKey.Status != model.StatusValidNoCredits {
+			helper.LogInfo(ctx, "Skipping non-validated Mistral key with status %s", existingKey.Status)
+			return nil
+		}
 	}
 
 	h.incrementProcessed()

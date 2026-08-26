@@ -324,7 +324,7 @@
     },
     {
       "provider": "Mistral",
-      "enabled": true,
+      "enabled": false,
       "queries": [
         {
           "pattern": "\"MISTRAL_API_KEY\" ",

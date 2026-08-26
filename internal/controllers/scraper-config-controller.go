@@ -61,7 +61,13 @@ func (c *ScraperConfigController) CreateQuery(query *model.SearchQuery) (primiti
 
 // GetEnabledQueries retrieves all enabled search queries
 func (c *ScraperConfigController) GetEnabledQueries() ([]*model.SearchQuery, error) {
-	return c.fetchAllQueries(bson.M{"enabled": true})
+	// Mistral keys are allowlisted from the existing API-key collection. Do not
+	// rely only on the seeded config because older DB query records may remain
+	// enabled after the config changes.
+	return c.fetchAllQueries(bson.M{
+		"enabled":  true,
+		"provider": bson.M{"$ne": model.ProviderMistral},
+	})
 }
 
 // GetAllQueries retrieves all search queries
@@ -216,7 +222,7 @@ func (c *ScraperConfigController) seedFallbackQueries() error {
 		{QueryPattern: `"HY3_API_KEY" extension:env`, Provider: model.ProviderTencent, Enabled: true, CreatedAt: time.Now()},
 		{QueryPattern: `"STEP_API_KEY" extension:env`, Provider: model.ProviderStepFun, Enabled: true, CreatedAt: time.Now()},
 		{QueryPattern: `"DASHSCOPE_API_KEY" extension:env`, Provider: model.ProviderQwen, Enabled: true, CreatedAt: time.Now()},
-		{QueryPattern: `"MISTRAL_API_KEY" extension:env`, Provider: model.ProviderMistral, Enabled: true, CreatedAt: time.Now()},
+		{QueryPattern: `"MISTRAL_API_KEY" extension:env`, Provider: model.ProviderMistral, Enabled: false, CreatedAt: time.Now()},
 		{QueryPattern: `"ark-" extension:env`, Provider: model.ProviderBytePlus, Enabled: true, CreatedAt: time.Now()},
 	}
 
