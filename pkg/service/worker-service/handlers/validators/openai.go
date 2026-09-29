@@ -27,14 +27,12 @@ func (v *OpenAIValidator) GetProviderName() string {
 
 // Validate validates an OpenAI API key
 func (v *OpenAIValidator) Validate(keyValue string, correlationID string) (string, map[string]interface{}, error) {
-	url := "https://api.openai.com/v1/chat/completions"
+	url := "https://api.openai.com/v1/responses"
 
 	requestBody := map[string]interface{}{
-		"model":      "gpt-5.4-mini",
-		"max_tokens": 1100,
-		"messages": []map[string]string{
-			{"role": "user", "content": "ping"},
-		},
+		"model":             "gpt-6-luna",
+		"input":             "ping",
+		"max_output_tokens": 1100,
 	}
 
 	bodyBytes, err := json.Marshal(requestBody)
