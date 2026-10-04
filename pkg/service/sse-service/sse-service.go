@@ -125,7 +125,6 @@ func (sse *SSEService) InitializeService(serviceObj micro.Service, serviceName s
 
 		// Initialize the SSE handler
 		sse.sseHandler = handler.NewSSERequestHandler()
-		go sse.sseHandler.Run()
 
 		// Initialize S3 service
 		s3Svc, _, err := aws.NewS3ServiceFromEnv()

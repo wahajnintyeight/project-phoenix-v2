@@ -125,8 +125,6 @@ func (handler *SSERequestHandler) Run() {
 				client <- msg
 			}
 			handler.mutex.Unlock()
-		default:
-			// log.Println("Default case",handler.clients)
 		}
 	}
 }
