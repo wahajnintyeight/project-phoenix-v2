@@ -6,7 +6,7 @@ import "time"
 type LLMAPIConfig struct {
 	ID              string    `json:"id" bson:"_id,omitempty"`
 	Name            string    `json:"name" bson:"name"`               // User-friendly name
-	Provider        string    `json:"provider" bson:"provider"`       // openai, anthropic, groq, openrouter, ollama
+	Provider        string    `json:"provider" bson:"provider"`       // Supported GoLLM or OpenAI-compatible provider ID
 	Model           string    `json:"model" bson:"model"`             // gpt-4, claude-3-opus, etc.
 	APIKey          string    `json:"apiKey,omitempty" bson:"apiKey"` // Encrypted API key (not returned in list)
 	EncryptedAPIKey string    `json:"-" bson:"encryptedApiKey"`       // Stored encrypted

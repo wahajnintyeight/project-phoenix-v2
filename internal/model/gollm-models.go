@@ -22,6 +22,7 @@ type ImageURL struct {
 
 // ChatCompletionRequest represents a request for chat-based LLM completion
 type ChatCompletionRequest struct {
+	APIID       string        `json:"api_id" bson:"api_id"`           // Stored LLM API configuration to use
 	Model       string        `json:"model" bson:"model"`             // LLM model to use
 	Messages    []ChatMessage `json:"messages" bson:"messages"`       // Conversation history
 	Temperature float64       `json:"temperature" bson:"temperature"` // Sampling temperature (0-1)

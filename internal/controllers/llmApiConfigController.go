@@ -7,7 +7,9 @@ import (
 	"project-phoenix/v2/internal/db"
 	"project-phoenix/v2/internal/enum"
 	"project-phoenix/v2/internal/model"
+	"project-phoenix/v2/internal/service"
 	"project-phoenix/v2/pkg/helper"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -35,7 +37,8 @@ func (l *LLMAPIConfigController) CreateAPIConfig(w http.ResponseWriter, r *http.
 	if req.Name == "" {
 		return int(enum.ERROR), "Name is required", nil
 	}
-	if req.Provider == "" {
+	provider := strings.ToLower(strings.TrimSpace(req.Provider))
+	if provider == "" {
 		return int(enum.ERROR), "Provider is required", nil
 	}
 	if req.Model == "" {
@@ -46,15 +49,8 @@ func (l *LLMAPIConfigController) CreateAPIConfig(w http.ResponseWriter, r *http.
 	}
 
 	// Validate provider
-	validProviders := map[string]bool{
-		"openai":     true,
-		"anthropic":  true,
-		"groq":       true,
-		"openrouter": true,
-		"ollama":     true,
-	}
-	if !validProviders[req.Provider] {
-		return int(enum.ERROR), "Invalid provider. Must be: openai, anthropic, groq, openrouter, or ollama", nil
+	if !service.IsSupportedLLMProvider(provider) {
+		return int(enum.ERROR), "Invalid provider. Must be: openai, anthropic, groq, openrouter, ollama, huggingface, xai, mistral, deepseek, or gemini", nil
 	}
 
 	// Encrypt API key
@@ -71,7 +67,7 @@ func (l *LLMAPIConfigController) CreateAPIConfig(w http.ResponseWriter, r *http.
 	// Create config
 	config := model.LLMAPIConfig{
 		Name:            req.Name,
-		Provider:        req.Provider,
+		Provider:        provider,
 		Model:           req.Model,
 		EncryptedAPIKey: encryptedKey,
 		IsActive:        req.IsActive,
@@ -180,7 +176,11 @@ func (l *LLMAPIConfigController) UpdateAPIConfig(w http.ResponseWriter, r *http.
 		update["name"] = req.Name
 	}
 	if req.Provider != "" {
-		update["provider"] = req.Provider
+		provider := strings.ToLower(strings.TrimSpace(req.Provider))
+		if !service.IsSupportedLLMProvider(provider) {
+			return int(enum.ERROR), "Invalid provider. Must be: openai, anthropic, groq, openrouter, ollama, huggingface, xai, mistral, deepseek, or gemini", nil
+		}
+		update["provider"] = provider
 	}
 	if req.Model != "" {
 		update["model"] = req.Model

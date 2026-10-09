@@ -17,7 +17,9 @@ import (
 )
 
 // LLMService handles interactions with LLM providers
-type LLMService struct{}
+type LLMService struct {
+	client *http.Client
+}
 
 var llmCreditExhaustedIndicators = []string{
 	"insufficient_quota",
@@ -43,7 +45,7 @@ var llmCreditFallbackMessages = []string{
 
 // NewLLMService creates a new LLM service instance
 func NewLLMService() *LLMService {
-	return &LLMService{}
+	return &LLMService{client: llmProviderHTTPClient}
 }
 
 // SendChatCompletion sends a chat completion request to the specified LLM provider
@@ -58,11 +60,16 @@ func (s *LLMService) SendChatCompletion(req model.ChatCompletionRequest) (*model
 		return nil, fmt.Errorf("API key is required")
 	}
 
+	provider := strings.ToLower(strings.TrimSpace(req.Provider))
+	if endpoint, ok := openAICompatibleLLMProviders[provider]; ok {
+		return s.sendOpenAICompatibleChatCompletion(req, provider, endpoint)
+	}
+
 	// Configure LLM based on provider
 	var llm gollm.LLM
 	var err error
 
-	switch strings.ToLower(req.Provider) {
+	switch provider {
 	case "openai":
 		llm, err = gollm.NewLLM(
 			gollm.SetProvider("openai"),

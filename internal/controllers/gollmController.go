@@ -33,6 +33,26 @@ func (g *GoLLMController) ChatCompletion(w http.ResponseWriter, r *http.Request)
 		return int(enum.ERROR), "Invalid request body", decodeErr
 	}
 
+	// Resolve stored credentials for extension requests that reference an API config.
+	if req.APIID != "" {
+		configController := GetControllerInstance(enum.LLMAPIConfigController, enum.MONGODB)
+		llmConfigController := configController.(*LLMAPIConfigController)
+		apiConfig, err := llmConfigController.GetDecryptedAPIKey(req.APIID)
+		if err != nil {
+			log.Printf("Error fetching API config: %v", err)
+			return int(enum.ERROR), "Failed to fetch API configuration", err
+		}
+		if apiConfig == nil {
+			return int(enum.ERROR), "API configuration not found", nil
+		}
+		if !apiConfig.IsActive {
+			return int(enum.ERROR), "API configuration is not active", nil
+		}
+		req.Provider = apiConfig.Provider
+		req.APIKey = apiConfig.APIKey
+		req.Model = apiConfig.Model
+	}
+
 	// Validate request
 	if req.Model == "" {
 		return int(enum.ERROR), "Model is required", nil
