@@ -111,8 +111,7 @@ func (l *LLMAPIConfigController) ListAPIConfigs(w http.ResponseWriter, r *http.R
 	// Convert to response format (without API keys)
 	var configs []model.LLMAPIConfigResponse
 	for _, result := range results {
-		var config model.LLMAPIConfig
-		mapErr := helper.MapToStruct(result, &config)
+		config, mapErr := llmAPIConfigFromDocument(result)
 		if mapErr != nil {
 			log.Println("Error converting config:", mapErr)
 			continue
@@ -131,7 +130,7 @@ func (l *LLMAPIConfigController) GetAPIConfig(w http.ResponseWriter, r *http.Req
 		return int(enum.ERROR), "Config ID is required", nil
 	}
 
-	query := bson.M{"_id": configID}
+	query := llmAPIConfigIDFilter(configID)
 	result, err := l.DB.FindOne(query, l.GetCollectionName())
 	if err != nil {
 		log.Println("Error fetching API config:", err)
@@ -142,8 +141,7 @@ func (l *LLMAPIConfigController) GetAPIConfig(w http.ResponseWriter, r *http.Req
 		return int(enum.ERROR), "API configuration not found", nil
 	}
 
-	var config model.LLMAPIConfig
-	mapErr := helper.MapToStruct(result, &config)
+	config, mapErr := llmAPIConfigFromDocument(result)
 	if mapErr != nil {
 		log.Println("Error converting config:", mapErr)
 		return int(enum.ERROR), "Failed to parse API configuration", mapErr
@@ -197,8 +195,8 @@ func (l *LLMAPIConfigController) UpdateAPIConfig(w http.ResponseWriter, r *http.
 	update["isActive"] = req.IsActive
 
 	// Update in database
-	query := bson.M{"_id": configID}
-	_, err := l.DB.Update(query, bson.M{"$set": update}, l.GetCollectionName())
+	query := llmAPIConfigIDFilter(configID)
+	_, err := l.DB.Update(query, update, l.GetCollectionName())
 	if err != nil {
 		log.Println("Error updating API config:", err)
 		return int(enum.ERROR), "Failed to update API configuration", err
@@ -215,7 +213,7 @@ func (l *LLMAPIConfigController) DeleteAPIConfig(w http.ResponseWriter, r *http.
 		return int(enum.ERROR), nil
 	}
 
-	query := bson.M{"_id": configID}
+	query := llmAPIConfigIDFilter(configID)
 	_, err := l.DB.Delete(query, l.GetCollectionName())
 	if err != nil {
 		log.Println("Error deleting API config:", err)
@@ -228,7 +226,7 @@ func (l *LLMAPIConfigController) DeleteAPIConfig(w http.ResponseWriter, r *http.
 
 // GetDecryptedAPIKey retrieves and decrypts the API key for internal use
 func (l *LLMAPIConfigController) GetDecryptedAPIKey(configID string) (*model.LLMAPIConfig, error) {
-	query := bson.M{"_id": configID}
+	query := llmAPIConfigIDFilter(configID)
 	result, err := l.DB.FindOne(query, l.GetCollectionName())
 	if err != nil {
 		return nil, err
@@ -238,8 +236,7 @@ func (l *LLMAPIConfigController) GetDecryptedAPIKey(configID string) (*model.LLM
 		return nil, nil
 	}
 
-	var config model.LLMAPIConfig
-	mapErr := helper.MapToStruct(result, &config)
+	config, mapErr := llmAPIConfigFromDocument(result)
 	if mapErr != nil {
 		return nil, mapErr
 	}
