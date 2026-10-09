@@ -133,7 +133,7 @@ func testKey(keyValue, provider, model string) KeyTestResult {
 		result := testZAIKey(keyValue, model)
 		return buildResult(provider, result)
 	case "xAI":
-		result := testXAIKey(keyValue)
+		result := testXAIKey(keyValue, model)
 		return buildResult(provider, result)
 	case "MiMo":
 		result := testMiMoKey(keyValue, model)
@@ -617,12 +617,27 @@ func testOpenRouterModelWithRequest(keyValue, model string) providerResult {
 	}
 }
 
-func testXAIKey(keyValue string) providerResult {
-	req, err := http.NewRequest(http.MethodGet, "https://api.x.ai/v1/models", nil)
+func testXAIKey(keyValue, model string) providerResult {
+	if strings.TrimSpace(model) == "" {
+		model = "grok-4.7"
+	}
+
+	body, err := json.Marshal(map[string]interface{}{
+		"model":      model,
+		"max_tokens": 1,
+		"messages":   []map[string]string{{"role": "user", "content": "PING"}},
+		"stream":     false,
+	})
 	if err != nil {
 		return providerResult{Status: "Error", Err: err}
 	}
-	req.Header.Set("Authorization", "Bearer "+keyValue)
+
+	req, err := http.NewRequest(http.MethodPost, "https://api.x.ai/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return providerResult{Status: "Error", Err: err}
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(keyValue))
+	req.Header.Set("Content-Type", "application/json")
 	return doProviderRequest(req)
 }
 

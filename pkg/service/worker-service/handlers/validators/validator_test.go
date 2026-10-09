@@ -2,6 +2,7 @@ package validators
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -168,6 +169,46 @@ func TestMistralValidatorDisablesHTTP2(t *testing.T) {
 	}
 	if got := transport.TLSClientConfig.NextProtos; len(got) != 1 || got[0] != "http/1.1" {
 		t.Fatalf("TLS ALPN protocols = %v, want [http/1.1]", got)
+	}
+}
+
+func TestXAIValidatorUsesLatestGrokModel(t *testing.T) {
+	validator := NewXAIValidator(false)
+	validator.HTTPClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodPost {
+			t.Fatalf("method = %q, want POST", req.Method)
+		}
+		if req.URL.String() != "https://api.x.ai/v1/chat/completions" {
+			t.Fatalf("URL = %q, want xAI chat completions endpoint", req.URL.String())
+		}
+		if got := req.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("Authorization = %q, want bearer token", got)
+		}
+
+		var payload map[string]interface{}
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if got := payload["model"]; got != "grok-4.7" {
+			t.Fatalf("model = %v, want grok-4.7", got)
+		}
+		if got := payload["max_tokens"]; got != float64(1) {
+			t.Fatalf("max_tokens = %v, want 1", got)
+		}
+
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(`{"id":"test"}`)),
+		}, nil
+	})
+
+	status, _, err := validator.Validate("  test-key  ", "test")
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if status != model.StatusValid {
+		t.Fatalf("status = %q, want %q", status, model.StatusValid)
 	}
 }
 
