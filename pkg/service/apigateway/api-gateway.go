@@ -147,6 +147,7 @@ func (s *APIGatewayService) registerRoutes() {
 
 		s.serviceConfig.EndpointPrefix + "/keys",
 		s.serviceConfig.EndpointPrefix + "/stats",
+		s.serviceConfig.EndpointPrefix + "/gollm/chat/completions",
 		s.serviceConfig.EndpointPrefix + "/validate-key",
 		s.serviceConfig.EndpointPrefix + "/validate-key/openrouter-models",
 	}
