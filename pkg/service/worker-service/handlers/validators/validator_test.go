@@ -212,6 +212,60 @@ func TestXAIValidatorUsesLatestGrokModel(t *testing.T) {
 	}
 }
 
+func TestDeepSeekValidatorUsesCurrentModelAlias(t *testing.T) {
+	validator := NewDeepSeekValidator(false)
+	validator.HTTPClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		var payload map[string]interface{}
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if got := payload["model"]; got != "deepseek-flash" {
+			t.Fatalf("model = %v, want deepseek-flash", got)
+		}
+
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(`{"id":"test"}`)),
+		}, nil
+	})
+
+	status, _, err := validator.Validate("test-key", "test")
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if status != model.StatusValid {
+		t.Fatalf("status = %q, want %q", status, model.StatusValid)
+	}
+}
+
+func TestZAIValidatorUsesLatestGLMModel(t *testing.T) {
+	validator := NewZAIValidator(false)
+	validator.HTTPClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		var payload map[string]interface{}
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if got := payload["model"]; got != "glm-5.3" {
+			t.Fatalf("model = %v, want glm-5.3", got)
+		}
+
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(`{"id":"test"}`)),
+		}, nil
+	})
+
+	status, _, err := validator.Validate("test-key", "test")
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if status != model.StatusValid {
+		t.Fatalf("status = %q, want %q", status, model.StatusValid)
+	}
+}
+
 func TestFactoryRegistersNewCodingProviders(t *testing.T) {
 	factory := NewValidatorFactory(false)
 	for _, provider := range []string{

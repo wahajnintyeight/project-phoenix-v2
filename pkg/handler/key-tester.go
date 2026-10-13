@@ -203,10 +203,10 @@ func testOpenAIKey(keyValue, model string) providerResult {
 	return doProviderRequest(req)
 }
 
-// testDeepSeekKey validates a DeepSeek key. Uses the provided model or defaults to deepseek-v4-flash.
+// testDeepSeekKey validates a DeepSeek key. Uses the provided model or defaults to deepseek-flash.
 func testDeepSeekKey(keyValue, model string) providerResult {
 	if model == "" {
-		model = "deepseek-v4-flash"
+		model = "deepseek-flash"
 	}
 
 	body, err := json.Marshal(map[string]interface{}{
@@ -228,10 +228,10 @@ func testDeepSeekKey(keyValue, model string) providerResult {
 	return doProviderRequest(req)
 }
 
-// testZAIKey validates a Z.AI (Zhipu AI) key. Uses the provided model or defaults to glm-5.1.
+// testZAIKey validates a Z.AI (Zhipu AI) key. Uses the provided model or defaults to glm-5.3.
 func testZAIKey(keyValue, model string) providerResult {
 	if model == "" {
-		model = "glm-5.1"
+		model = "glm-5.3"
 	}
 
 	body, err := json.Marshal(map[string]interface{}{

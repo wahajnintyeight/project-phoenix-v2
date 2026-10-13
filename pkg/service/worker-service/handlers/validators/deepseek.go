@@ -8,6 +8,8 @@ import (
 	"project-phoenix/v2/internal/model"
 )
 
+const deepSeekValidationModel = "deepseek-flash"
+
 // DeepSeekValidator validates DeepSeek API keys
 type DeepSeekValidator struct {
 	*BaseValidator
@@ -30,7 +32,7 @@ func (v *DeepSeekValidator) Validate(keyValue string, correlationID string) (str
 	url := "https://api.deepseek.com/v1/chat/completions"
 
 	requestBody := map[string]interface{}{
-		"model":      "deepseek-v4-flash",
+		"model":      deepSeekValidationModel,
 		"max_tokens": 1,
 		"messages": []map[string]string{
 			{"role": "user", "content": "hi"},

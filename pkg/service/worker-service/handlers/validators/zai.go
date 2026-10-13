@@ -9,6 +9,8 @@ import (
 	"project-phoenix/v2/internal/model"
 )
 
+const zaiValidationModel = "glm-5.3"
+
 // ZAIValidator validates Z.AI (Zhipu AI) API keys
 type ZAIValidator struct {
 	*BaseValidator
@@ -33,7 +35,7 @@ func (v *ZAIValidator) Validate(keyValue string, correlationID string) (string, 
 	url := "https://api.z.ai/api/paas/v4/chat/completions"
 
 	requestBody := map[string]interface{}{
-		"model":       "glm-5.1",
+		"model":       zaiValidationModel,
 		"max_tokens":  1,
 		"stream":      false,
 		"temperature": 1,

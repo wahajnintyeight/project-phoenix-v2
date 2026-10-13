@@ -75,3 +75,57 @@ func TestTestXAIKeyHonorsModelOverride(t *testing.T) {
 		t.Fatalf("status = %q, want Valid (error: %v)", result.Status, result.Err)
 	}
 }
+
+func TestTestDeepSeekKeyUsesCurrentModelAlias(t *testing.T) {
+	originalClient := keyTesterHTTPClient
+	t.Cleanup(func() { keyTesterHTTPClient = originalClient })
+
+	keyTesterHTTPClient = &http.Client{
+		Transport: keyTesterRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			var payload map[string]interface{}
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			if got := payload["model"]; got != "deepseek-flash" {
+				t.Fatalf("model = %v, want deepseek-flash", got)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Body:       io.NopCloser(strings.NewReader(`{"id":"test"}`)),
+			}, nil
+		}),
+	}
+
+	result := testDeepSeekKey("test-key", "")
+	if result.Status != "Valid" {
+		t.Fatalf("status = %q, want Valid (error: %v)", result.Status, result.Err)
+	}
+}
+
+func TestTestZAIKeyUsesLatestGLMModel(t *testing.T) {
+	originalClient := keyTesterHTTPClient
+	t.Cleanup(func() { keyTesterHTTPClient = originalClient })
+
+	keyTesterHTTPClient = &http.Client{
+		Transport: keyTesterRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			var payload map[string]interface{}
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			if got := payload["model"]; got != "glm-5.3" {
+				t.Fatalf("model = %v, want glm-5.3", got)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Body:       io.NopCloser(strings.NewReader(`{"id":"test"}`)),
+			}, nil
+		}),
+	}
+
+	result := testZAIKey("test-key", "")
+	if result.Status != "Valid" {
+		t.Fatalf("status = %q, want Valid (error: %v)", result.Status, result.Err)
+	}
+}
