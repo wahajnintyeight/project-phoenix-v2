@@ -17,15 +17,15 @@ ENV GOFLAGS="-mod=vendor"
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main .
 
 # Final stage
-FROM alpine:3.19
+FROM alpine:3.22
 
 # Install runtime dependencies (removed ffmpeg - no longer needed for direct streaming)
+# nodejs must be >= 22 (yt-dlp rejects older versions as a JS runtime for challenge solving)
 RUN apk --no-cache add \
     ca-certificates \
     aria2 \
     python3 \
     py3-pip \
-    deno \
     ffmpeg \
     nodejs \
     curl
