@@ -8,6 +8,8 @@ import (
 	"project-phoenix/v2/internal/model"
 )
 
+const moonshotValidationModel = "kimi-k3.1-pro"
+
 // MoonshotValidator validates Moonshot AI API keys
 type MoonshotValidator struct {
 	*BaseValidator
@@ -30,11 +32,10 @@ func (v *MoonshotValidator) Validate(keyValue string, correlationID string) (str
 	url := "https://api.moonshot.ai/v1/chat/completions"
 
 	requestBody := map[string]interface{}{
-		"model":       "kimi-k2-0905-preview",
-		"temperature": 0.3,
-		"max_tokens":  100,
-		"top_p":       1,
-		"stream":      false, // Disable streaming for validation
+		"model":                 moonshotValidationModel,
+		"max_completion_tokens": 1,
+		"reasoning_effort":      "low",
+		"stream":                false, // Disable streaming for validation
 		"messages": []map[string]string{
 			{"role": "system", "content": "You are a helpful assistant."},
 			{"role": "user", "content": "ping"},

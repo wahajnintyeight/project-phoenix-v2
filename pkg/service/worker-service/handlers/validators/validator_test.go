@@ -266,6 +266,36 @@ func TestZAIValidatorUsesLatestGLMModel(t *testing.T) {
 	}
 }
 
+func TestMoonshotValidatorUsesLatestKimiRequest(t *testing.T) {
+	validator := NewMoonshotValidator(false)
+	validator.HTTPClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.String() != "https://api.moonshot.ai/v1/chat/completions" {
+			t.Fatalf("unexpected endpoint: %s", req.URL)
+		}
+		var payload map[string]interface{}
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["model"] != "kimi-k3.1-pro" || payload["max_completion_tokens"] != float64(1) || payload["reasoning_effort"] != "low" {
+			t.Fatalf("unexpected Kimi validation payload: %v", payload)
+		}
+		for _, field := range []string{"temperature", "top_p", "max_tokens", "thinking"} {
+			if _, exists := payload[field]; exists {
+				t.Fatalf("unexpected parameter %s for Kimi K3.1 Pro", field)
+			}
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(`{"id":"test"}`)),
+		}, nil
+	})
+	status, _, err := validator.Validate("test-key", "test")
+	if err != nil || status != model.StatusValid {
+		t.Fatalf("Validate() = %q, %v; want valid", status, err)
+	}
+}
+
 func TestFactoryRegistersNewCodingProviders(t *testing.T) {
 	factory := NewValidatorFactory(false)
 	for _, provider := range []string{
