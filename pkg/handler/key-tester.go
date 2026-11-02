@@ -149,7 +149,7 @@ func testKey(keyValue, provider, model string) KeyTestResult {
 	case "Mistral":
 		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "mistral-large-latest", "https://api.mistral.ai/v1/chat/completions", "max_tokens"))
 	case "BytePlus":
-		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "dola-seed-2-1-turbo", "https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions", "max_tokens"))
+		return buildResult(provider, testOpenAICompatibleKey(keyValue, model, "dola-seed-2-1-turbo-260628", "https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions", "max_tokens"))
 	case "HuggingFace":
 		result := testHuggingFaceKey(keyValue)
 		return buildResult(provider, result)

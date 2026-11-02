@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	"project-phoenix/v2/internal/model"
@@ -154,7 +155,10 @@ func isRetryableHTTPError(err error) bool {
 
 	errText := err.Error()
 	return strings.Contains(errText, "http2: server sent GOAWAY") ||
-		strings.Contains(errText, "ErrCode=ENHANCE_YOUR_CALM")
+		strings.Contains(errText, "ErrCode=ENHANCE_YOUR_CALM") ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.EPIPE)
 }
 
 func sanitizeHTTPError(err error) error {
