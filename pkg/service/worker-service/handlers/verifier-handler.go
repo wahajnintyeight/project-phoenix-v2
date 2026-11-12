@@ -25,6 +25,7 @@ import (
 var discordSkipProviders = map[string]bool{
 	model.ProviderGoogle:   true,
 	model.ProviderDeepSeek: true,
+	model.ProviderMistral:  true,
 }
 
 type VerifierHandler struct {
