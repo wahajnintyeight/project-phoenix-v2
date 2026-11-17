@@ -120,7 +120,9 @@ func (c *QdrantClient) CollectionExists(ctx context.Context) (bool, error) {
 
 // UpsertMemory inserts or updates a screenshot memory
 func (c *QdrantClient) UpsertMemory(ctx context.Context, memory ScreenshotMemory) error {
-	log.Printf("Upserting memory with ID: %s", memory.ID)
+	startedAt := time.Now()
+	vectorSize := len(memory.Embedding)
+	log.Printf("Qdrant upsert starting: collection=%s point_id=%s vector_size=%d", c.collectionName, memory.ID, vectorSize)
 
 	// Build payload from metadata
 	payload := c.buildPayload(memory)
@@ -143,16 +145,29 @@ func (c *QdrantClient) UpsertMemory(ctx context.Context, memory ScreenshotMemory
 	}
 
 	// Upsert the point
-	_, err := c.points.Upsert(ctx, &pb.UpsertPoints{
+	waitForCompletion := true
+	response, err := c.points.Upsert(ctx, &pb.UpsertPoints{
 		CollectionName: c.collectionName,
 		Points:         []*pb.PointStruct{point},
+		Wait:           &waitForCompletion,
 	})
 
 	if err != nil {
+		log.Printf("Qdrant upsert failed: collection=%s point_id=%s vector_size=%d duration=%s error=%v", c.collectionName, memory.ID, vectorSize, time.Since(startedAt), err)
 		return fmt.Errorf("failed to upsert memory: %w", err)
 	}
 
-	log.Printf("Memory upserted successfully: %s", memory.ID)
+	if response == nil || response.GetResult() == nil {
+		log.Printf("Qdrant upsert returned no result: collection=%s point_id=%s vector_size=%d duration=%s", c.collectionName, memory.ID, vectorSize, time.Since(startedAt))
+		return fmt.Errorf("Qdrant upsert returned no result for point %s", memory.ID)
+	}
+
+	result := response.GetResult()
+	log.Printf("Qdrant upsert response: collection=%s point_id=%s vector_size=%d status=%s operation_id=%d qdrant_processing_seconds=%.3f duration=%s", c.collectionName, memory.ID, vectorSize, result.GetStatus(), result.GetOperationId(), response.GetTime(), time.Since(startedAt))
+	if result.GetStatus() != pb.UpdateStatus_Completed {
+		return fmt.Errorf("Qdrant upsert for point %s was not completed: status=%s operation_id=%d", memory.ID, result.GetStatus(), result.GetOperationId())
+	}
+
 	return nil
 }
 
