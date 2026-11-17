@@ -21,6 +21,7 @@ type QdrantClient struct {
 	collections    pb.CollectionsClient
 	points         pb.PointsClient
 	collectionName string
+	vectorName     string
 }
 
 type ScreenshotMemory struct {
@@ -38,6 +39,7 @@ func NewQdrantClient() (*QdrantClient, error) {
 	host := getEnvOrDefault("QDRANT_HOST", "localhost")
 	port := getEnvOrDefault("QDRANT_PORT", "6334")
 	collectionName := getEnvOrDefault("QDRANT_COLLECTION_NAME", "screenshot_memories")
+	vectorName := os.Getenv("QDRANT_VECTOR_NAME")
 	apiKey := os.Getenv("QDRANT_API_KEY")
 
 	addr := fmt.Sprintf("%s:%s", host, port)
@@ -69,6 +71,7 @@ func NewQdrantClient() (*QdrantClient, error) {
 		collections:    pb.NewCollectionsClient(conn),
 		points:         pb.NewPointsClient(conn),
 		collectionName: collectionName,
+		vectorName:     vectorName,
 	}
 
 	log.Printf("Successfully connected to Qdrant collection: %s", collectionName)
@@ -87,16 +90,14 @@ func (c *QdrantClient) Close() error {
 func (c *QdrantClient) CreateCollection(ctx context.Context, vectorSize uint64) error {
 	log.Printf("Creating collection '%s' with vector size %d", c.collectionName, vectorSize)
 
+	params := &pb.VectorParams{Size: vectorSize, Distance: pb.Distance_Cosine}
+	config := &pb.VectorsConfig{Config: &pb.VectorsConfig_Params{Params: params}}
+	if c.vectorName != "" {
+		config = &pb.VectorsConfig{Config: &pb.VectorsConfig_ParamsMap{ParamsMap: &pb.VectorParamsMap{Map: map[string]*pb.VectorParams{c.vectorName: params}}}}
+	}
 	_, err := c.collections.Create(ctx, &pb.CreateCollection{
 		CollectionName: c.collectionName,
-		VectorsConfig: &pb.VectorsConfig{
-			Config: &pb.VectorsConfig_Params{
-				Params: &pb.VectorParams{
-					Size:     vectorSize,
-					Distance: pb.Distance_Cosine,
-				},
-			},
-		},
+		VectorsConfig:  config,
 	})
 
 	if err != nil {
@@ -134,13 +135,7 @@ func (c *QdrantClient) UpsertMemory(ctx context.Context, memory ScreenshotMemory
 				Uuid: memory.ID,
 			},
 		},
-		Vectors: &pb.Vectors{
-			VectorsOptions: &pb.Vectors_Vector{
-				Vector: &pb.Vector{
-					Data: memory.Embedding,
-				},
-			},
-		},
+		Vectors: c.pointVectors(memory.Embedding),
 		Payload: payload,
 	}
 
@@ -190,13 +185,7 @@ func (c *QdrantClient) UpsertMemories(ctx context.Context, memories []Screenshot
 					Uuid: memory.ID,
 				},
 			},
-			Vectors: &pb.Vectors{
-				VectorsOptions: &pb.Vectors_Vector{
-					Vector: &pb.Vector{
-						Data: memory.Embedding,
-					},
-				},
-			},
+			Vectors: c.pointVectors(memory.Embedding),
 			Payload: payload,
 		}
 
@@ -214,6 +203,14 @@ func (c *QdrantClient) UpsertMemories(ctx context.Context, memories []Screenshot
 
 	log.Printf("Batch upserted %d memories successfully", len(memories))
 	return nil
+}
+
+func (c *QdrantClient) pointVectors(embedding []float32) *pb.Vectors {
+	vector := &pb.Vector{Data: embedding}
+	if c.vectorName != "" {
+		return &pb.Vectors{VectorsOptions: &pb.Vectors_Vectors{Vectors: &pb.NamedVectors{Vectors: map[string]*pb.Vector{c.vectorName: vector}}}}
+	}
+	return &pb.Vectors{VectorsOptions: &pb.Vectors_Vector{Vector: vector}}
 }
 
 // buildPayload converts memory metadata to Qdrant payload format

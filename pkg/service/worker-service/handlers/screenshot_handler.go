@@ -581,18 +581,24 @@ func (h *ScreenshotHandler) storeInVectorDB(
 	}
 
 	// Create text for embedding
-	textToEmbed := fmt.Sprintf(
-		"%s. Application: %s. Activity: %s. Category: %s. User State: %s. Observations: %s.",
-		analysis.Summary,
-		analysis.Application,
-		analysis.Activity,
-		analysis.Category,
-		analysis.UserState,
-		analysis.Observations,
-	)
+	fields := []struct{ name, value string }{
+		{"Summary", analysis.Summary}, {"Activity", analysis.Activity},
+		{"Application", analysis.Application}, {"Category", analysis.Category},
+		{"User State", analysis.UserState}, {"Observations", analysis.Observations},
+	}
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if value := strings.TrimSpace(field.value); value != "" {
+			parts = append(parts, field.name+": "+value)
+		}
+	}
+	if len(parts) == 0 {
+		return fmt.Errorf("screenshot analysis contains no text to embed")
+	}
+	textToEmbed := strings.Join(parts, ". ")
 
 	// Generate embedding
-	embedding, err := h.generateEmbedding(textToEmbed)
+	embedding, err := h.generateEmbedding(ctx, textToEmbed)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -627,26 +633,65 @@ func (h *ScreenshotHandler) storeInVectorDB(
 	return nil
 }
 
-// generateEmbedding generates a vector embedding for the text
-// TODO: Replace with actual embedding service (OpenAI, Ollama, etc.)
-func (h *ScreenshotHandler) generateEmbedding(text string) ([]float32, error) {
-	// For now, generate a mock embedding
-	// In production, replace this with actual embedding generation
+// generateEmbedding uses the same model and document task as the migration.
+func (h *ScreenshotHandler) generateEmbedding(ctx context.Context, text string) ([]float32, error) {
+	modelName := getEnvOrDefault("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2")
 	vectorSize := int(vectorstore.GetVectorSize())
-	embedding := make([]float32, vectorSize)
-
-	// Simple hash-based mock embedding (deterministic)
-	hash := 0
-	for _, char := range text {
-		hash = (hash*31 + int(char)) % 1000
+	body, err := json.Marshal(map[string]interface{}{
+		"model":    "models/" + modelName,
+		"content":  map[string]interface{}{"parts": []map[string]string{{"text": text}}},
+		"taskType": "RETRIEVAL_DOCUMENT", "outputDimensionality": vectorSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encode embedding request: %w", err)
 	}
-
-	for i := range embedding {
-		embedding[i] = float32(hash%100) / 100.0
+	keys := h.getGeminiAPIKeys()
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("no Google API keys available for embeddings")
 	}
-
-	log.Printf("Generated mock embedding (size: %d) - Replace with real embedding service!", vectorSize)
-	return embedding, nil
+	var lastErr error
+	for i, key := range keys {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("embedding request timed out: %w", ctx.Err())
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+			"https://generativelanguage.googleapis.com/v1beta/models/"+modelName+":embedContent", bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("create embedding request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-goog-api-key", key)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("embedding request failed: %w", err)
+			continue
+		}
+		responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = fmt.Errorf("read embedding response: %w", readErr)
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("Gemini embeddings returned HTTP %d", resp.StatusCode)
+			log.Printf("Gemini embedding key %d/%d failed: HTTP %d", i+1, len(keys), resp.StatusCode)
+			continue
+		}
+		var result struct {
+			Embedding struct {
+				Values []float32 `json:"values"`
+			} `json:"embedding"`
+		}
+		if err := json.Unmarshal(responseBody, &result); err != nil {
+			return nil, fmt.Errorf("decode embedding response: %w", err)
+		}
+		if len(result.Embedding.Values) != vectorSize {
+			return nil, fmt.Errorf("embedding dimension %d does not match expected %d", len(result.Embedding.Values), vectorSize)
+		}
+		log.Printf("Generated Gemini embedding: model=%s dimension=%d", modelName, vectorSize)
+		return result.Embedding.Values, nil
+	}
+	return nil, fmt.Errorf("all Google embedding keys failed: %w", lastErr)
 }
 
 // Helper types

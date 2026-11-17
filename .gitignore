@@ -1,4 +1,6 @@
 .env
+__pycache__/
+.qdrant-reembed-migration.json
 main.exe
 project-phoenix.exe
 tmp
